@@ -15,6 +15,8 @@ from core.api.schemas import (
     CompetitorAnalysisOut,
     DeleteProjectKeywordIn,
     DeleteProjectKeywordOut,
+    FixGeneratedBlogPostIn,
+    FixGeneratedBlogPostOut,
     GeneratedContentOut,
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
@@ -210,6 +212,7 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
         logger.error(
             "Failed to generate title from idea",
             error=str(e),
+            exc_info=True,
             project_id=project.id,
             user_prompt=data.user_prompt,
         )
@@ -250,6 +253,7 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
         logger.error(
             "Failed to generate blog content",
             error=str(e),
+            exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
@@ -324,6 +328,7 @@ def update_title_score(request: HttpRequest, suggestion_id: int, data: UpdateTit
         logger.error(
             "Failed to update title score",
             error=str(e),
+            exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
@@ -345,6 +350,7 @@ def update_archive_status(request: HttpRequest, suggestion_id: int, data: Update
         logger.error(
             "Failed to update suggestion archive status",
             error=str(e),
+            exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
@@ -547,6 +553,7 @@ def toggle_project_keyword_use(request: HttpRequest, data: ToggleProjectKeywordU
         logger.error(
             "Failed to toggle ProjectKeyword use field",
             error=str(e),
+            exc_info=True,
             project_id=data.project_id,
             keyword_id=data.keyword_id,
             profile_id=profile.id,
@@ -571,6 +578,7 @@ def delete_project_keyword(request: HttpRequest, data: DeleteProjectKeywordIn):
         logger.error(
             "Failed to delete ProjectKeyword",
             error=str(e),
+            exc_info=True,
             project_id=data.project_id,
             keyword_id=data.keyword_id,
             profile_id=profile.id,
@@ -619,5 +627,44 @@ def post_generated_blog_post(request: HttpRequest, data: PostGeneratedBlogPostIn
     except GeneratedBlogPost.DoesNotExist:
         return {"status": "error", "message": "Generated blog post not found."}
     except Exception as e:
-        logger.error("Failed to post generated blog post", error=str(e), blog_post_id=blog_post_id)
+        logger.error(
+            "Failed to post generated blog post",
+            error=str(e),
+            blog_post_id=blog_post_id,
+            exc_info=True,
+        )
         return {"status": "error", "message": str(e)}
+
+
+@api.post("/fix-generated-blog-post", response=FixGeneratedBlogPostOut, auth=[session_auth])
+def fix_generated_blog_post(request: HttpRequest, data: FixGeneratedBlogPostIn):
+    profile = request.auth
+
+    blog_post_id = data.id
+    if not blog_post_id:
+        return {"status": "error", "message": "Missing generated blog post id."}
+
+    try:
+        generated_post = GeneratedBlogPost.objects.get(id=blog_post_id)
+        if generated_post.project and generated_post.project.profile != profile:
+            return {"status": "error", "message": "Forbidden: You do not have access to this post."}
+
+        # Check if there are actually issues to fix
+        if generated_post.blog_post_content_is_valid:
+            return {"status": "success", "message": "Blog post content is already valid."}
+
+        # Run the fix method
+        generated_post.fix_generated_blog_post()
+
+        return {"status": "success", "message": "Blog post issues have been fixed successfully."}
+
+    except GeneratedBlogPost.DoesNotExist:
+        return {"status": "error", "message": "Generated blog post not found."}
+    except Exception as e:
+        logger.error(
+            "Failed to fix generated blog post",
+            error=str(e),
+            blog_post_id=blog_post_id,
+            exc_info=True,
+        )
+        return {"status": "error", "message": f"Failed to fix blog post: {str(e)}"}

@@ -187,7 +187,7 @@ class BlogPostGenerationContext(BaseModel):
     content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
 
 
-class BlogPostContent(BaseModel):
+class GeneratedBlogPostSchema(BaseModel):
     description: str = Field(
         description="Meta description (150-160 characters) optimized for search engines"
     )

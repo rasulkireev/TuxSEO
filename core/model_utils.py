@@ -67,7 +67,7 @@ def run_agent_synchronously(agent, input_string, deps=None, function_name="", mo
             logger.error(
                 "[Run Agent Synchronously] Failed execution",
                 messages=messages,
-                exc_info=e,
+                exc_info=True,
                 error=str(e),
                 function_name=function_name,
                 model_name=model_name,
@@ -83,14 +83,14 @@ def get_html_content(url):
     except requests.exceptions.RequestException as e:
         logger.warning(
             "[Get HTML Content] Could not fetch HTML content",
-            exc_info=e,
+            exc_info=True,
             error=str(e),
             url=url,
         )
     except Exception as e:
         logger.warning(
             "[Get HTML Content] Unexpected error",
-            exc_info=e,
+            exc_info=True,
             error=str(e),
             url=url,
         )
@@ -127,6 +127,7 @@ def get_markdown_content(url):
         logger.error(
             "Error fetching content from Jina Reader",
             error=str(e),
+            exc_info=True,
             url=url,
         )
         raise e

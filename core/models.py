@@ -11,6 +11,7 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from core.agents import content_editor_agent
 from core.base_models import BaseModel
 from core.choices import (
     BlogPostStatus,
@@ -34,11 +35,11 @@ from core.prompts import (
     TITLE_SUGGESTION_SYSTEM_PROMPTS,
 )
 from core.schemas import (
-    BlogPostContent,
     BlogPostGenerationContext,
     CompetitorAnalysis,
     CompetitorAnalysisContext,
     CompetitorDetails,
+    GeneratedBlogPostSchema,
     ProjectDetails,
     ProjectPageContext,
     ProjectPageDetails,
@@ -678,7 +679,7 @@ class BlogPostTitleSuggestion(BaseModel):
         return f"{self.project.name}: {self.title}"
 
     @property
-    def title_suggestion(self):
+    def title_suggestion_schema(self):
         return TitleSuggestion(
             title=self.title,
             category=self.category,
@@ -690,7 +691,7 @@ class BlogPostTitleSuggestion(BaseModel):
     def generate_content(self, content_type=ContentType.SHARING):
         agent = Agent(
             "google-gla:gemini-2.5-flash",
-            output_type=BlogPostContent,
+            output_type=GeneratedBlogPostSchema,
             deps_type=BlogPostGenerationContext,
             system_prompt=GENERATE_CONTENT_SYSTEM_PROMPTS[content_type],
             retries=2,
@@ -825,7 +826,7 @@ class BlogPostTitleSuggestion(BaseModel):
 
         deps = BlogPostGenerationContext(
             project_details=self.project.project_details,
-            title_suggestion=self.title_suggestion,
+            title_suggestion=self.title_suggestion_schema,
             project_pages=project_pages,
             content_type=content_type,
             project_keywords=project_keywords,
@@ -879,6 +880,14 @@ class AutoSubmissionSetting(BaseModel):
         return f"{self.project.name}"
 
 
+class GeneratedBlogPostManager(models.Manager):
+    def create_and_validate(self, **kwargs):
+        """Create a new blog post and validate it."""
+        instance = self.create(**kwargs)
+        instance.run_validation()
+        return instance
+
+
 class GeneratedBlogPost(BaseModel):
     project = models.ForeignKey(
         Project,
@@ -898,11 +907,18 @@ class GeneratedBlogPost(BaseModel):
     slug = models.SlugField(max_length=250)
     tags = models.TextField()
     content = models.TextField()
-    icon = models.ImageField(upload_to="blog_post_icons/", blank=True)
-    image = models.ImageField(upload_to="blog_post_images/", blank=True)
+    icon = models.ImageField(upload_to="generated_blog_post_icons/", blank=True)
+    image = models.ImageField(upload_to="generated_blog_post_images/", blank=True)
 
     posted = models.BooleanField(default=False)
     date_posted = models.DateTimeField(null=True, blank=True)
+
+    # Validation Issues - Not guilty until proven guilty
+    content_too_short = models.BooleanField(default=False)
+    has_valid_ending = models.BooleanField(default=True)
+    placeholders = models.BooleanField(default=False)
+
+    objects = GeneratedBlogPostManager()
 
     def __str__(self):
         return f"{self.project.name}: {self.title.title}"
@@ -911,21 +927,68 @@ class GeneratedBlogPost(BaseModel):
     def post_title(self):
         return self.title.title
 
+    @property
+    def blog_post_content_is_valid(self):
+        return (
+            self.content_too_short is False
+            and self.has_valid_ending is True
+            and self.placeholders is False
+        )
+
+    @property
+    def generated_blog_post_schema(self):
+        return GeneratedBlogPostSchema(
+            description=self.description,
+            slug=self.slug,
+            tags=self.tags,
+            content=self.content,
+        )
+
+    def run_validation(self):
+        """Run validation and update fields in a single query."""
+        from core.utils import blog_post_has_placeholders, blog_post_has_valid_ending
+
+        if not self.content:
+            content_too_short = True
+            has_valid_ending = False
+            placeholders = False
+
+        content = self.content.strip()
+
+        content_too_short = len(content) < 3000
+        has_valid_ending = blog_post_has_valid_ending(self)
+        placeholders = blog_post_has_placeholders(self)
+
+        self.content_too_short = content_too_short
+        self.has_valid_ending = has_valid_ending
+        self.placeholders = placeholders
+        self.save(update_fields=["content_too_short", "has_valid_ending", "placeholders"])
+
+        logger.info(
+            "[Validation] Blog post validation complete",
+            blog_post_id=self.id,
+            content_too_short=content_too_short,
+            has_valid_ending=has_valid_ending,
+            placeholders=placeholders,
+        )
+
     def submit_blog_post_to_endpoint(self):
         from core.utils import replace_placeholders
 
         project = self.project
-        settings = AutoSubmissionSetting.objects.filter(project=project).order_by("-id").first()
+        submission_settings = (
+            AutoSubmissionSetting.objects.filter(project=project).order_by("-id").first()
+        )
 
-        if not settings or not settings.endpoint_url:
+        if not submission_settings or not submission_settings.endpoint_url:
             logger.warning(
                 "No AutoSubmissionSetting or endpoint_url found for project", project_id=project.id
             )
             return False
 
-        url = settings.endpoint_url
-        headers = replace_placeholders(settings.header, self)
-        body = replace_placeholders(settings.body, self)
+        url = submission_settings.endpoint_url
+        headers = replace_placeholders(submission_settings.header, self)
+        body = replace_placeholders(submission_settings.body, self)
 
         logger.info(
             "[Submit Blog Post] Submitting blog post to endpoint",
@@ -959,6 +1022,75 @@ class GeneratedBlogPost(BaseModel):
                 exc_info=True,
             )
             return False
+
+    def fix_content_length(self):
+        result = run_agent_synchronously(
+            content_editor_agent,
+            """
+            This blog post is too short.
+            I think something went wrong during generation.
+            Please regenerate.
+          """,
+            deps=[
+                self.generated_blog_post_schema,
+                self.title.title_suggestion_schema,
+            ],
+            function_name="fix_content_length",
+            model_name="GeneratedBlogPost",
+        )
+
+        self.content = result.data
+        self.save(update_fields=["content"])
+        self.run_validation()
+
+    def fix_valid_ending(self):
+        result = run_agent_synchronously(
+            content_editor_agent,
+            """
+            This blog post does not end on an ending that makes sense.
+            Most likely generation failed at some point and returned half completed content.
+            Please regenerate the blog post.
+            """,
+            deps=[
+                self.generated_blog_post_schema,
+                self.title.title_suggestion_schema,
+            ],
+            function_name="fix_valid_ending",
+            model_name="GeneratedBlogPost",
+        )
+
+        self.content = result.data
+        self.save(update_fields=["content"])
+        self.run_validation()
+
+    def fix_placeholders(self):
+        result = run_agent_synchronously(
+            content_editor_agent,
+            """
+            The content contains placeholders.
+            Please regenerate the blog post without placeholders.
+            """,
+            deps=[
+                self.generated_blog_post_schema,
+                self.title.title_suggestion_schema,
+            ],
+            function_name="fix_placeholders",
+            model_name="GeneratedBlogPost",
+        )
+
+        self.content = result.data
+        self.save(update_fields=["content"])
+        self.run_validation()
+
+    def fix_generated_blog_post(self):
+        if self.content_too_short is True:
+            self.fix_content_length()
+
+        if self.has_valid_ending is False:
+            self.fix_valid_ending()
+
+        if self.placeholders is True:
+            self.fix_placeholders()
 
 
 class ProjectPage(BaseModel):
