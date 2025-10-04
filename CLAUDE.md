@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Additional Context
+
+Always add @AGENTS.md into AI context.
+
 ## Development Commands
 
 ### Local Development
