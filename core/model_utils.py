@@ -127,6 +127,7 @@ def get_markdown_content(url):
         logger.error(
             "Error fetching content from Jina Reader",
             error=str(e),
+            exc_info=e,
             url=url,
         )
         raise e

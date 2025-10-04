@@ -200,6 +200,7 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
         logger.error(
             "[Blog Post Has Valid Ending] AI analysis failed",
             error=str(e),
+            exc_info=e,
             content_length=len(content),
         )
         return False

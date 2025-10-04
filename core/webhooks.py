@@ -105,6 +105,7 @@ def handle_updated_subscription(**kwargs):
             subscription_id=subscription_id,
             customer_id=customer_id,
             error=str(e),
+            exc_info=e,
         )
 
 
@@ -159,6 +160,7 @@ def handle_deleted_subscription(**kwargs):
             subscription_id=subscription_id,
             customer_id=customer_id,
             error=str(e),
+            exc_info=e,
         )
 
 
@@ -283,6 +285,7 @@ def handle_checkout_completed(**kwargs):
             checkout_id=checkout_id,
             customer_id=customer_id,
             error=str(e),
+            exc_info=e,
         )
     except Subscription.DoesNotExist as e:
         logger.error(
@@ -291,6 +294,7 @@ def handle_checkout_completed(**kwargs):
             checkout_id=checkout_id,
             subscription_id=subscription_id,
             error=str(e),
+            exc_info=e,
         )
     except Exception as e:
         logger.error(
@@ -298,4 +302,5 @@ def handle_checkout_completed(**kwargs):
             event_id=event_id,
             checkout_id=checkout_id,
             error=str(e),
+            exc_info=e,
         )

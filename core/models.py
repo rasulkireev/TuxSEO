@@ -920,7 +920,7 @@ class GeneratedBlogPost(BaseModel):
             if not is_valid:
                 logger.warning(
                     "[Submit Blog Post] Validation failed",
-                    project_id=self.project.id if self.project else None,
+                    project_id=self.project_id if self.project else None,
                     blog_post_id=self.id,
                     error=error_message,
                 )
@@ -928,9 +928,10 @@ class GeneratedBlogPost(BaseModel):
         except ValueError as e:
             logger.error(
                 "[Submit Blog Post] Validation error, deleting.",
-                project_id=self.project.id if self.project else None,
+                project_id=self.project_id if self.project else None,
                 blog_post_id=self.id,
                 error=str(e),
+                exc_info=e,
             )
             self.delete()
             return False
