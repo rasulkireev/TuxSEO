@@ -112,48 +112,33 @@ def save_keyword(keyword_text: str, project: Project):
     ProjectKeyword.objects.get_or_create(project=project, keyword=keyword_obj)
 
 
-def check_blog_post_before_sending(blog_post):
-    if not blog_post:
-        raise ValueError("Blog post cannot be None")
-
-    if not hasattr(blog_post, "content"):
-        raise ValueError("Blog post must have a content attribute")
-
-    # Check if content exists and has sufficient length
-    content = blog_post.content or ""
-
-    if len(content.strip()) < 3000:
-        return False, f"Blog post content is too short ({len(content.strip())} characters)."
-
-    is_valid_ending = blog_post_has_valid_ending(blog_post)
-    if not is_valid_ending:
-        return False, "Blog post does not have a valid ending."
-
-    has_placeholders = blog_post_has_placeholders(blog_post)
-    if has_placeholders:
-        return False, "Blog post contains placeholder content."
-
-    # Future checks can be added here
-    # For example:
-    # - Check for required sections
-    # - Check for proper formatting
-    # - Validate SEO requirements
-
-    return True, None
-
-
 def blog_post_has_placeholders(blog_post: GeneratedBlogPost) -> bool:
     content = blog_post.content or ""
     content_lower = content.lower()
 
     for pattern in PLACEHOLDER_PATTERNS:
         if pattern in content_lower:
+            logger.warning(
+                "[Blog Post Has Placeholders] Placeholder found",
+                pattern=pattern,
+                blog_post_id=blog_post.id,
+            )
             return True
 
     for pattern in PLACEHOLDER_BRACKET_PATTERNS:
         matches = re.findall(pattern, content_lower)
         if matches:
+            logger.warning(
+                "[Blog Post Has Placeholders] Bracket Placeholder found",
+                pattern=pattern,
+                blog_post_id=blog_post.id,
+            )
             return True
+
+    logger.info(
+        "[Blog Post Has Placeholders] No placeholders found",
+        blog_post_id=blog_post.id,
+    )
 
     return False
 
@@ -194,7 +179,22 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
             function_name="blog_post_has_valid_ending",
         )
 
-        return result.data
+        ending_is_valid = result.data
+
+        if result:
+            logger.info(
+                "[Blog Post Has Valid Ending] Valid ending",
+                result=ending_is_valid,
+                blog_post_id=blog_post.id,
+            )
+        else:
+            logger.warning(
+                "[Blog Post Has Valid Ending] Invalid ending",
+                result=ending_is_valid,
+                blog_post_id=blog_post.id,
+            )
+
+        return ending_is_valid
 
     except Exception as e:
         logger.error(
