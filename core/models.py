@@ -912,7 +912,7 @@ class GeneratedBlogPost(BaseModel):
         return self.title.title
 
     def submit_blog_post_to_endpoint(self):
-        from core.utils import replace_placeholders, check_blog_post_before_sending
+        from core.utils import check_blog_post_before_sending, replace_placeholders
 
         # Validate blog post before sending
         try:
@@ -927,11 +927,12 @@ class GeneratedBlogPost(BaseModel):
                 return False
         except ValueError as e:
             logger.error(
-                "[Submit Blog Post] Validation error",
+                "[Submit Blog Post] Validation error, deleting.",
                 project_id=self.project.id if self.project else None,
                 blog_post_id=self.id,
                 error=str(e),
             )
+            self.delete()
             return False
 
         project = self.project
