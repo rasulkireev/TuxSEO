@@ -126,7 +126,7 @@ def process_project_keywords(project_id: int):
             logger.error(
                 "[KeywordProcessing] Error processing keyword",
                 error=str(e),
-                exc_info=e,
+                exc_info=True,
                 project_id=project.id,
                 keyword_text=keyword_str,
             )

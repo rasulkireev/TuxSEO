@@ -212,7 +212,7 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
         logger.error(
             "Failed to generate title from idea",
             error=str(e),
-            exc_info=e,
+            exc_info=True,
             project_id=project.id,
             user_prompt=data.user_prompt,
         )
@@ -253,7 +253,7 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
         logger.error(
             "Failed to generate blog content",
             error=str(e),
-            exc_info=e,
+            exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
@@ -262,7 +262,7 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
         logger.error(
             "Unexpected error generating blog content",
             error=str(e),
-            exc_info=e,
+            exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
@@ -328,7 +328,7 @@ def update_title_score(request: HttpRequest, suggestion_id: int, data: UpdateTit
         logger.error(
             "Failed to update title score",
             error=str(e),
-            exc_info=e,
+            exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
@@ -350,7 +350,7 @@ def update_archive_status(request: HttpRequest, suggestion_id: int, data: Update
         logger.error(
             "Failed to update suggestion archive status",
             error=str(e),
-            exc_info=e,
+            exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
@@ -553,7 +553,7 @@ def toggle_project_keyword_use(request: HttpRequest, data: ToggleProjectKeywordU
         logger.error(
             "Failed to toggle ProjectKeyword use field",
             error=str(e),
-            exc_info=e,
+            exc_info=True,
             project_id=data.project_id,
             keyword_id=data.keyword_id,
             profile_id=profile.id,
@@ -578,7 +578,7 @@ def delete_project_keyword(request: HttpRequest, data: DeleteProjectKeywordIn):
         logger.error(
             "Failed to delete ProjectKeyword",
             error=str(e),
-            exc_info=e,
+            exc_info=True,
             project_id=data.project_id,
             keyword_id=data.keyword_id,
             profile_id=profile.id,
@@ -631,7 +631,7 @@ def post_generated_blog_post(request: HttpRequest, data: PostGeneratedBlogPostIn
             "Failed to post generated blog post",
             error=str(e),
             blog_post_id=blog_post_id,
-            exc_info=e,
+            exc_info=True,
         )
         return {"status": "error", "message": str(e)}
 
@@ -665,6 +665,6 @@ def fix_generated_blog_post(request: HttpRequest, data: FixGeneratedBlogPostIn):
             "Failed to fix generated blog post",
             error=str(e),
             blog_post_id=blog_post_id,
-            exc_info=e,
+            exc_info=True,
         )
         return {"status": "error", "message": f"Failed to fix blog post: {str(e)}"}

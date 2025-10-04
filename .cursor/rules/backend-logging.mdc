@@ -8,7 +8,7 @@ alwaysApply: false
 logger.warning(
     "Error occurred during profile update",
     error=str(e),
-    exc_info=e,
+    exc_info=True,
     profile_id=profile.id
 )
 ```
