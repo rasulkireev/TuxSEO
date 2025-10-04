@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.7] - 2025-10-04
 **Added**
 - Check that will make sure blog post is valid before submitting to endpoint.
+- Endpoint to Fix the validation errors.
+- Self fixing for Content generated in an automated task.
 
 **Fixed**
 - link to the generated blog post upon creation
