@@ -1,6 +1,7 @@
 import re
 
 import posthog
+from django.conf import settings
 from django.forms.utils import ErrorList
 from pydantic_ai import Agent
 
@@ -78,11 +79,12 @@ def get_or_create_project(profile_id, url, source=None):
     }
 
     if created:
-        posthog.capture(
-            profile.user.email,
-            event="project_created",
-            properties=project_metadata,
-        )
+        if settings.POSTHOG_API_KEY:
+            posthog.capture(
+                profile.user.email,
+                event="project_created",
+                properties=project_metadata,
+            )
         logger.info("[Get or Create Project] Project created", **project_metadata)
     else:
         logger.info("[Get or Create Project] Got existing project", **project_metadata)
