@@ -403,3 +403,14 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         return GeneratedBlogPost.objects.filter(
             project__profile=self.request.user.profile, project__pk=self.kwargs["project_pk"]
         )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        generated_post = self.object
+
+        context["has_pro_subscription"] = self.request.user.profile.has_active_subscription
+        context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
+            project=generated_post.project
+        ).exists()
+
+        return context

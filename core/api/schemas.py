@@ -198,3 +198,12 @@ class ToggleAutoSubmissionOut(Schema):
     status: str
     enabled: bool
     message: str = ""
+
+
+class FixGeneratedBlogPostIn(Schema):
+    id: int
+
+
+class FixGeneratedBlogPostOut(Schema):
+    status: str
+    message: str

@@ -880,6 +880,14 @@ class AutoSubmissionSetting(BaseModel):
         return f"{self.project.name}"
 
 
+class GeneratedBlogPostManager(models.Manager):
+    def create_and_validate(self, **kwargs):
+        """Create a new blog post and validate it."""
+        instance = self.create(**kwargs)
+        instance.run_validation()
+        return instance
+
+
 class GeneratedBlogPost(BaseModel):
     project = models.ForeignKey(
         Project,
@@ -910,31 +918,7 @@ class GeneratedBlogPost(BaseModel):
     has_valid_ending = models.BooleanField(default=True)
     placeholders = models.BooleanField(default=False)
 
-    def save(self, *args, **kwargs):
-        # Only run checks if object is new or content was updated
-        is_new = self.pk is None
-        content_updated = False
-
-        if not is_new and self.pk:
-            try:
-                old_instance = GeneratedBlogPost.objects.get(pk=self.pk)
-                content_updated = old_instance.content != self.content
-            except GeneratedBlogPost.DoesNotExist:
-                # Treat as new if old instance doesn't exist
-                is_new = True
-
-        if is_new or content_updated:
-            try:
-                self.run_blog_post_content_validation()
-            except Exception as e:
-                logger.warning(
-                    "[GeneratedBlogPost Save] Error running blog post content validation",
-                    blog_post_id=self.id,
-                    error=str(e),
-                    exc_info=e,
-                )
-
-        super().save(*args, **kwargs)
+    objects = GeneratedBlogPostManager()
 
     def __str__(self):
         return f"{self.project.name}: {self.title.title}"
@@ -960,57 +944,40 @@ class GeneratedBlogPost(BaseModel):
             content=self.content,
         )
 
-    def run_blog_post_content_validation(self):
+    def run_validation(self):
+        """Run validation and update fields in a single query."""
         from core.utils import blog_post_has_placeholders, blog_post_has_valid_ending
 
-        if not self:
-            raise ValueError("Blog post cannot be None")
+        validation_results = self.validate_content()
 
-        if not hasattr(self, "content"):
-            raise ValueError("Blog post must have a content attribute")
+        if not self.content:
+            validation_results = {
+                "content_too_short": True,
+                "has_valid_ending": False,
+                "placeholders": False,
+            }
 
-        content = self.content or ""
+        content = self.content.strip()
 
-        if len(content.strip()) < 3000:
-            self.content_too_short = True
-            self.save(update_fields=["content_too_short"])
-            logger.warning(
-                "[Check Blog Post Before Sending] Blog post content is too short",
-                blog_post_id=self.id,
-                content_length=len(content.strip()),
-            )
+        validation_results = {
+            "content_too_short": len(content) < 3000,
+            "has_valid_ending": blog_post_has_valid_ending(self),
+            "placeholders": blog_post_has_placeholders(self),
+        }
 
-        has_valid_ending = blog_post_has_valid_ending(self)
-        if not has_valid_ending:
-            self.has_valid_ending = False
-            self.save(update_fields=["has_valid_ending"])
-            logger.warning(
-                "[Check Blog Post Before Sending] Blog post does not have a valid ending",
-                blog_post_id=self.id,
-            )
-
-        has_placeholders = blog_post_has_placeholders(self)
-        if has_placeholders:
-            self.placeholders = True
-            self.save(update_fields=["placeholders"])
-            logger.warning(
-                "[Check Blog Post Before Sending] Blog post contains placeholder content",
-                blog_post_id=self.id,
-            )
-
-        logger.info(
-            "[Check Blog Post Before Sending] Blog post validation complete",
-            blog_post_id=self.id,
-            content_too_short=self.content_too_short,
-            has_valid_ending=self.has_valid_ending,
-            placeholders=self.placeholders,
+        # Update all validation fields at once
+        type(self).objects.filter(pk=self.pk).update(
+            content_too_short=validation_results["content_too_short"],
+            has_valid_ending=validation_results["has_valid_ending"],
+            placeholders=validation_results["placeholders"],
         )
 
-        # Future checks can be added here
-        # For example:
-        # - Check for required sections
-        # - Check for proper formatting
-        # - Validate SEO requirements
+        # Refresh from DB to get updated values
+        self.refresh_from_db(fields=["content_too_short", "has_valid_ending", "placeholders"])
+
+        logger.info(
+            "[Validation] Blog post validation complete", blog_post_id=self.id, **validation_results
+        )
 
     def submit_blog_post_to_endpoint(self):
         from core.utils import replace_placeholders
@@ -1079,8 +1046,9 @@ class GeneratedBlogPost(BaseModel):
             model_name="GeneratedBlogPost",
         )
 
-        self.content = result.data.content
+        self.content = result.data
         self.save(update_fields=["content"])
+        self.run_validation()
 
     def fix_valid_ending(self):
         result = run_agent_synchronously(
@@ -1098,8 +1066,9 @@ class GeneratedBlogPost(BaseModel):
             model_name="GeneratedBlogPost",
         )
 
-        self.content = result.data.content
+        self.content = result.data
         self.save(update_fields=["content"])
+        self.run_validation()
 
     def fix_placeholders(self):
         result = run_agent_synchronously(
@@ -1116,8 +1085,9 @@ class GeneratedBlogPost(BaseModel):
             model_name="GeneratedBlogPost",
         )
 
-        self.content = result.data.content
+        self.content = result.data
         self.save(update_fields=["content"])
+        self.run_validation()
 
     def fix_generated_blog_post(self):
         if self.content_too_short is True:

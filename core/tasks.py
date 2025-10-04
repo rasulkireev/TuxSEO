@@ -341,7 +341,7 @@ def generate_and_post_blog_post(project_id: int):
     # if neither, create a new blog post title suggestion, generate the blog post
     if not blog_post_to_post:
         logger.info(
-            "[Generate and Post Blog Post] No BlogPost or BlogPostTitleSuggestion found for {project.name}, so generatin both.",  # noqa: E501
+            "[Generate and Post Blog Post] No BlogPost or BlogPostTitleSuggestion found, so generating both.",  # noqa: E501
             project_id=project_id,
             project_name=project.name,
         )
@@ -353,8 +353,16 @@ def generate_and_post_blog_post(project_id: int):
 
     # once you have the generated blog post, submit it to the endpoint
     if blog_post_to_post:
+        if blog_post_to_post.blog_post_content_is_valid is False:
+            logger.info(
+                "[Generate and Post Blog Post] Blog post content is not valid, so fixing it before posting.",  # noqa: E501
+                project_id=project_id,
+                project_name=project.name,
+            )
+            blog_post_to_post.fix_generated_blog_post()
+
         logger.info(
-            "[Generate and Post Blog Post] Submitting blog post to endpoint for {project.name}",
+            "[Generate and Post Blog Post] Submitting blog post to endpoint",
             project_id=project_id,
             project_name=project.name,
             blog_post_title=blog_post_to_post.title,
@@ -367,7 +375,13 @@ def generate_and_post_blog_post(project_id: int):
             return f"Posted blog post for {project.name}"
         else:
             return f"Failed to post blog post for {project.name}."
+
     else:
+        logger.error(
+            "[Generate and Post Blog Post] No blog post to post. This should not happen.",
+            project_id=project_id,
+            project_name=project.name,
+        )
         return f"No blog post to post for {project.name}."
 
 
