@@ -8,7 +8,6 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0007_blogposttitlesuggestion_user_score_and_more'),
-        ('djstripe', '0014_2_9a'),
     ]
 
     operations = [

@@ -47,9 +47,9 @@ from core.schemas import (
     TitleSuggestions,
     WebPageContent,
 )
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo.utils import get_tuxseo_logger
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 
 class Profile(BaseModel):

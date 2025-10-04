@@ -1,11 +1,12 @@
 import posthog
+from django.conf import settings
 from django.forms.utils import ErrorList
 
 from core.choices import KeywordDataSource
 from core.models import Keyword, Profile, Project, ProjectKeyword
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo.utils import get_tuxseo_logger
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 
 class DivErrorList(ErrorList):
@@ -73,11 +74,12 @@ def get_or_create_project(profile_id, url, source=None):
     }
 
     if created:
-        posthog.capture(
-            profile.user.email,
-            event="project_created",
-            properties=project_metadata,
-        )
+        if settings.POSTHOG_API_KEY:
+            posthog.capture(
+                profile.user.email,
+                event="project_created",
+                properties=project_metadata,
+            )
         logger.info("[Get or Create Project] Project created", **project_metadata)
     else:
         logger.info("[Get or Create Project] Got existing project", **project_metadata)

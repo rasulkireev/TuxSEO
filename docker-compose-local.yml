@@ -5,25 +5,25 @@ services:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
-    environment:
-      - POSTGRES_DB=seo_blog_bot
-      - POSTGRES_USER=seo_blog_bot
-      - POSTGRES_PASSWORD=seo_blog_bot
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U seo_blog_bot"]
+      test: ["CMD-SHELL", "pg_isready -U tuxseo"]
       interval: 5s
       timeout: 5s
       retries: 5
+    environment:
+      - POSTGRES_USER=tuxseo
+      - POSTGRES_PASSWORD=tuxseo
+      - POSTGRES_DB=tuxseo
 
   redis:
     image: redis:7-alpine
-    command: redis-server --requirepass seo_blog_bot
+    command: redis-server --requirepass tuxseo
     ports:
-      - "6380:6379"
+      - "6378:6379"
     volumes:
       - redis_data:/data
     environment:
-      - REDIS_PASSWORD=seo_blog_bot
+      - REDIS_PASSWORD=tuxseo
 
   backend:
     build:
@@ -106,8 +106,8 @@ services:
     volumes:
       - minio_data:/data
     environment:
-      MINIO_ROOT_USER: seo_blog_bot
-      MINIO_ROOT_PASSWORD: seo_blog_bot
+      MINIO_ROOT_USER: tuxseo-user
+      MINIO_ROOT_PASSWORD: tuxseo-password
     command: server --console-address ":9001" /data
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
@@ -123,9 +123,9 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 5 &&
-      /usr/bin/mc config host add myminio http://minio:9000 seo_blog_bot seo_blog_bot &&
-      /usr/bin/mc mb myminio/seo-blog-bot-dev &&
-      /usr/bin/mc anonymous set download myminio/seo-blog-bot-dev &&
+      /usr/bin/mc config host add myminio http://minio:9000 tuxseo tuxseo &&
+      /usr/bin/mc mb myminio/tuxseo-dev &&
+      /usr/bin/mc anonymous set download myminio/tuxseo-dev &&
       exit 0;
       "
 

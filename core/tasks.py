@@ -20,17 +20,20 @@ from core.models import (
     ProjectPage,
 )
 from core.utils import save_keyword
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo.utils import get_tuxseo_logger
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 
 def add_email_to_buttondown(email, tag):
+    if not settings.BUTTONDOWN_API_KEY:
+        return "Buttondown API key not found."
+
     data = {
         "email_address": str(email),
         "metadata": {"source": tag},
         "tags": [tag],
-        "referrer_url": "https://seo_blog_bot.app",
+        "referrer_url": "https://tuxseo.app",
         "subscriber_type": "regular",
     }
 
@@ -153,6 +156,9 @@ def generate_blog_post_suggestions(project_id: int):
 
 
 def try_create_posthog_alias(profile_id: int, cookies: dict, source_function: str = None) -> str:
+    if not settings.POSTHOG_API_KEY:
+        return "PostHog API key not found."
+
     base_log_data = {
         "profile_id": profile_id,
         "cookies": cookies,
@@ -199,16 +205,17 @@ def track_event(
         logger.error("[TrackEvent] Profile not found.", **base_log_data)
         return f"Profile with id {profile_id} not found."
 
-    posthog.capture(
-        profile.user.email,
-        event=event_name,
-        properties={
-            "profile_id": profile.id,
-            "email": profile.user.email,
-            "current_state": profile.state,
-            **properties,
-        },
-    )
+    if settings.POSTHOG_API_KEY:
+        posthog.capture(
+            profile.user.email,
+            event=event_name,
+            properties={
+                "profile_id": profile.id,
+                "email": profile.user.email,
+                "current_state": profile.state,
+                **properties,
+            },
+        )
 
     logger.info("[TrackEvent] Tracked event", **base_log_data)
 

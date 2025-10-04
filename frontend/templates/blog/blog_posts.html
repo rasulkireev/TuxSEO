@@ -2,31 +2,31 @@
 {% load webpack_loader static %}
 
 {% block meta %}
-<title>Marketing Agents Blog</title>
+<title>TuxSEO Blog</title>
 <meta name="description" content="Best SEO Blog Writer entity in the universe!" />
 <meta name="keywords" content="" />
 <meta name="robots" content="index, follow" />
 <link rel="canonical" href="https://{{ request.get_host }}{% url 'blog_posts' %}" />
 
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Marketing Agents Blog" />
+<meta property="og:title" content="TuxSEO Blog" />
 <meta property="og:url" content="https://{{ request.get_host }}{% url 'blog_posts' %}" />
 <meta property="og:description" content="Best SEO Blog Writer entity in the universe!" />
-<meta property="og:image" content="https://osig.app/g?site=x&style=logo&font=markerfelt&title=Marketing Agents Blog&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
+<meta property="og:image" content="https://osig.app/g?site=x&style=logo&font=markerfelt&title=TuxSEO Blog&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
 <meta property="og:locale" content="en_US" />
 
 <meta name="twitter:card" content="summary_large_image" />
 <meta name="twitter:creator" content="@rasulkireev" />
 <meta name="twitter:site" content="@rasulkireev" />
-<meta name="twitter:title" content="Marketing Agents Blog" />
+<meta name="twitter:title" content="TuxSEO Blog" />
 <meta name="twitter:description" content="Best SEO Blog Writer entity in the universe!" />
-<meta name="twitter:image" content="https://osig.app/g?site=x&style=logo&font=markerfelt&title=Marketing Agents Blog&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
+<meta name="twitter:image" content="https://osig.app/g?site=x&style=logo&font=markerfelt&title=TuxSEO Blog&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
 {% endblock meta %}
 
 {% block content %}
 <div class="container px-4 py-8 mx-auto md:relative">
   <div class="mx-auto max-w-3xl">
-    <h1 class="mb-8 text-3xl font-bold text-center">Marketing Agents Blog</h1>
+    <h1 class="mb-8 text-3xl font-bold text-center">TuxSEO Blog</h1>
     {% if blog_posts %}
       <div class="pt-10 mt-10 space-y-8 border-t border-gray-200 sm:mt-16 sm:pt-16">
         {% for post in blog_posts %}
@@ -57,9 +57,9 @@
   {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": "Marketing Agents Blog",
+    "name": "TuxSEO Blog",
     "description": "Best SEO Blog Writer entity in the universe!",
-    "thumbnailUrl": "https://osig.app/g?site=x&style=logo&font=markerfelt&title=Marketing Agents Blog&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}",
+    "thumbnailUrl": "https://osig.app/g?site=x&style=logo&font=markerfelt&title=TuxSEO Blog&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}",
     "url": "https://{{ request.get_host }}{% url 'blog_posts' %}",
     "author": {
       "@type": "Person",

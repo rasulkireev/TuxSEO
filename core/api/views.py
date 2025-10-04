@@ -44,9 +44,9 @@ from core.models import (
     ProjectPage,
 )
 from core.utils import get_or_create_project
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo.utils import get_tuxseo_logger
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 api = NinjaAPI(docs_url=None)
 

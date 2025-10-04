@@ -27,12 +27,12 @@ from core.models import (
     Project,
 )
 from core.tasks import track_event, try_create_posthog_alias
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo.utils import get_tuxseo_logger
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 
 class HomeView(TemplateView):
@@ -91,13 +91,14 @@ class AccountSignupView(SignupView):
         user = self.user
         profile = user.profile
 
-        async_task(
-            try_create_posthog_alias,
-            profile_id=profile.id,
-            cookies=self.request.COOKIES,
-            source_function="AccountSignupView - form_valid",
-            group="Create Posthog Alias",
-        )
+        if settings.POSTHOG_API_KEY:
+            async_task(
+                try_create_posthog_alias,
+                profile_id=profile.id,
+                cookies=self.request.COOKIES,
+                source_function="AccountSignupView - form_valid",
+                group="Create Posthog Alias",
+            )
 
         async_task(
             track_event,

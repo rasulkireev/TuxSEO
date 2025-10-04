@@ -2,9 +2,9 @@ from djstripe.event_handlers import djstripe_receiver
 from djstripe.models import Customer, Event, Price, Product, Subscription
 
 from core.models import Profile, ProfileStates
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo.utils import get_tuxseo_logger
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 
 @djstripe_receiver("customer.subscription.created")
@@ -26,7 +26,11 @@ def handle_created_subscription(**kwargs):
 
     profile.track_state_change(
         to_state=ProfileStates.SUBSCRIBED,
-        metadata={"event": "subscription_created", "subscription_id": subscription.id, "stripe_event_id": event_id},
+        metadata={
+            "event": "subscription_created",
+            "subscription_id": subscription.id,
+            "stripe_event_id": event_id,
+        },
     )
 
     logger.info(
@@ -64,7 +68,8 @@ def handle_updated_subscription(**kwargs):
 
         if (
             subscription_data.get("cancel_at_period_end")
-            and subscription_data.get("cancellation_details", {}).get("reason") == "cancellation_requested"
+            and subscription_data.get("cancellation_details", {}).get("reason")
+            == "cancellation_requested"
         ):
             # The subscription has been cancelled and will end at the end of the current period
             profile.track_state_change(
@@ -74,8 +79,12 @@ def handle_updated_subscription(**kwargs):
                     "subscription_id": subscription_id,
                     "cancel_at": subscription_data.get("cancel_at"),
                     "current_period_end": subscription_data.get("current_period_end"),
-                    "cancellation_feedback": subscription_data.get("cancellation_details", {}).get("feedback"),
-                    "cancellation_comment": subscription_data.get("cancellation_details", {}).get("comment"),
+                    "cancellation_feedback": subscription_data.get("cancellation_details", {}).get(
+                        "feedback"
+                    ),
+                    "cancellation_comment": subscription_data.get("cancellation_details", {}).get(
+                        "comment"
+                    ),
                 },
             )
 
@@ -228,7 +237,9 @@ def handle_checkout_completed(**kwargs):
                 except Price.DoesNotExist:
                     logger.warning("Price not found in database", price_id=price_id)
                 except Exception as e:
-                    logger.error("Error retrieving product from price", price_id=price_id, error=str(e))
+                    logger.error(
+                        "Error retrieving product from price", price_id=price_id, error=str(e)
+                    )
 
             if update_fields:
                 profile.save(update_fields=update_fields)
@@ -259,7 +270,10 @@ def handle_checkout_completed(**kwargs):
 
         else:
             logger.info(
-                "Checkout completed with unsupported mode", checkout_id=checkout_id, mode=mode, profile_id=profile.id
+                "Checkout completed with unsupported mode",
+                checkout_id=checkout_id,
+                mode=mode,
+                profile_id=profile.id,
             )
 
     except (Customer.DoesNotExist, Profile.DoesNotExist) as e:

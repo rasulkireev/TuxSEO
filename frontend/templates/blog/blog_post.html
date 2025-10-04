@@ -3,7 +3,7 @@
 {% load markdown_extras %}
 
 {% block meta %}
-<title>{{ blog_post.title }} | Marketing Agents Blog</title>
+<title>{{ blog_post.title }} | TuxSEO Blog</title>
 <meta name="description" content="{{ blog_post.description }}" />
 <meta name="keywords" content="{{ blog_post.tags }}" />
 <meta name="robots" content="index, follow" />
@@ -14,9 +14,9 @@
 <meta property="og:url" content="https://{{ request.get_host }}{{ blog_post.get_absolute_url }}" />
 <meta property="og:description" content="{{ blog_post.description }}" />
 {% if blog_post.image %}
-  <meta property="og:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | Marketing Agents Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.image.url }}" />
+  <meta property="og:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | TuxSEO Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.image.url }}" />
 {% elif blog_post.icon %}
-  <meta property="og:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | Marketing Agents Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.icon.url }}" />
+  <meta property="og:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | TuxSEO Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.icon.url }}" />
 {% else %}
   <meta property="og:image" content="https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
 {% endif %}
@@ -28,9 +28,9 @@
 <meta name="twitter:title" content="{{ blog_post.title }}" />
 <meta name="twitter:description" content="{{ blog_post.description }}" />
 {% if blog_post.image %}
-  <meta name="twitter:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | Marketing Agents Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.image.url }}" />
+  <meta name="twitter:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | TuxSEO Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.image.url }}" />
 {% elif blog_post.icon %}
-  <meta name="twitter:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | Marketing Agents Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.icon.url }}" />
+  <meta name="twitter:image" content="https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | TuxSEO Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.icon.url }}" />
 {% else %}
   <meta name="twitter:image" content="https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
 {% endif %}
@@ -62,9 +62,9 @@
     "headline": "{{ blog_post.title }}",
     "description": "{{ blog_post.description }}",
     {% if blog_post.image %}
-      "image": "https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | Marketing Agents Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.image.url }}",
+      "image": "https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | TuxSEO Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.image.url }}",
     {% elif blog_post.icon %}
-      "image": "https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | Marketing Agents Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.icon.url }}",
+      "image": "https://osig.app/g?site=x&style=base&font=markerfelt&title={{ blog_post.title }} | TuxSEO Blog&subtitle={{ blog_post.description }}&image_url={{ blog_post.icon.url }}",
     {% else %}
       "image": "https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}",
     {% endif %}
@@ -78,7 +78,7 @@
     },
     "publisher": {
       "@type": "Organization",
-      "name": "Marketing Agents",
+      "name": "TuxSEO",
       "logo": {
         "@type": "ImageObject",
         "url": "https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}"

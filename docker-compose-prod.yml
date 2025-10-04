@@ -1,0 +1,50 @@
+# docker-compose -f docker-compose.yml -p "tuxseo" up --detach --remove-orphans || true
+
+services:
+  db:
+    image: rasulkireev/custom-postgres:17
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    env_file:
+      - .env
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    env_file:
+      - .env
+
+  backend:
+    image: ghcr.io/rasulkireev/tuxseo:latest
+    working_dir: /app
+    ports:
+      - "8000:80"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+
+  workers:
+    image: ghcr.io/rasulkireev/tuxseo-workers:latest
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "seo_blog_bot"
+name = "tuxseo"
 version = "0.1.0"
 description = "Best SEO Blog Writer entity in the universe!"
 authors = ["Rasul Kireev <kireevr1996@gmail.com>"]
@@ -34,8 +34,6 @@ structlog-sentry = "^2.2.1"
 whitenoise = "^6.7.0"
 pydantic-ai = "^0.2.9"
 posthog = "^5.3.0"
-
-[tool.poetry.dev-dependencies]
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.2.1"

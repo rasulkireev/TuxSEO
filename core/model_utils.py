@@ -4,10 +4,10 @@ import string
 import requests
 from pydantic_ai import capture_run_messages
 
-from seo_blog_bot import settings
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo import settings
+from tuxseo.utils import get_tuxseo_logger
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 
 def generate_random_key():

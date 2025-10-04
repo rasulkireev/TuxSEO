@@ -54,7 +54,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `src/controllers/` - Stimulus.js controllers
   - `templates/` - Django templates
   - `webpack/` - Webpack configuration
-- `seo_blog_bot/` - Django project configuration
+- `tuxseo/` - Django project configuration
 - `deployment/` - Docker deployment files
 
 ### Key Design Patterns

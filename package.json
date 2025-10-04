@@ -1,5 +1,5 @@
 {
-  "name": "seo_blog_bot",
+  "name": "tuxseo",
   "version": "1.0.0",
   "description": "Best SEO Blog Writer entity in the universe!",
   "scripts": {
@@ -9,7 +9,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/rasulkireev/seo_blog_bot"
+    "url": "https://github.com/rasulkireev/tuxseo"
   },
   "keywords": [
     "webpack",
@@ -19,7 +19,7 @@
   "author": "Rasul Kireev",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/rasulkireev/seo_blog_bot/issues"
+    "url": "https://github.com/rasulkireev/tuxseo/issues"
   },
   "devDependencies": {
     "@babel/core": "^7.16.7",

@@ -6,9 +6,9 @@ from django_q.tasks import async_task
 
 from core.models import Profile, ProfileStates
 from core.tasks import add_email_to_buttondown
-from seo_blog_bot.utils import get_seo_blog_bot_logger
+from tuxseo.utils import get_tuxseo_logger
 
-logger = get_seo_blog_bot_logger(__name__)
+logger = get_tuxseo_logger(__name__)
 
 
 @receiver(post_save, sender=User)
