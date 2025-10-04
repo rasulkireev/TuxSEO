@@ -11,6 +11,7 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from core.agents import content_editor_agent
 from core.base_models import BaseModel
 from core.choices import (
     BlogPostStatus,
@@ -906,7 +907,7 @@ class GeneratedBlogPost(BaseModel):
 
     # Validation Issues - Not guilty until proven guilty
     content_too_short = models.BooleanField(default=False)
-    valid_ending = models.BooleanField(default=True)
+    has_valid_ending = models.BooleanField(default=True)
     placeholders = models.BooleanField(default=False)
 
     def save(self, *args, **kwargs):
@@ -946,7 +947,7 @@ class GeneratedBlogPost(BaseModel):
     def blog_post_content_is_valid(self):
         return (
             self.content_too_short is False
-            and self.valid_ending is True
+            and self.has_valid_ending is True
             and self.placeholders is False
         )
 
@@ -979,10 +980,10 @@ class GeneratedBlogPost(BaseModel):
                 content_length=len(content.strip()),
             )
 
-        is_valid_ending = blog_post_has_valid_ending(self)
-        if not is_valid_ending:
-            self.valid_ending = False
-            self.save(update_fields=["valid_ending"])
+        has_valid_ending = blog_post_has_valid_ending(self)
+        if not has_valid_ending:
+            self.has_valid_ending = False
+            self.save(update_fields=["has_valid_ending"])
             logger.warning(
                 "[Check Blog Post Before Sending] Blog post does not have a valid ending",
                 blog_post_id=self.id,
@@ -1001,7 +1002,7 @@ class GeneratedBlogPost(BaseModel):
             "[Check Blog Post Before Sending] Blog post validation complete",
             blog_post_id=self.id,
             content_too_short=self.content_too_short,
-            valid_ending=self.valid_ending,
+            has_valid_ending=self.has_valid_ending,
             placeholders=self.placeholders,
         )
 
@@ -1063,8 +1064,6 @@ class GeneratedBlogPost(BaseModel):
             return False
 
     def fix_content_length(self):
-        from core.agents import content_editor_agent
-
         result = run_agent_synchronously(
             content_editor_agent,
             """
@@ -1083,7 +1082,52 @@ class GeneratedBlogPost(BaseModel):
         self.content = result.data.content
         self.save(update_fields=["content"])
 
-        return True
+    def fix_valid_ending(self):
+        result = run_agent_synchronously(
+            content_editor_agent,
+            """
+            This blog post does not end on an ending that makes sense.
+            Most likely generation failed at some point and returned half completed content.
+            Please regenerate the blog post.
+            """,
+            deps=[
+                self.generated_blog_post_schema,
+                self.title.title_suggestion_schema,
+            ],
+            function_name="fix_valid_ending",
+            model_name="GeneratedBlogPost",
+        )
+
+        self.content = result.data.content
+        self.save(update_fields=["content"])
+
+    def fix_placeholders(self):
+        result = run_agent_synchronously(
+            content_editor_agent,
+            """
+            The content contains placeholders.
+            Please regenerate the blog post without placeholders.
+            """,
+            deps=[
+                self.generated_blog_post_schema,
+                self.title.title_suggestion_schema,
+            ],
+            function_name="fix_placeholders",
+            model_name="GeneratedBlogPost",
+        )
+
+        self.content = result.data.content
+        self.save(update_fields=["content"])
+
+    def fix_generated_blog_post(self):
+        if self.content_too_short is True:
+            self.fix_content_length()
+
+        if self.has_valid_ending is False:
+            self.fix_valid_ending()
+
+        if self.placeholders is True:
+            self.fix_placeholders()
 
 
 class ProjectPage(BaseModel):
