@@ -948,35 +948,28 @@ class GeneratedBlogPost(BaseModel):
         """Run validation and update fields in a single query."""
         from core.utils import blog_post_has_placeholders, blog_post_has_valid_ending
 
-        validation_results = self.validate_content()
-
         if not self.content:
-            validation_results = {
-                "content_too_short": True,
-                "has_valid_ending": False,
-                "placeholders": False,
-            }
+            content_too_short = True
+            has_valid_ending = False
+            placeholders = False
 
         content = self.content.strip()
 
-        validation_results = {
-            "content_too_short": len(content) < 3000,
-            "has_valid_ending": blog_post_has_valid_ending(self),
-            "placeholders": blog_post_has_placeholders(self),
-        }
+        content_too_short = len(content) < 3000
+        has_valid_ending = blog_post_has_valid_ending(self)
+        placeholders = blog_post_has_placeholders(self)
 
-        # Update all validation fields at once
-        type(self).objects.filter(pk=self.pk).update(
-            content_too_short=validation_results["content_too_short"],
-            has_valid_ending=validation_results["has_valid_ending"],
-            placeholders=validation_results["placeholders"],
-        )
-
-        # Refresh from DB to get updated values
-        self.refresh_from_db(fields=["content_too_short", "has_valid_ending", "placeholders"])
+        self.content_too_short = content_too_short
+        self.has_valid_ending = has_valid_ending
+        self.placeholders = placeholders
+        self.save(update_fields=["content_too_short", "has_valid_ending", "placeholders"])
 
         logger.info(
-            "[Validation] Blog post validation complete", blog_post_id=self.id, **validation_results
+            "[Validation] Blog post validation complete",
+            blog_post_id=self.id,
+            content_too_short=content_too_short,
+            has_valid_ending=has_valid_ending,
+            placeholders=placeholders,
         )
 
     def submit_blog_post_to_endpoint(self):

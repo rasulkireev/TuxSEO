@@ -181,7 +181,7 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
 
         ending_is_valid = result.data
 
-        if result:
+        if ending_is_valid:
             logger.info(
                 "[Blog Post Has Valid Ending] Valid ending",
                 result=ending_is_valid,
