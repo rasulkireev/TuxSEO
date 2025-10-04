@@ -7,7 +7,6 @@ on:
 
 env:
   PROJECT_NAME: tuxseo
-  IMAGE_NAME: tuxseo
 
 jobs:
   build-and-deploy:
@@ -33,7 +32,7 @@ jobs:
           context: .
           push: true
           file: deployment/Dockerfile.server
-          tags: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+          tags: ghcr.io/${{ github.repository_owner }}/${{ env.PROJECT_NAME }}
 
       - name: Deploy to CapRover
         uses: caprover/deploy-from-github@main
@@ -41,4 +40,4 @@ jobs:
             server: ${{ secrets.CAPROVER_SERVER }}
             app: ${{ env.PROJECT_NAME }}
             token: ${{ secrets.APP_TOKEN }}
-            image: ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}
+            image: ghcr.io/${{ github.repository_owner }}/${{ env.PROJECT_NAME }}
