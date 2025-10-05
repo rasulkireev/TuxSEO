@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - You can hover over a Target keyword to get summary stats.
 - You will now see which keywords are being use
 - You can now set keywords to use from the Title Suggestions view
+- Google Auth
 
 **Fixed**
 - link to the generated blog post upon creation
