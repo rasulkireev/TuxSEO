@@ -1,3 +1,6 @@
+import re
+import uuid
+
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
 
@@ -18,7 +21,9 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         user = super().populate_user(request, sociallogin, data)
 
         if not user.username and user.email:
-            base_username = user.email.split("@")[0]
+            base_username = re.sub(r"[^\w]", "", user.email.split("@")[0])
+            if not base_username:  # If email contained only special chars
+                base_username = f"user{uuid.uuid4().hex[:8]}"
             username = base_username
 
             counter = 1
