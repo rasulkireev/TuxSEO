@@ -116,6 +116,12 @@ class AccountSignupView(SignupView):
 
         return response
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if settings.ENVIRONMENT == "prod":
+            context["google_disabled"] = True
+        return context
+
 
 class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     login_url = "account_login"
