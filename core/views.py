@@ -117,6 +117,12 @@ class AccountSignupView(SignupView):
 
         return response
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        if settings.ENVIRONMENT == "prod":
+            context["google_disabled"] = True
+        return context
+
 
 class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     login_url = "account_login"
@@ -168,6 +174,14 @@ class PricingView(TemplateView):
         context["early_bird_spots_left"] = 20 - number_of_subscribed_users - 1
 
         return context
+
+
+class PrivacyPolicyView(TemplateView):
+    template_name = "pages/privacy_policy.html"
+
+
+class TermsOfServiceView(TemplateView):
+    template_name = "pages/terms_of_service.html"
 
 
 def create_checkout_session(request, pk, plan):

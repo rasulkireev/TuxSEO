@@ -7,6 +7,8 @@ urlpatterns = [
     # pages
     path("", views.HomeView.as_view(), name="home"),
     path("settings", views.UserSettingsView.as_view(), name="settings"),
+    path("privacy-policy", views.PrivacyPolicyView.as_view(), name="privacy_policy"),
+    path("terms-of-service", views.TermsOfServiceView.as_view(), name="terms_of_service"),
     # blog
     path("blog/", views.BlogView.as_view(), name="blog_posts"),
     path("blog/<slug:slug>", views.BlogPostView.as_view(), name="blog_post"),
