@@ -1,0 +1,8 @@
+<!-- Keyword chip component with hover functionality -->
+<span class="inline-flex items-center px-3 py-1.5 text-xs font-medium {% if keyword_in_use %}text-green-700 bg-green-50 border-green-200 hover:bg-green-100{% else %}text-gray-600 bg-gray-50 border-gray-200 hover:bg-gray-100{% endif %} rounded-full border transition-colors cursor-pointer"
+      data-controller="keyword-hover"
+      data-keyword-hover-text-value="{{ keyword }}"
+      data-keyword-hover-project-id-value="{{ project_id }}"
+      data-action="mouseenter->keyword-hover#mouseenter mouseleave->keyword-hover#mouseleave click->keyword-hover#handleClick">
+  {{ keyword }}
+</span>

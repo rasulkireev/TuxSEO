@@ -21,6 +21,7 @@ from core.api.schemas import (
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
+    GetKeywordDetailsOut,
     PostGeneratedBlogPostIn,
     PostGeneratedBlogPostOut,
     ProjectScanIn,
@@ -585,6 +586,79 @@ def delete_project_keyword(request: HttpRequest, data: DeleteProjectKeywordIn):
         )
         return DeleteProjectKeywordOut(
             status="error", message=f"Failed to delete keyword: {str(e)}"
+        )
+
+
+@api.get("/keywords/details", response=GetKeywordDetailsOut, auth=[session_auth])
+def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int):
+    profile = request.auth
+
+    try:
+        # Verify user has access to the project
+        project = get_object_or_404(Project, id=project_id, profile=profile)
+
+        # Clean the keyword text
+        keyword_text_cleaned = keyword_text.strip().lower()
+        if not keyword_text_cleaned:
+            return GetKeywordDetailsOut(status="error", message="Keyword text cannot be empty")
+
+        # Try to find existing keyword (pick most recent if multiple exist)
+        keyword = (
+            Keyword.objects.filter(keyword_text=keyword_text_cleaned)
+            .order_by("-last_fetched_at")
+            .first()
+        )
+
+        if keyword is None:
+            # Create new keyword if it doesn't exist
+            keyword = Keyword.objects.create(keyword_text=keyword_text_cleaned)
+            # Try to fetch metrics for the new keyword
+            metrics_fetched = keyword.fetch_and_update_metrics()
+            if not metrics_fetched:
+                logger.warning(
+                    "[GetKeywordDetails] Failed to fetch metrics for new keyword",
+                    keyword_id=keyword.id,
+                    keyword_text=keyword_text_cleaned,
+                    project_id=project_id,
+                )
+
+        # Check if keyword is already in the project and if it's in use
+        project_keyword = ProjectKeyword.objects.filter(project=project, keyword=keyword).first()
+
+        is_in_project = project_keyword is not None
+        in_use = project_keyword.use if project_keyword else False
+
+        # Prepare keyword data
+        keyword_data = {
+            "id": keyword.id,
+            "keyword_text": keyword.keyword_text,
+            "volume": keyword.volume,
+            "cpc_currency": keyword.cpc_currency,
+            "cpc_value": float(keyword.cpc_value) if keyword.cpc_value is not None else None,
+            "competition": keyword.competition,
+            "country": keyword.country,
+            "is_in_project": is_in_project,
+            "in_use": in_use,
+            "project_keyword_id": project_keyword.id if project_keyword else None,
+            "trend_data": [
+                {"value": trend.value, "month": trend.month, "year": trend.year}
+                for trend in keyword.trends.all()
+            ],
+        }
+
+        return GetKeywordDetailsOut(status="success", keyword=keyword_data)
+
+    except Exception as e:
+        logger.error(
+            "[GetKeywordDetails] Failed to get keyword details",
+            error=str(e),
+            exc_info=True,
+            keyword_text=keyword_text,
+            project_id=project_id,
+            profile_id=profile.id,
+        )
+        return GetKeywordDetailsOut(
+            status="error", message=f"Failed to get keyword details: {str(e)}"
         )
 
 

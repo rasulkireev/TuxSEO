@@ -140,6 +140,9 @@ class KeywordMetricsOut(Schema):
     data_source: str | None = None
     last_fetched_at: str | None = None  # datetime converted to str
     trend_data: list[dict] | None = None
+    is_in_project: bool | None = None
+    in_use: bool | None = None
+    project_keyword_id: int | None = None
 
 
 class AddKeywordOut(Schema):
@@ -207,3 +210,9 @@ class FixGeneratedBlogPostIn(Schema):
 class FixGeneratedBlogPostOut(Schema):
     status: str
     message: str
+
+
+class GetKeywordDetailsOut(Schema):
+    status: str
+    message: str | None = None
+    keyword: KeywordMetricsOut | None = None

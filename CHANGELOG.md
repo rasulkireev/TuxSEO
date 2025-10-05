@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Check that will make sure blog post is valid before submitting to endpoint.
 - Endpoint to Fix the validation errors.
 - Self fixing for Content generated in an automated task.
+- Target Keywords that are generated in a Title Suggestion, now get saved to project keywords.
+- You can hover over a Target keyword to get summary stats.
+- You will now see which keywords are being use
+- You can now set keywords to use from the Title Suggestions view
 
 **Fixed**
 - link to the generated blog post upon creation
