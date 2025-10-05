@@ -2,7 +2,7 @@
 
 ## Commands
 
-- Do not run any commands any commands in the agent.
+- Do not run any commands in the agent.
 
 ## Tests
 

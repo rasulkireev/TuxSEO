@@ -406,7 +406,7 @@ def save_title_suggestion_keywords(title_suggestion_id: int):
     logger.info(
         "[Save Title Suggestion Keywords] Successfully saved keywords",
         title_suggestion_id=title_suggestion_id,
-        project_id=title_suggestion.project.id,
+        project_id=title_suggestion.project_id,
         project_name=title_suggestion.project.name,
         saved_keywords_count=saved_keywords_count,
         total_keywords=len(title_suggestion.target_keywords),

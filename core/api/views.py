@@ -602,10 +602,14 @@ def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int
         if not keyword_text_cleaned:
             return GetKeywordDetailsOut(status="error", message="Keyword text cannot be empty")
 
-        # Try to find existing keyword
-        try:
-            keyword = Keyword.objects.get(keyword_text=keyword_text_cleaned)
-        except Keyword.DoesNotExist:
+        # Try to find existing keyword (pick most recent if multiple exist)
+        keyword = (
+            Keyword.objects.filter(keyword_text=keyword_text_cleaned)
+            .order_by("-last_fetched_at")
+            .first()
+        )
+
+        if keyword is None:
             # Create new keyword if it doesn't exist
             keyword = Keyword.objects.create(keyword_text=keyword_text_cleaned)
             # Try to fetch metrics for the new keyword
