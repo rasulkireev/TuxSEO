@@ -100,7 +100,7 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
             }
         else:
             logger.error(
-                "[Scan Project] Project has no content",
+                "[Scan Project] Failed to analyze project",
                 got_content=got_content,
                 analyzed_project=analyzed_project,
                 project_id=project.id if project else None,
