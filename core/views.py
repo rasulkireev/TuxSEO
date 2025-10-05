@@ -119,8 +119,9 @@ class AccountSignupView(SignupView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        if settings.ENVIRONMENT == "prod":
-            context["google_disabled"] = True
+        context["google_enabled"] = True
+        if not settings.DEBUG:
+            context["google_enabled"] = False
         return context
 
 
