@@ -258,7 +258,6 @@ ACCOUNT_FORMS = {
 SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
 SOCIALACCOUNT_PROVIDERS = {}
-SOCIALACCOUNT_EMAIL_VERIFICATION = False
 
 GITHUB_CLIENT_ID = env("GITHUB_CLIENT_ID", default="")
 if GITHUB_CLIENT_ID != "":
@@ -288,6 +287,8 @@ if GOOGLE_CLIENT_ID != "":
             "client_id": env("GOOGLE_CLIENT_ID"),
             "secret": env("GOOGLE_CLIENT_SECRET"),
         },
+        "AUTO_SIGNUP": True,
+        "EMAIL_AUTHENTICATION": True,
     }
 
 MAILGUN_API_KEY = env("MAILGUN_API_KEY", default="")
