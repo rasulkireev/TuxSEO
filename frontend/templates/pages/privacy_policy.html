@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block meta %}
+<title>Privacy Policy - TuxSEO</title>
+<meta name="description" content="Privacy Policy for TuxSEO - Learn how we collect, use, and protect your personal information." />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="https://{{ request.get_host }}{% url 'privacy_policy' %}" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="Privacy Policy - TuxSEO" />
+<meta property="og:url" content="https://{{ request.get_host }}{% url 'privacy_policy' %}" />
+<meta property="og:description" content="Privacy Policy for TuxSEO - Learn how we collect, use, and protect your personal information." />
+<meta property="og:image" content="https://osig.app/g?site=meta&style=logo&font=markerfelt&title=Privacy Policy&subtitle=TuxSEO&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
+<meta property="og:locale" content="en_US" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:creator" content="@rasulkireev" />
+<meta name="twitter:site" content="@rasulkireev" />
+<meta name="twitter:title" content="Privacy Policy - TuxSEO" />
+<meta name="twitter:description" content="Privacy Policy for TuxSEO - Learn how we collect, use, and protect your personal information." />
+<meta name="twitter:image" content="https://osig.app/g?site=x&style=logo&font=markerfelt&title=Privacy Policy&subtitle=TuxSEO&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
+{% endblock meta %}
+
+{% block content %}
+<div class="px-4 py-16 mx-auto max-w-4xl sm:py-24 sm:px-6 lg:px-8">
+  <div class="text-center">
+    <h1 class="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
+      Privacy Policy
+    </h1>
+    <p class="mt-4 text-lg text-gray-600">
+      Last updated: October 2025
+    </p>
+  </div>
+
+  <div class="mt-16 max-w-none prose prose-lg">
+    <h2>1. Information We Collect</h2>
+    <p>
+      We collect information you provide directly to us, such as when you create an account,
+      use our services, or contact us for support. This may include:
+    </p>
+    <ul>
+      <li>Name and email address</li>
+      <li>Account credentials</li>
+      <li>Project information and content</li>
+      <li>Payment information (processed securely through Stripe)</li>
+      <li>Communication preferences</li>
+    </ul>
+
+    <h2>2. How We Use Your Information</h2>
+    <p>We use the information we collect to:</p>
+    <ul>
+      <li>Provide, maintain, and improve our services</li>
+      <li>Process transactions and send related information</li>
+      <li>Send technical notices, updates, and support messages</li>
+      <li>Respond to your comments and questions</li>
+      <li>Monitor and analyze usage and trends</li>
+    </ul>
+
+    <h2>3. Information Sharing</h2>
+    <p>
+      We do not sell, trade, or otherwise transfer your personal information to third parties
+      without your consent, except as described in this policy. We may share your information:
+    </p>
+    <ul>
+      <li>With service providers who assist us in operating our platform</li>
+      <li>When required by law or to protect our rights</li>
+      <li>In connection with a business transfer or acquisition</li>
+    </ul>
+
+    <h2>4. Data Security</h2>
+    <p>
+      We implement appropriate security measures to protect your personal information against
+      unauthorized access, alteration, disclosure, or destruction. However, no method of
+      transmission over the internet is 100% secure.
+    </p>
+
+    <h2>5. Cookies and Tracking</h2>
+    <p>
+      We use cookies and similar tracking technologies to enhance your experience on our
+      platform. You can control cookie settings through your browser preferences.
+    </p>
+
+    <h2>6. Your Rights</h2>
+    <p>You have the right to:</p>
+    <ul>
+      <li>Access and update your personal information</li>
+      <li>Delete your account and associated data</li>
+      <li>Opt out of marketing communications</li>
+      <li>Request a copy of your data</li>
+    </ul>
+
+    <h2>7. Changes to This Policy</h2>
+    <p>
+      We may update this privacy policy from time to time. We will notify you of any changes
+      by posting the new policy on this page and updating the "Last updated" date.
+    </p>
+
+    <h2>8. Contact Us</h2>
+    <p>
+      If you have any questions about this privacy policy, please contact us at:
+    </p>
+    <p>
+      Email: privacy@tuxseo.com<br>
+      Address: LVTD, LLC<br>
+      Website: <a href="{% url 'home' %}">tuxseo.com</a>
+    </p>
+  </div>
+</div>
+{% endblock content %}

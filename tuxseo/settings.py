@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "allauth.account",
     "allauth.socialaccount",
     "allauth.socialaccount.providers.github",
+    "allauth.socialaccount.providers.google",
     "django_q",
     "django_extensions",
     "django_structlog",
@@ -236,6 +237,10 @@ SITE_ID = 1
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
+if ENVIRONMENT != "dev":
+    ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
+
+
 LOGIN_REDIRECT_URL = "home"
 ACCOUNT_LOGOUT_REDIRECT_URL = "home"
 
@@ -250,10 +255,10 @@ ACCOUNT_FORMS = {
     "login": "core.forms.CustomLoginForm",
 }
 
-if ENVIRONMENT != "dev":
-    ACCOUNT_DEFAULT_HTTP_PROTOCOL = "https"
-
+SOCIALACCOUNT_AUTO_SIGNUP = True
+SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
 SOCIALACCOUNT_PROVIDERS = {}
+SOCIALACCOUNT_EMAIL_VERIFICATION = False
 
 GITHUB_CLIENT_ID = env("GITHUB_CLIENT_ID", default="")
 if GITHUB_CLIENT_ID != "":
@@ -267,6 +272,23 @@ if GITHUB_CLIENT_ID != "":
         },
     }
 
+GOOGLE_CLIENT_ID = env("GOOGLE_CLIENT_ID", default="")
+GOOGLE_CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET", default="")
+if GOOGLE_CLIENT_ID != "":
+    SOCIALACCOUNT_PROVIDERS["google"] = {
+        "SCOPE": [
+            "profile",
+            "email",
+        ],
+        "AUTH_PARAMS": {
+            "access_type": "online",
+        },
+        "OAUTH_PKCE_ENABLED": True,
+        "APP": {
+            "client_id": env("GOOGLE_CLIENT_ID"),
+            "secret": env("GOOGLE_CLIENT_SECRET"),
+        },
+    }
 
 MAILGUN_API_KEY = env("MAILGUN_API_KEY", default="")
 ANYMAIL = {

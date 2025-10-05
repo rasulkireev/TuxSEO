@@ -169,6 +169,14 @@ class PricingView(TemplateView):
         return context
 
 
+class PrivacyPolicyView(TemplateView):
+    template_name = "pages/privacy_policy.html"
+
+
+class TermsOfServiceView(TemplateView):
+    template_name = "pages/terms_of_service.html"
+
+
 def create_checkout_session(request, pk, plan):
     user = request.user
 
