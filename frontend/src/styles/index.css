@@ -20,4 +20,15 @@
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 200ms;
   }
+
+  /* Keyword tooltip styles */
+  .keyword-tooltip {
+    z-index: 1000;
+    pointer-events: none;
+  }
+
+  /* Make tooltip clickable when it has cursor-pointer class */
+  .keyword-tooltip.cursor-pointer {
+    pointer-events: auto;
+  }
 }

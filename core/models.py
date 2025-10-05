@@ -494,7 +494,14 @@ class Project(BaseModel):
                 )
                 suggestions.append(suggestion)
 
-            return BlogPostTitleSuggestion.objects.bulk_create(suggestions)
+            created_suggestions = BlogPostTitleSuggestion.objects.bulk_create(suggestions)
+
+            # Schedule background tasks to save target keywords for each suggestion
+            for suggestion in created_suggestions:
+                if suggestion.target_keywords:
+                    async_task("core.tasks.save_title_suggestion_keywords", suggestion.id)
+
+            return created_suggestions
 
     def get_a_list_of_links(self):
         agent = Agent(

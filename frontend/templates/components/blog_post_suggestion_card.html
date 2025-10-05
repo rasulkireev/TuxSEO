@@ -113,10 +113,8 @@
             Keywords
           </h5>
           <div class="flex flex-wrap gap-2">
-            {% for keyword in suggestion.target_keywords %}
-              <span class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-50 rounded-full border border-gray-200 transition-colors hover:bg-gray-100">
-                {{ keyword }}
-              </span>
+            {% for keyword_data in suggestion.keywords_with_usage %}
+              {% include "components/keyword_chip.html" with keyword=keyword_data.text project_id=suggestion.project.id keyword_in_use=keyword_data.in_use %}
             {% endfor %}
           </div>
         </div>

@@ -145,6 +145,29 @@ def blog_post_has_placeholders(blog_post: GeneratedBlogPost) -> bool:
     return False
 
 
+def get_project_keywords_dict(project: Project) -> dict:
+    """
+    Build a dictionary of project keywords for quick lookup.
+
+    Returns a dict mapping lowercase keyword text to keyword metadata:
+    {
+        "keyword_text": {
+            "keyword": Keyword object,
+            "in_use": bool,
+            "project_keyword_id": int
+        }
+    }
+    """
+    project_keywords = {}
+    for project_keyword in project.project_keywords.select_related("keyword").all():
+        project_keywords[project_keyword.keyword.keyword_text.lower()] = {
+            "keyword": project_keyword.keyword,
+            "in_use": project_keyword.use,
+            "project_keyword_id": project_keyword.id,
+        }
+    return project_keywords
+
+
 def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
     content = blog_post.content
     content = content.strip()
