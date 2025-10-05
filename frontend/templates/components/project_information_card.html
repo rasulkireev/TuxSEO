@@ -1,6 +1,6 @@
 {% load humanize %}
 
-<div class="overflow-hidden p-6 bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-300 transform hover:shadow-lg hover:border-gray-300 hover:-translate-y-1">
+<div class="overflow-hidden p-6 bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-300 transform hover:shadow-lg hover:border-gray-300 hover:-translate-y-1" data-controller="delete-project">
   <!-- Project Content -->
   <div class="flex flex-col h-full">
     <!-- Header -->
@@ -64,12 +64,65 @@
       </div>
     </div>
 
-    <!-- Action Button (pushed to bottom) -->
-    <div class="flex justify-end mt-auto">
+    <!-- Action Buttons (pushed to bottom) -->
+    <div class="flex gap-2 justify-end mt-auto">
+      <button
+        type="button"
+        data-action="click->delete-project#showModal"
+        class="px-4 py-2 text-sm font-medium text-red-700 bg-white rounded-md border border-red-300 shadow-sm transition-all duration-200 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+        Delete
+      </button>
       <a href="{% url 'project_detail' project.id %}"
          class="px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-all duration-200 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
         View details �
       </a>
+    </div>
+  </div>
+
+  <!-- Delete Confirmation Modal -->
+  <div
+    data-delete-project-target="modal"
+    class="hidden fixed inset-0 z-50 p-4 bg-black bg-opacity-50 opacity-0 transition-opacity duration-300 pointer-events-none"
+    data-action="click->delete-project#hideModal"
+    style="display: flex; justify-content: center; align-items: center;">
+    <div
+      class="p-6 mx-4 w-full max-w-md bg-white rounded-lg shadow-xl"
+      data-action="click->delete-project#hideModal:stop">
+      <div class="flex items-start mb-4">
+        <div class="flex flex-shrink-0 justify-center items-center mx-auto w-12 h-12 bg-red-100 rounded-full sm:mx-0 sm:h-10 sm:w-10">
+          <svg class="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+          </svg>
+        </div>
+        <div class="mt-0 ml-4 text-left">
+          <h3 class="text-lg font-medium leading-6 text-gray-900">
+            Delete project
+          </h3>
+          <div class="mt-2">
+            <p class="text-sm text-gray-500">
+              Are you sure you want to delete "<strong>{% if project.name %}{{ project.name }}{% else %}{{ project.url|truncatechars:40 }}{% endif %}</strong>"? This will permanently delete all associated data including blog post suggestions, generated content, and keywords. This action cannot be undone.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <form method="post" action="{% url 'project_delete' project.id %}" data-delete-project-target="form">
+        {% csrf_token %}
+        <div class="flex gap-3 justify-end mt-5 sm:mt-4">
+          <button
+            type="button"
+            data-action="click->delete-project#hideModal"
+            class="inline-flex justify-center px-4 py-2 w-full text-base font-medium text-gray-700 bg-white rounded-md border border-gray-300 shadow-sm transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 sm:w-auto sm:text-sm">
+            Cancel
+          </button>
+          <button
+            type="button"
+            data-action="click->delete-project#submitDelete"
+            class="inline-flex justify-center px-4 py-2 w-full text-base font-medium text-white bg-red-600 rounded-md border border-transparent shadow-sm transition-colors hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm">
+            Delete project
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </div>

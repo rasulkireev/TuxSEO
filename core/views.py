@@ -12,7 +12,7 @@ from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import redirect
 from django.urls import reverse, reverse_lazy
-from django.views.generic import DetailView, ListView, TemplateView, UpdateView
+from django.views.generic import DeleteView, DetailView, ListView, TemplateView, UpdateView
 from django_q.tasks import async_task
 from djstripe import models as djstripe_models
 
@@ -466,3 +466,30 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
                     )
 
         return context
+
+
+class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
+    login_url = "account_login"
+    model = Project
+    success_url = reverse_lazy("home")
+    success_message = "Project deleted successfully"
+
+    def get_queryset(self):
+        return Project.objects.filter(profile=self.request.user.profile)
+
+    def form_valid(self, form):
+        project_name = self.object.name or self.object.url
+
+        async_task(
+            track_event,
+            profile_id=self.request.user.profile.id,
+            event_name="project_deleted",
+            properties={
+                "project_id": self.object.id,
+                "project_name": project_name,
+            },
+            source_function="ProjectDeleteView - form_valid",
+            group="Track Event",
+        )
+
+        return super().form_valid(form)
