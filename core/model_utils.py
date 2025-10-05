@@ -72,6 +72,7 @@ def run_agent_synchronously(agent, input_string, deps=None, function_name="", mo
                 function_name=function_name,
                 model_name=model_name,
             )
+            raise
 
 
 def get_html_content(url):

@@ -312,13 +312,13 @@ class Project(BaseModel):
         Analyze the page content using PydanticAI and update project details.
         Should be called after get_page_content().
         """
-        from core.agents.analyze_project_agent import analyze_project_agent
+        from core.agents import analyze_project_agent
 
         html_content = get_html_content(self.url)
 
         result = run_agent_synchronously(
             analyze_project_agent,
-            "Please analyze this web page content and extract the key information.",
+            "Analyze this web page content and extract the key information.",
             deps=WebPageContent(
                 title=self.title,
                 description=self.description,

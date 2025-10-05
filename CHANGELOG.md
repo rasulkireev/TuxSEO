@@ -24,9 +24,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - You will now see which keywords are being use
 - You can now set keywords to use from the Title Suggestions view
 - Google Auth
+- Added a way to delete projects (irreversably)
 
 **Fixed**
 - link to the generated blog post upon creation
+- if we failed to get project content and analyze it, delete the project
 
 
 ## [0.0.6] - 2025-09-15

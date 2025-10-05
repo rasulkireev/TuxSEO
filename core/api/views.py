@@ -76,39 +76,56 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
 
     project = get_or_create_project(profile.id, data.url, source="scan_project")
 
-    got_content = project.get_page_content()
+    try:
+        got_content = project.get_page_content()
 
-    analyzed_project = False
-    if got_content:
-        analyzed_project = project.analyze_content()
-    else:
-        project.delete()
-        return {
-            "status": "error",
-            "message": "Failed to get page content",
-        }
+        analyzed_project = False
+        if got_content:
+            analyzed_project = project.analyze_content()
+        else:
+            project.delete()
+            return {
+                "status": "error",
+                "message": "Failed to get page content",
+            }
 
-    if analyzed_project:
-        return {
-            "status": "success",
-            "project_id": project.id,
-            "name": project.name,
-            "type": project.get_type_display(),
-            "url": project.url,
-            "summary": project.summary,
-        }
-    else:
+        if analyzed_project:
+            return {
+                "status": "success",
+                "project_id": project.id,
+                "name": project.name,
+                "type": project.get_type_display(),
+                "url": project.url,
+                "summary": project.summary,
+            }
+        else:
+            logger.error(
+                "[Scan Project] Failed to analyze project",
+                got_content=got_content,
+                analyzed_project=analyzed_project,
+                project_id=project.id if project else None,
+                url=data.url,
+            )
+            project.delete()
+            return {
+                "status": "error",
+                "message": "Failed to analyze project",
+            }
+
+    except Exception as e:
         logger.error(
-            "[Scan Project] Project has no content",
-            got_content=got_content,
-            analyzed_project=analyzed_project,
+            "[Scan Project] Unexpected error during project scan",
+            error=str(e),
+            exc_info=True,
             project_id=project.id if project else None,
             url=data.url,
+            profile_id=profile.id,
         )
-        project.delete()
+        if project and project.id:
+            project.delete()
         return {
             "status": "error",
-            "message": "Failed to analyze project",
+            "message": "An unexpected error occurred while scanning the project",
         }
 
 
