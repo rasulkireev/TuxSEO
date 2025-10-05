@@ -311,7 +311,6 @@ class Project(BaseModel):
         """
         Analyze the page content using PydanticAI and update project details.
         Should be called after get_page_content().
-        Returns True on success, False on failure.
         """
         from core.agents import analyze_project_agent
 
@@ -319,7 +318,7 @@ class Project(BaseModel):
 
         result = run_agent_synchronously(
             analyze_project_agent,
-            "Please analyze this web page content and extract the key information.",
+            "Analyze this web page content and extract the key information.",
             deps=WebPageContent(
                 title=self.title,
                 description=self.description,

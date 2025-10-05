@@ -117,13 +117,6 @@ class AccountSignupView(SignupView):
 
         return response
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context["google_enabled"] = True
-        if not settings.DEBUG:
-            context["google_enabled"] = False
-        return context
-
 
 class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     login_url = "account_login"

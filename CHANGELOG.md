@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Fixed**
 - link to the generated blog post upon creation
+- if we failed to get project content and analyze it, delete the project
 
 
 ## [0.0.6] - 2025-09-15
