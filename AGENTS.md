@@ -1,5 +1,9 @@
 # AGENTS.md
 
+## Commands
+
+- Do not run any commands any commands in the agent.
+
 ## Tests
 
 - Do not write new tests unless specifically asked to.

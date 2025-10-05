@@ -385,6 +385,36 @@ def generate_and_post_blog_post(project_id: int):
         return f"No blog post to post for {project.name}."
 
 
+def save_title_suggestion_keywords(title_suggestion_id: int):
+    title_suggestion = BlogPostTitleSuggestion.objects.get(id=title_suggestion_id)
+
+    if not title_suggestion.target_keywords or not title_suggestion.project:
+        logger.warning(
+            "[Save Title Suggestion Keywords] No target keywords or project found",
+            title_suggestion_id=title_suggestion_id,
+            has_keywords=bool(title_suggestion.target_keywords),
+            has_project=bool(title_suggestion.project),
+        )
+        return "No keywords or project to save"
+
+    saved_keywords_count = 0
+    for keyword_text in title_suggestion.target_keywords:
+        if keyword_text and keyword_text.strip():
+            save_keyword(keyword_text.strip(), title_suggestion.project)
+            saved_keywords_count += 1
+
+    logger.info(
+        "[Save Title Suggestion Keywords] Successfully saved keywords",
+        title_suggestion_id=title_suggestion_id,
+        project_id=title_suggestion.project.id,
+        project_name=title_suggestion.project.name,
+        saved_keywords_count=saved_keywords_count,
+        total_keywords=len(title_suggestion.target_keywords),
+    )
+
+    return f"Saved {saved_keywords_count} keywords for project {title_suggestion.project.name}"
+
+
 def get_and_save_related_keywords(
     project_id: int,
     limit: int = 10,

@@ -260,6 +260,15 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
             posted_count=Count("generated_blog_posts", filter=Q(generated_blog_posts__posted=True))
         ).prefetch_related("generated_blog_posts")
 
+        # Get all project keywords with their usage status for quick lookup
+        project_keywords = {}
+        for pk in project.project_keywords.select_related("keyword").all():
+            project_keywords[pk.keyword.keyword_text.lower()] = {
+                "keyword": pk.keyword,
+                "in_use": pk.use,
+                "project_keyword_id": pk.id,
+            }
+
         # Categorize suggestions based on the annotated posted_count
         posted_suggestions = []
         archived_suggestions = []
@@ -267,6 +276,23 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
 
         for suggestion in all_suggestions:
             has_posted = suggestion.posted_count > 0
+
+            # Add keyword usage info to each suggestion
+            suggestion.keywords_with_usage = []
+            if suggestion.target_keywords:
+                for keyword_text in suggestion.target_keywords:
+                    keyword_info = project_keywords.get(
+                        keyword_text.lower(),
+                        {"keyword": None, "in_use": False, "project_keyword_id": None},
+                    )
+                    suggestion.keywords_with_usage.append(
+                        {
+                            "text": keyword_text,
+                            "keyword": keyword_info["keyword"],
+                            "in_use": keyword_info["in_use"],
+                            "project_keyword_id": keyword_info["project_keyword_id"],
+                        }
+                    )
 
             if has_posted:
                 posted_suggestions.append(suggestion)
@@ -407,10 +433,39 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         generated_post = self.object
+        project = generated_post.project
 
         context["has_pro_subscription"] = self.request.user.profile.has_active_subscription
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
-            project=generated_post.project
+            project=project
         ).exists()
+
+        # Add keyword usage info to the title suggestion
+        if generated_post.title:
+            # Get all project keywords with their usage status for quick lookup
+            project_keywords = {}
+            for pk in project.project_keywords.select_related("keyword").all():
+                project_keywords[pk.keyword.keyword_text.lower()] = {
+                    "keyword": pk.keyword,
+                    "in_use": pk.use,
+                    "project_keyword_id": pk.id,
+                }
+
+            # Add keyword usage info to the suggestion
+            generated_post.title.keywords_with_usage = []
+            if generated_post.title.target_keywords:
+                for keyword_text in generated_post.title.target_keywords:
+                    keyword_info = project_keywords.get(
+                        keyword_text.lower(),
+                        {"keyword": None, "in_use": False, "project_keyword_id": None},
+                    )
+                    generated_post.title.keywords_with_usage.append(
+                        {
+                            "text": keyword_text,
+                            "keyword": keyword_info["keyword"],
+                            "in_use": keyword_info["in_use"],
+                            "project_keyword_id": keyword_info["project_keyword_id"],
+                        }
+                    )
 
         return context
