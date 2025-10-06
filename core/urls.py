@@ -21,6 +21,11 @@ urlpatterns = [
     path(
         "project/<int:pk>/keywords/", views.ProjectKeywordsView.as_view(), name="project_keywords"
     ),
+    path(
+        "project/<int:pk>/publish-history",
+        views.PublishHistoryView.as_view(),
+        name="publish_history",
+    ),
     path("project/<int:pk>/delete/", views.ProjectDeleteView.as_view(), name="project_delete"),
     path(
         "project/<int:project_pk>/post/<int:pk>/",

@@ -468,6 +468,28 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
+class PublishHistoryView(LoginRequiredMixin, DetailView):
+    login_url = "account_login"
+    model = Project
+    template_name = "project/project_publish_history.html"
+    context_object_name = "project"
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        project = self.object
+
+        published_posts = (
+            GeneratedBlogPost.objects.filter(project=project, posted=True)
+            .select_related("title")
+            .order_by("-date_posted", "-updated_at")
+        )
+
+        context["published_posts"] = published_posts
+        context["total_published_count"] = published_posts.count()
+
+        return context
+
+
 class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
     login_url = "account_login"
     model = Project

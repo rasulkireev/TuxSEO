@@ -229,7 +229,7 @@
             data-action="click->archived-list#toggle"
           >
             <div>
-              <h2 class="text-xl font-bold tracking-tight text-gray-900">Blogging Agent</h2>
+              <h2 class="text-xl font-bold tracking-tight text-gray-900">Automatic Submission Configuration</h2>
               <p class="mt-1 text-sm text-gray-600">Configure automatic blog post submission settings</p>
             </div>
             <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -237,8 +237,6 @@
             </svg>
           </button>
           <div data-archived-list-target="list" class="p-6 border-t border-gray-200">
-
-        <h3 class="mb-4 text-lg font-semibold text-gray-900">Automatic Submission Configuration</h3>
 
         <!-- Automatic Post Submission Toggle -->
         <div
@@ -349,7 +347,18 @@
 
           <!-- Form Submit Section -->
           <div class="pt-6 border-t border-gray-200">
-            <div class="flex justify-end">
+            <div class="flex justify-end space-x-2">
+              <!-- Publish History Link -->
+              <a
+                href="{% url 'publish_history' project.id %}"
+                class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              >
+                <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                View Publish History
+              </a>
+
               <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-colors duration-200 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
                 <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
