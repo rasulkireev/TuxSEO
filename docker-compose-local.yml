@@ -123,7 +123,7 @@ services:
     entrypoint: >
       /bin/sh -c "
       sleep 5 &&
-      /usr/bin/mc config host add myminio http://minio:9000 tuxseo tuxseo &&
+      /usr/bin/mc config host add myminio http://minio:9000 tuxseo-user tuxseo-password &&
       /usr/bin/mc mb myminio/tuxseo-dev &&
       /usr/bin/mc anonymous set download myminio/tuxseo-dev &&
       exit 0;

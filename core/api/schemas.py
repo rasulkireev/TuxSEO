@@ -216,3 +216,10 @@ class GetKeywordDetailsOut(Schema):
     status: str
     message: str | None = None
     keyword: KeywordMetricsOut | None = None
+
+
+class GeneratedImageOut(Schema):
+    status: str
+    message: str | None = None
+    image_url: str | None = None
+    id: int | None = None

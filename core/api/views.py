@@ -18,6 +18,7 @@ from core.api.schemas import (
     FixGeneratedBlogPostIn,
     FixGeneratedBlogPostOut,
     GeneratedContentOut,
+    GeneratedImageOut,
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
@@ -282,6 +283,52 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
             error=str(e),
             exc_info=True,
             suggestion_id=suggestion_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": "An unexpected error occurred. Please try again later.",
+        }
+
+
+@api.post("/generate-blog-image/{blog_post_id}", response=GeneratedImageOut, auth=[session_auth])
+def generate_blog_image(request: HttpRequest, blog_post_id: int):
+    profile = request.auth
+    generated_blog_post = get_object_or_404(
+        GeneratedBlogPost, id=blog_post_id, project__profile=profile
+    )
+
+    try:
+        result = generated_blog_post.generate_og_image()
+
+        if not result or not result.image:
+            return {
+                "status": "error",
+                "message": "Failed to generate image. Please try again.",
+            }
+
+        return {
+            "status": "success",
+            "id": result.id,
+            "image_url": result.image.url,
+            "message": "Image generated successfully",
+        }
+
+    except ValueError as e:
+        logger.error(
+            "Failed to generate blog image",
+            error=str(e),
+            exc_info=True,
+            blog_post_id=blog_post_id,
+            profile_id=profile.id,
+        )
+        return {"status": "error", "message": str(e)}
+    except Exception as e:
+        logger.error(
+            "Unexpected error generating blog image",
+            error=str(e),
+            exc_info=True,
+            blog_post_id=blog_post_id,
             profile_id=profile.id,
         )
         return {

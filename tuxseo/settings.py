@@ -204,16 +204,18 @@ if not aws_s3_endpoint_url:
 else:
     STORAGES = {
         "default": {
-            "BACKEND": "storages.backends.s3.S3Storage",
+            "BACKEND": "tuxseo.storages.CustomS3Boto3Storage",
             "OPTIONS": {
                 "bucket_name": folder_name,
                 "default_acl": "public-read",
-                "region_name": "eu-east-1",
+                "region_name": "us-east-1",
                 "endpoint_url": aws_s3_endpoint_url,
                 "access_key": env("AWS_ACCESS_KEY_ID"),
                 "secret_key": env("AWS_SECRET_ACCESS_KEY"),
                 "querystring_auth": False,
                 "file_overwrite": False,
+                "signature_version": "s3v4",
+                "use_ssl": False,
             },
         },
         "staticfiles": {

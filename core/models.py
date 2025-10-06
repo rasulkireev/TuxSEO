@@ -1,12 +1,16 @@
 from decimal import Decimal, InvalidOperation
+from io import BytesIO
 
 import requests
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django_q.tasks import async_task
+from google import genai
+from PIL import Image
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -1098,6 +1102,69 @@ class GeneratedBlogPost(BaseModel):
 
         if self.placeholders is True:
             self.fix_placeholders()
+
+    def generate_og_image(self):
+        gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
+
+        try:
+            response = gemini_client.models.generate_content(
+                model="gemini-2.5-flash-image",
+                contents=[
+                    "Create an abstract, modern, clean, minimalist (no text) og image for a\
+                    blog post. Title: {self.title.title}. Description: {self.title.description}"
+                ],
+            )
+
+            first_candidate = response.candidates[0]
+            content_parts = first_candidate.content.parts
+
+            for part in content_parts:
+                if part.inline_data is None:
+                    continue
+
+                generated_image = Image.open(BytesIO(part.inline_data.data))
+
+                image_buffer = BytesIO()
+                generated_image.save(image_buffer, format="PNG")
+                image_buffer.seek(0)
+
+                image_filename = f"{self.slug}-image.png"
+                self.image.save(
+                    image_filename,
+                    ContentFile(image_buffer.read()),
+                    save=True,
+                )
+
+                logger.info(
+                    "[Generate Image] Image generated and saved successfully",
+                    blog_post_id=self.id,
+                    image_filename=image_filename,
+                )
+
+                return self
+
+            logger.warning(
+                "[Generate Image] No image data found in response",
+                blog_post_id=self.id,
+            )
+            return None
+
+        except ValueError as e:
+            logger.error(
+                "[Generate Image] Failed to generate image - invalid value",
+                error=str(e),
+                exc_info=True,
+                blog_post_id=self.id,
+            )
+            raise
+        except Exception as e:
+            logger.error(
+                "[Generate Image] Failed to generate image - unexpected error",
+                error=str(e),
+                exc_info=True,
+                blog_post_id=self.id,
+            )
+            raise
 
 
 class ProjectPage(BaseModel):
