@@ -957,7 +957,7 @@ class GeneratedBlogPost(BaseModel):
 
         base_logger_info = {
             "blog_post_id": self.id,
-            "project_id": self.project.id,
+            "project_id": self.project_id,
             "project_name": self.project.name,
             "profile_id": self.project.profile.id,
             "profile_email": self.project.profile.user.email,
