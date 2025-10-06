@@ -111,7 +111,6 @@ TEMPLATES = [
                 "core.context_processors.pro_subscription_status",
                 "core.context_processors.posthog_api_key",
                 "core.context_processors.available_social_providers",
-                "core.context_processors.google_enabled",
             ],
         },
     },

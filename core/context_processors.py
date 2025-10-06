@@ -45,7 +45,3 @@ def available_social_providers(request):
         "available_social_providers": available_providers_list,
         "has_social_providers": len(available_providers_list) > 0,
     }
-
-
-def google_enabled(request):
-    return {"google_enabled": settings.DEBUG}

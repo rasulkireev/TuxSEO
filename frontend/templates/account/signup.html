@@ -80,7 +80,7 @@
         </div>
 
         <div class="grid grid-cols-2 gap-4 mt-6">
-          {% if 'google' in available_social_providers and google_enabled %}
+          {% if 'google' in available_social_providers %}
             <form method="post" action="{% provider_login_url 'google' %}">
               {% csrf_token %}
               <button class="flex gap-3 justify-center items-center px-3 py-2 w-full text-sm font-semibold text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm hover:bg-gray-50 focus-visible:ring-transparent">
