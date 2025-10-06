@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Change**
 - Generate More Ideas now shows up all the time
 
+**Fixed**
+- actually run validations now
+
 
 ## [0.0.7] - 2025-10-04
 **Added**

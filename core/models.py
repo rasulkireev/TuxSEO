@@ -847,7 +847,7 @@ class BlogPostTitleSuggestion(BaseModel):
             model_name="BlogPostTitleSuggestion",
         )
 
-        return GeneratedBlogPost.objects.create(
+        return GeneratedBlogPost.objects.create_and_validate(
             project=self.project,
             title=self,
             description=result.data.description,
@@ -920,7 +920,7 @@ class GeneratedBlogPost(BaseModel):
     posted = models.BooleanField(default=False)
     date_posted = models.DateTimeField(null=True, blank=True)
 
-    # Validation Issues - Not guilty until proven guilty
+    # Validation Issues - Innocent until proven guilty
     content_too_short = models.BooleanField(default=False)
     has_valid_ending = models.BooleanField(default=True)
     placeholders = models.BooleanField(default=False)
@@ -955,28 +955,36 @@ class GeneratedBlogPost(BaseModel):
         """Run validation and update fields in a single query."""
         from core.utils import blog_post_has_placeholders, blog_post_has_valid_ending
 
+        base_logger_info = {
+            "blog_post_id": self.id,
+            "project_id": self.project_id,
+            "project_name": self.project.name,
+            "profile_id": self.project.profile.id,
+            "profile_email": self.project.profile.user.email,
+        }
+
+        logger.info("[Validation] Running validation", **base_logger_info)
+
         if not self.content:
-            content_too_short = True
-            has_valid_ending = False
-            placeholders = False
+            self.content_too_short = True
+            self.has_valid_ending = False
+            self.placeholders = False
 
-        content = self.content.strip()
+        else:
+            content = self.content.strip()
+            self.content_too_short = len(content) < 3000
+            self.has_valid_ending = blog_post_has_valid_ending(self)
+            self.placeholders = blog_post_has_placeholders(self)
 
-        content_too_short = len(content) < 3000
-        has_valid_ending = blog_post_has_valid_ending(self)
-        placeholders = blog_post_has_placeholders(self)
-
-        self.content_too_short = content_too_short
-        self.has_valid_ending = has_valid_ending
-        self.placeholders = placeholders
         self.save(update_fields=["content_too_short", "has_valid_ending", "placeholders"])
 
         logger.info(
             "[Validation] Blog post validation complete",
-            blog_post_id=self.id,
-            content_too_short=content_too_short,
-            has_valid_ending=has_valid_ending,
-            placeholders=placeholders,
+            **base_logger_info,
+            blog_post_title=self.title.title,
+            content_too_short=self.content_too_short,
+            has_valid_ending=self.has_valid_ending,
+            placeholders=self.placeholders,
         )
 
     def submit_blog_post_to_endpoint(self):
