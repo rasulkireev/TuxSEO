@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Added**
 - page to show publish history
 
+**Change**
+- Generate More Ideas now shows up all the time
+
 
 ## [0.0.7] - 2025-10-04
 **Added**
