@@ -56,7 +56,7 @@ class SuperuserAPIKeyAuth(APIKeyQuery):
             logger.warning(
                 "[Django Ninja Auth] Non-superuser attempted admin access",
                 extra={
-                    "profile_id": profile.user.id,
+                    "profile_id": profile.user_id,
                 },
             )
             return None
