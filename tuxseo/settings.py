@@ -18,7 +18,9 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
 from structlog_sentry import SentryProcessor
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -418,10 +420,15 @@ if ENVIRONMENT == "prod":
 if ENVIRONMENT == "prod" and SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        send_default_pii=True,
         integrations=[
-            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+            LoggingIntegration(event_level=None, level=None),
+            RedisIntegration(max_data_size=None),
+            DjangoIntegration(transaction_style="url"),
         ],
+        send_default_pii=True,
+        traces_sample_rate=0.5,
+        profile_session_sample_rate=0.5,
+        profile_lifecycle="trace",
     )
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
 
