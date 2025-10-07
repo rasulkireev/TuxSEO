@@ -1,8 +1,11 @@
+import logging
+
 from djstripe.event_handlers import djstripe_receiver
 from djstripe.models import Customer, Event, Price, Product, Subscription
-from sentry_sdk import logger
 
 from core.models import Profile, ProfileStates
+
+logger = logging.getLogger(__name__)
 
 
 @djstripe_receiver("customer.subscription.created")

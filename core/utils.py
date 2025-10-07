@@ -1,15 +1,17 @@
+import logging
 import re
 
 import posthog
 from django.conf import settings
 from django.forms.utils import ErrorList
 from pydantic_ai import Agent
-from sentry_sdk import logger
 
 from core.choices import KeywordDataSource
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.model_utils import run_agent_synchronously
 from core.models import GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
+
+logger = logging.getLogger(__name__)
 
 
 class DivErrorList(ErrorList):

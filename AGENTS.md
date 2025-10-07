@@ -621,7 +621,9 @@ def process_order(order_id: str):
 
 **Bad - Direct dependency:**
 ```python
-from sentry_sdk import logger
+import logging
+
+logger = logging.getLogger(__name__)
 
 def process_data(data):
     logging.info("Processing started")

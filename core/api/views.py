@@ -1,9 +1,10 @@
+import logging
+
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
 from ninja import NinjaAPI
-from sentry_sdk import logger
 
 from core.api.auth import session_auth, superuser_api_auth
 from core.api.schemas import (
@@ -48,6 +49,8 @@ from core.models import (
     ProjectPage,
 )
 from core.utils import get_or_create_project
+
+logger = logging.getLogger(__name__)
 
 api = NinjaAPI(docs_url=None)
 

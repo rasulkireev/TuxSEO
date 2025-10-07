@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
 import os
+from logging import basicConfig
 from pathlib import Path
 
 import environ
@@ -38,6 +39,8 @@ LOGFIRE_TOKEN = env("LOGFIRE_TOKEN", default="")
 
 if LOGFIRE_TOKEN != "":
     logfire.configure(environment=ENVIRONMENT)
+    basicConfig(handlers=[logfire.LogfireLoggingHandler()])
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/

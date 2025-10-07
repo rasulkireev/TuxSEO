@@ -1,8 +1,11 @@
+import logging
+
 from django.http import HttpRequest
 from ninja.security import APIKeyQuery
-from sentry_sdk import logger
 
 from core.models import Profile
+
+logger = logging.getLogger(__name__)
 
 
 class APIKeyAuth(APIKeyQuery):

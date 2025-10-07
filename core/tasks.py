@@ -1,5 +1,6 @@
 import calendar
 import json
+import logging
 import random
 from urllib.parse import unquote
 
@@ -8,7 +9,6 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 from django_q.tasks import async_task
-from sentry_sdk import logger
 
 from core.choices import ContentType
 from core.models import (
@@ -21,6 +21,8 @@ from core.models import (
     ProjectPage,
 )
 from core.utils import save_keyword
+
+logger = logging.getLogger(__name__)
 
 
 def add_email_to_buttondown(email, tag):

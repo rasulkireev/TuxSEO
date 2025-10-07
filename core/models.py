@@ -1,3 +1,4 @@
+import logging
 from decimal import Decimal
 
 import requests
@@ -10,7 +11,6 @@ from django_q.tasks import async_task
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
-from sentry_sdk import logger
 
 from core.agents import content_editor_agent
 from core.base_models import BaseModel
@@ -49,6 +49,8 @@ from core.schemas import (
     TitleSuggestions,
     WebPageContent,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class Profile(BaseModel):

@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlencode
 
 import stripe
@@ -15,7 +16,6 @@ from django.urls import reverse, reverse_lazy
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView, UpdateView
 from django_q.tasks import async_task
 from djstripe import models as djstripe_models
-from sentry_sdk import logger
 
 from core.choices import BlogPostStatus, Language, ProfileStates
 from core.forms import AutoSubmissionSettingForm, ProfileUpdateForm, ProjectScanForm
@@ -29,6 +29,8 @@ from core.models import (
 )
 from core.tasks import track_event, try_create_posthog_alias
 from core.utils import get_project_keywords_dict
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
 

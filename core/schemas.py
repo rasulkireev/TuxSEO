@@ -1,7 +1,10 @@
+import logging
+
 from pydantic import BaseModel, Field, field_validator
-from sentry_sdk import logger
 
 from core.choices import Language, ProjectPageType, ProjectType
+
+logger = logging.getLogger(__name__)
 
 
 class WebPageContent(BaseModel):

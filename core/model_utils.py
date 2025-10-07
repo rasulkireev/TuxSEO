@@ -1,11 +1,13 @@
+import logging
 import random
 import string
 
 import requests
 from pydantic_ai import capture_run_messages
-from sentry_sdk import logger
 
 from tuxseo import settings
+
+logger = logging.getLogger(__name__)
 
 
 def generate_random_key():
