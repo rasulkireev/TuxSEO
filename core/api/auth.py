@@ -1,24 +1,23 @@
 from django.http import HttpRequest
 from ninja.security import APIKeyQuery
+from sentry_sdk import logger
 
 from core.models import Profile
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
 
 
 class APIKeyAuth(APIKeyQuery):
     param_name = "api_key"
 
     def authenticate(self, request: HttpRequest, key: str) -> Profile | None:
-        logger.info(
-            "[Django Ninja Auth] API Request with key",
-            key=key,
-        )
         try:
             return Profile.objects.get(key=key)
         except Profile.DoesNotExist:
-            logger.warning("[Django Ninja Auth] Invalid API key", key=key)
+            logger.warning(
+                "[Django Ninja Auth] Invalid API key",
+                extra={
+                    "key": key,
+                },
+            )
             return None
 
 
@@ -27,14 +26,15 @@ class SessionAuth:
 
     def authenticate(self, request: HttpRequest) -> Profile | None:
         if hasattr(request, "user") and request.user.is_authenticated:
-            logger.info(
-                "[Django Ninja Auth] API Request with authenticated user",
-                user_id=request.user.id,
-            )
             try:
                 return request.user.profile
             except Profile.DoesNotExist:
-                logger.warning("[Django Ninja Auth] No profile for user", user_id=request.user.id)
+                logger.warning(
+                    "[Django Ninja Auth] No profile for user",
+                    extra={
+                        "user_id": request.user.id,
+                    },
+                )
                 return None
         return None
 
@@ -52,7 +52,9 @@ class SuperuserAPIKeyAuth(APIKeyQuery):
                 return profile
             logger.warning(
                 "[Django Ninja Auth] Non-superuser attempted admin access",
-                profile_id=profile.user.id,
+                extra={
+                    "profile_id": profile.user.id,
+                },
             )
             return None
         except Profile.DoesNotExist:

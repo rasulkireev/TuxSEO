@@ -4,14 +4,12 @@ import posthog
 from django.conf import settings
 from django.forms.utils import ErrorList
 from pydantic_ai import Agent
+from sentry_sdk import logger
 
 from core.choices import KeywordDataSource
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.model_utils import run_agent_synchronously
 from core.models import GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
 
 
 class DivErrorList(ErrorList):
@@ -85,9 +83,7 @@ def get_or_create_project(profile_id, url, source=None):
                 event="project_created",
                 properties=project_metadata,
             )
-        logger.info("[Get or Create Project] Project created", **project_metadata)
-    else:
-        logger.info("[Get or Create Project] Got existing project", **project_metadata)
+        logger.info("[Get or Create Project] Project created", extra=project_metadata)
 
     return project
 
@@ -104,10 +100,12 @@ def save_keyword(keyword_text: str, project: Project):
     if created:
         metrics_fetched = keyword_obj.fetch_and_update_metrics()
         if not metrics_fetched:
-            logger.warning(
+            logger.error(
                 "[Save Keyword] Failed to fetch metrics for keyword",
-                keyword_id=keyword_obj.id,
-                keyword_text=keyword_text,
+                extra={
+                    "keyword_id": keyword_obj.id,
+                    "keyword_text": keyword_text,
+                },
             )
 
     # Associate with project
@@ -120,10 +118,12 @@ def blog_post_has_placeholders(blog_post: GeneratedBlogPost) -> bool:
 
     for pattern in PLACEHOLDER_PATTERNS:
         if pattern in content_lower:
-            logger.warning(
+            logger.info(
                 "[Blog Post Has Placeholders] Placeholder found",
-                pattern=pattern,
-                blog_post_id=blog_post.id,
+                extra={
+                    "pattern": pattern,
+                    "blog_post_id": blog_post.id,
+                },
             )
             return True
 
@@ -132,15 +132,12 @@ def blog_post_has_placeholders(blog_post: GeneratedBlogPost) -> bool:
         if matches:
             logger.warning(
                 "[Blog Post Has Placeholders] Bracket Placeholder found",
-                pattern=pattern,
-                blog_post_id=blog_post.id,
+                extra={
+                    "pattern": pattern,
+                    "blog_post_id": blog_post.id,
+                },
             )
             return True
-
-    logger.info(
-        "[Blog Post Has Placeholders] No placeholders found",
-        blog_post_id=blog_post.id,
-    )
 
     return False
 
@@ -204,28 +201,16 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
             function_name="blog_post_has_valid_ending",
         )
 
-        ending_is_valid = result.data
-
-        if ending_is_valid:
-            logger.info(
-                "[Blog Post Has Valid Ending] Valid ending",
-                result=ending_is_valid,
-                blog_post_id=blog_post.id,
-            )
-        else:
-            logger.warning(
-                "[Blog Post Has Valid Ending] Invalid ending",
-                result=ending_is_valid,
-                blog_post_id=blog_post.id,
-            )
-
-        return ending_is_valid
+        return result.data
 
     except Exception as e:
         logger.error(
             "[Blog Post Has Valid Ending] AI analysis failed",
-            error=str(e),
-            exc_info=True,
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "content_length": len(content),
+            },
             content_length=len(content),
         )
         return False

@@ -10,18 +10,15 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
-import logging
 import os
 from pathlib import Path
 
 import environ
 import logfire
 import sentry_sdk
-import structlog
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
-from structlog_sentry import SentryProcessor
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -79,7 +76,6 @@ INSTALLED_APPS = [
     "allauth.socialaccount.providers.google",
     "django_q",
     "django_extensions",
-    "django_structlog",
     "core.apps.CoreConfig",
 ]
 
@@ -93,7 +89,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "django_structlog.middlewares.RequestMiddleware",  # adds log for each request
 ]
 
 ROOT_URLCONF = "tuxseo.urls"
@@ -331,92 +326,6 @@ Q_CLUSTER = {
     "error_reporter": {},
 }
 
-LOGGING = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "formatters": {
-        "json_formatter": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.JSONRenderer(),
-        },
-        "plain_console": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.dev.ConsoleRenderer(),
-        },
-        "key_value": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.KeyValueRenderer(
-                key_order=["timestamp", "level", "event", "logger"]
-            ),
-        },
-    },
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-            "formatter": "plain_console",
-            "level": "DEBUG",
-        },
-        "json_console": {
-            "class": "logging.StreamHandler",
-            "formatter": "json_formatter",
-            "level": "DEBUG",
-        },
-    },
-    "loggers": {
-        "django_structlog": {
-            "handlers": ["console"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "tuxseo": {
-            "level": "DEBUG",
-            "handlers": ["console"],
-            "propagate": False,
-        },
-    },
-}
-
-structlog_processors = [
-    structlog.contextvars.merge_contextvars,
-    structlog.stdlib.filter_by_level,
-    structlog.processors.TimeStamper(fmt="iso"),
-    structlog.stdlib.add_logger_name,
-    structlog.stdlib.add_log_level,
-    structlog.stdlib.PositionalArgumentsFormatter(),
-    structlog.processors.StackInfoRenderer(),
-    structlog.processors.format_exc_info,
-]
-
-if SENTRY_DSN:
-    structlog_processors.append(
-        SentryProcessor(
-            event_level=logging.ERROR,
-            active=True,
-        )
-    )
-
-if LOGFIRE_TOKEN:
-    structlog_processors.append(logfire.StructlogProcessor())
-
-structlog_processors.extend(
-    [
-        structlog.processors.UnicodeDecoder(),
-        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-    ]
-)
-
-structlog.configure(
-    processors=structlog_processors,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
-
-log_level = env("DJANGO_LOG_LEVEL", default="INFO")
-if ENVIRONMENT == "prod":
-    LOGGING["loggers"]["django_structlog"]["handlers"] = ["json_console"]
-    LOGGING["loggers"]["tuxseo"]["level"] = log_level
-    LOGGING["loggers"]["tuxseo"]["handlers"] = ["json_console"]
-
 if ENVIRONMENT == "prod" and SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
@@ -429,6 +338,7 @@ if ENVIRONMENT == "prod" and SENTRY_DSN:
         traces_sample_rate=0.5,
         profile_session_sample_rate=0.5,
         profile_lifecycle="trace",
+        enable_logs=True,
     )
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
 

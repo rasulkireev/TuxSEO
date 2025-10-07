@@ -1,4 +1,4 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 import requests
 from django.conf import settings
@@ -10,6 +10,7 @@ from django_q.tasks import async_task
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
+from sentry_sdk import logger
 
 from core.agents import content_editor_agent
 from core.base_models import BaseModel
@@ -48,9 +49,6 @@ from core.schemas import (
     TitleSuggestions,
     WebPageContent,
 )
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
 
 
 class Profile(BaseModel):
@@ -285,9 +283,11 @@ class Project(BaseModel):
         title, description, markdown_content = get_markdown_content(self.url)
 
         if not markdown_content:
-            logger.error(
+            logger.warning(
                 "[Get Page Content] Failed to get page content",
-                url=self.url,
+                extra={
+                    "url": self.url,
+                },
             )
             return False
 
@@ -963,7 +963,7 @@ class GeneratedBlogPost(BaseModel):
             "profile_email": self.project.profile.user.email,
         }
 
-        logger.info("[Validation] Running validation", **base_logger_info)
+        logger.info("[Validation] Running validation", extra=base_logger_info)
 
         if not self.content:
             self.content_too_short = True
@@ -980,11 +980,13 @@ class GeneratedBlogPost(BaseModel):
 
         logger.info(
             "[Validation] Blog post validation complete",
-            **base_logger_info,
-            blog_post_title=self.title.title,
-            content_too_short=self.content_too_short,
-            has_valid_ending=self.has_valid_ending,
-            placeholders=self.placeholders,
+            extra={
+                **base_logger_info,
+                "blog_post_title": self.title.title,
+                "content_too_short": self.content_too_short,
+                "has_valid_ending": self.has_valid_ending,
+                "placeholders": self.placeholders,
+            },
         )
 
     def submit_blog_post_to_endpoint(self):
@@ -997,7 +999,10 @@ class GeneratedBlogPost(BaseModel):
 
         if not submission_settings or not submission_settings.endpoint_url:
             logger.warning(
-                "No AutoSubmissionSetting or endpoint_url found for project", project_id=project.id
+                "No AutoSubmissionSetting or endpoint_url found for project",
+                extra={
+                    "project_id": project.id,
+                },
             )
             return False
 
@@ -1005,38 +1010,19 @@ class GeneratedBlogPost(BaseModel):
         headers = replace_placeholders(submission_settings.header, self)
         body = replace_placeholders(submission_settings.body, self)
 
-        logger.info(
-            "[Submit Blog Post] Submitting blog post to endpoint",
-            project_id=project.id,
-            profile_id=project.profile.id,
-            endpoint_url=url,
-            headers_configured=bool(headers),
-            body_configured=bool(body),
-        )
+        session = requests.Session()
+        session.cookies.clear()
 
-        try:
-            session = requests.Session()
-            session.cookies.clear()
+        if headers is None:
+            headers = {}
 
-            if headers is None:
-                headers = {}
+        if "content-type" not in headers and "Content-Type" not in headers:
+            headers["Content-Type"] = "application/json"
 
-            if "content-type" not in headers and "Content-Type" not in headers:
-                headers["Content-Type"] = "application/json"
+        response = session.post(url, json=body, headers=headers, timeout=15)
+        response.raise_for_status()
 
-            response = session.post(url, json=body, headers=headers, timeout=15)
-            response.raise_for_status()
-            return True
-
-        except requests.RequestException as e:
-            logger.error(
-                "[Submit Blog Post to Endpoint] Request error",
-                error=str(e),
-                url=url,
-                headers=headers,
-                exc_info=True,
-            )
-            return False
+        return True
 
     def fix_content_length(self):
         result = run_agent_synchronously(
@@ -1448,11 +1434,7 @@ class Keyword(BaseModel):
     def __str__(self):
         return f"{self.keyword_text} ({self.country or 'global'} - {self.data_source or 'N/A'})"
 
-    def fetch_and_update_metrics(self, currency="usd"):  # noqa: C901
-        if not hasattr(settings, "KEYWORDS_EVERYWHERE_API_KEY"):
-            logger.error("[KeywordFetch] KEYWORDS_EVERYWHERE_API_KEY not found in settings.")
-            return False
-
+    def fetch_and_update_metrics(self, currency="usd"):
         api_key = settings.KEYWORDS_EVERYWHERE_API_KEY
         api_url = "https://api.keywordseverywhere.com/v1/get_keyword_data"
 
@@ -1464,126 +1446,77 @@ class Keyword(BaseModel):
         }
         headers = {"Accept": "application/json", "Authorization": f"Bearer {api_key}"}
 
-        try:
-            response = requests.post(api_url, data=payload, headers=headers, timeout=30)
-            response.raise_for_status()
+        response = requests.post(api_url, data=payload, headers=headers, timeout=30)
+        response.raise_for_status()
 
-            response_data = response.json()
+        response_data = response.json()
 
-            if (
-                not response_data.get("data")
-                or not isinstance(response_data["data"], list)
-                or not response_data["data"][0]
-            ):
-                logger.warning(
-                    "[KeywordFetch] No data found in API response for keyword.",
-                    keyword_id=self.id,
-                    keyword_text=self.keyword_text,
-                    response_status=response.status_code,
-                    response_content=response.text[:500],
-                )
-                return False
-
-            keyword_api_data = response_data["data"][0]
-
-            self.volume = keyword_api_data.get("vol")
-
-            cpc_data = keyword_api_data.get("cpc", {})
-            self.cpc_currency = cpc_data.get("currency", "")
-            try:
-                self.cpc_value = Decimal(str(cpc_data.get("value", "0.00")))
-            except InvalidOperation:
-                logger.warning(
-                    "[KeywordFetch] Invalid CPC value for keyword.",
-                    keyword_text=self.keyword_text,
-                    keyword_id=self.id,
-                    cpc_value_raw=cpc_data.get("value"),
-                )
-                self.cpc_value = Decimal("0.00")
-
-            self.competition = keyword_api_data.get("competition")
-            self.last_fetched_at = timezone.now()
-
-            # Save keyword instance before handling trends to ensure FK exists
-            self.save(
-                update_fields=[
-                    "volume",
-                    "cpc_currency",
-                    "cpc_value",
-                    "competition",
-                    "last_fetched_at",
-                ]
+        if (
+            not response_data.get("data")
+            or not isinstance(response_data["data"], list)
+            or not response_data["data"][0]
+        ):
+            logger.warning(
+                "[KeywordFetch] No data found in API response for keyword.",
+                keyword_id=self.id,
+                keyword_text=self.keyword_text,
+                response_status=response.status_code,
+                response_content=response.text[:500],
             )
+            return False
 
-            trend_data = keyword_api_data.get("trend", [])
-            if isinstance(trend_data, list):
-                with transaction.atomic():
-                    # Get a set of existing (month, year) tuples for efficient lookup
-                    existing_trends_tuples = set(self.trends.values_list("month", "year"))
+        keyword_api_data = response_data["data"][0]
 
-                    trends_to_create = []
-                    for trend_item in trend_data:
-                        if (
-                            isinstance(trend_item, dict)
-                            and "month" in trend_item
-                            and "year" in trend_item
-                            and "value" in trend_item
-                        ):
-                            month_str = str(trend_item["month"])
-                            year_int = int(trend_item["year"])
+        self.volume = keyword_api_data.get("vol")
+        self.competition = keyword_api_data.get("competition")
+        self.last_fetched_at = timezone.now()
 
-                            # Check if this month/year combo already exists
-                            if (month_str, year_int) not in existing_trends_tuples:
-                                trends_to_create.append(
-                                    KeywordTrend(
-                                        keyword=self,
-                                        month=month_str,
-                                        year=year_int,
-                                        value=int(trend_item["value"]),
-                                    )
+        cpc_data = keyword_api_data.get("cpc", {})
+        self.cpc_currency = cpc_data.get("currency", "")
+        self.cpc_value = Decimal(str(cpc_data.get("value", "0.00")))
+
+        # Save keyword instance before handling trends to ensure FK exists
+        self.save(
+            update_fields=[
+                "volume",
+                "cpc_currency",
+                "cpc_value",
+                "competition",
+                "last_fetched_at",
+            ]
+        )
+
+        trend_data = keyword_api_data.get("trend", [])
+        if isinstance(trend_data, list):
+            with transaction.atomic():
+                # Get a set of existing (month, year) tuples for efficient lookup
+                existing_trends_tuples = set(self.trends.values_list("month", "year"))
+
+                trends_to_create = []
+                for trend_item in trend_data:
+                    if (
+                        isinstance(trend_item, dict)
+                        and "month" in trend_item
+                        and "year" in trend_item
+                        and "value" in trend_item
+                    ):
+                        month_str = str(trend_item["month"])
+                        year_int = int(trend_item["year"])
+
+                        # Check if this month/year combo already exists
+                        if (month_str, year_int) not in existing_trends_tuples:
+                            trends_to_create.append(
+                                KeywordTrend(
+                                    keyword=self,
+                                    month=month_str,
+                                    year=year_int,
+                                    value=int(trend_item["value"]),
                                 )
-                    if trends_to_create:
-                        KeywordTrend.objects.bulk_create(trends_to_create)
+                            )
+                if trends_to_create:
+                    KeywordTrend.objects.bulk_create(trends_to_create)
 
-            return True
-
-        except requests.exceptions.HTTPError as e:
-            logger.error(
-                "[KeywordFetch] HTTP error occurred.",
-                keyword_id=self.id,
-                keyword_text=self.keyword_text,
-                error=str(e),
-                exc_info=True,
-                status_code=e.response.status_code if e.response else None,
-                response_content=e.response.text[:500] if e.response else None,
-            )
-            # Specific handling for API error codes
-            if e.response is not None:
-                if e.response.status_code == 401:
-                    logger.error("[KeywordFetch] API Key is missing or invalid.")
-                elif e.response.status_code == 402:
-                    logger.error("[KeywordFetch] Insufficient credits or invalid subscription.")
-                elif e.response.status_code == 400:
-                    logger.error("[KeywordFetch] Submitted request data is invalid.")
-            return False
-        except requests.exceptions.RequestException as e:
-            logger.error(
-                "[KeywordFetch] Request exception occurred.",
-                keyword_id=self.id,
-                keyword_text=self.keyword_text,
-                error=str(e),
-                exc_info=True,
-            )
-            return False
-        except Exception as e:
-            logger.error(
-                "[KeywordFetch] An unexpected error occurred.",
-                keyword_id=self.id,
-                keyword_text=self.keyword_text,
-                error=str(e),
-                exc_info=True,
-            )
-            return False
+        return True
 
 
 class ProjectKeyword(BaseModel):

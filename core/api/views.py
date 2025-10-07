@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
 from ninja import NinjaAPI
+from sentry_sdk import logger
 
 from core.api.auth import session_auth, superuser_api_auth
 from core.api.schemas import (
@@ -47,9 +48,6 @@ from core.models import (
     ProjectPage,
 )
 from core.utils import get_or_create_project
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
 
 api = NinjaAPI(docs_url=None)
 
@@ -101,10 +99,12 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
         else:
             logger.error(
                 "[Scan Project] Failed to analyze project",
-                got_content=got_content,
-                analyzed_project=analyzed_project,
-                project_id=project.id if project else None,
-                url=data.url,
+                extra={
+                    "got_content": got_content,
+                    "analyzed_project": analyzed_project,
+                    "project_id": project.id if project else None,
+                    "url": data.url,
+                },
             )
             project.delete()
             return {
@@ -115,11 +115,13 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
     except Exception as e:
         logger.error(
             "[Scan Project] Unexpected error during project scan",
-            error=str(e),
-            exc_info=True,
-            project_id=project.id if project else None,
-            url=data.url,
-            profile_id=profile.id,
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "project_id": project.id if project else None,
+                "url": data.url,
+                "profile_id": profile.id,
+            },
         )
         if project and project.id:
             project.delete()
@@ -190,17 +192,16 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
         }
 
     try:
-        try:
-            content_type = ContentType[data.content_type]
-        except KeyError:
-            return {"status": "error", "message": f"Invalid content type: {data.content_type}"}
-
+        content_type = ContentType[data.content_type]
         suggestions = project.generate_title_suggestions(
             content_type=content_type, num_titles=1, user_prompt=data.user_prompt
         )
 
         if not suggestions:
-            return {"status": "error", "message": "No suggestions were generated"}
+            return {
+                "status": "error",
+                "message": "No suggestions were generated",
+            }
 
         suggestion = suggestions[0]
 
@@ -228,13 +229,18 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
 
     except Exception as e:
         logger.error(
-            "Failed to generate title from idea",
-            error=str(e),
-            exc_info=True,
-            project_id=project.id,
-            user_prompt=data.user_prompt,
+            "[Generate Title From Idea] Failed to generate title from idea",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "project_id": project.id,
+                "user_prompt": data.user_prompt,
+            },
         )
-        raise e
+        return {
+            "status": "error",
+            "message": "Failed to generate title from idea",
+        }
 
 
 @api.post(
@@ -267,22 +273,15 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
             "description": blog_post.description,
         }
 
-    except ValueError as e:
-        logger.error(
-            "Failed to generate blog content",
-            error=str(e),
-            exc_info=True,
-            suggestion_id=suggestion_id,
-            profile_id=profile.id,
-        )
-        return {"status": "error", "message": str(e)}
     except Exception as e:
         logger.error(
-            "Unexpected error generating blog content",
-            error=str(e),
-            exc_info=True,
-            suggestion_id=suggestion_id,
-            profile_id=profile.id,
+            "[Generate Blog Content] Unexpected error generating blog content",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "suggestion_id": suggestion_id,
+                "profile_id": profile.id,
+            },
         )
         return {
             "status": "error",
@@ -293,7 +292,6 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
 @api.post("/projects/{project_id}/update", response={200: dict}, auth=[session_auth])
 def update_project(request: HttpRequest, project_id: int):
     profile = request.auth
-    logger.info("Updating project", project_id=project_id, profile_id=profile.id)
     project = get_object_or_404(Project, id=project_id, profile=profile)
 
     # Update project fields from form data
@@ -344,13 +342,18 @@ def update_title_score(request: HttpRequest, suggestion_id: int, data: UpdateTit
 
     except Exception as e:
         logger.error(
-            "Failed to update title score",
-            error=str(e),
-            exc_info=True,
-            suggestion_id=suggestion_id,
-            profile_id=profile.id,
+            "[Update Title Score] Failed to update title score",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "suggestion_id": suggestion_id,
+                "profile_id": profile.id,
+            },
         )
-        return {"status": "error", "message": f"Failed to update score: {str(e)}"}
+        return {
+            "status": "error",
+            "message": "Failed to update score",
+        }
 
 
 @api.post("/suggestions/{suggestion_id}/archive-status", response={200: dict}, auth=[session_auth])
@@ -366,13 +369,18 @@ def update_archive_status(request: HttpRequest, suggestion_id: int, data: Update
         return {"status": "success"}
     except Exception as e:
         logger.error(
-            "Failed to update suggestion archive status",
-            error=str(e),
-            exc_info=True,
-            suggestion_id=suggestion_id,
-            profile_id=profile.id,
+            "[Update Suggestion Archive Status] Failed to update suggestion archive status",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "suggestion_id": suggestion_id,
+                "profile_id": profile.id,
+            },
         )
-        return {"status": "error", "message": str(e)}
+        return {
+            "status": "error",
+            "message": "Failed to update suggestion archive status",
+        }
 
 
 @api.post("/add-pricing-page", auth=[session_auth])
@@ -444,13 +452,18 @@ def add_competitor(request: HttpRequest, data: AddCompetitorIn):
 
     except Exception as e:
         logger.error(
-            "Failed to add competitor",
-            error=str(e),
-            exc_info=True,
-            project_id=project.id,
-            url=data.url,
+            "[Add Competitor] Failed to add competitor",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "project_id": project.id,
+                "url": data.url,
+            },
         )
-        return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+        return {
+            "status": "error",
+            "message": "Failed to add competitor",
+        }
 
 
 @api.post("/submit-feedback", auth=[session_auth])
@@ -481,13 +494,18 @@ def user_settings(request: HttpRequest, project_id: int):
         return data
     except Exception as e:
         logger.error(
-            "Error fetching user settings",
-            error=str(e),
-            project_id=project_id,
-            profile_id=profile.id,
-            exc_info=True,
+            "[User Settings] Error fetching user settings",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "project_id": project_id,
+                "profile_id": profile.id,
+            },
         )
-        raise
+        return {
+            "profile": None,
+            "project": None,
+        }
 
 
 @api.post("/keywords/add", response=AddKeywordOut, auth=[session_auth])
@@ -497,7 +515,10 @@ def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
 
     keyword_text_cleaned = data.keyword_text.strip().lower()
     if not keyword_text_cleaned:
-        return {"status": "error", "message": "Keyword text cannot be empty."}
+        return {
+            "status": "error",
+            "message": "Keyword text cannot be empty.",
+        }
 
     try:
         keyword, created = Keyword.objects.get_or_create(
@@ -511,10 +532,12 @@ def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
         if created:
             metrics_fetched = keyword.fetch_and_update_metrics()
             if not metrics_fetched:
-                logger.warning(
+                logger.error(
                     "[AddKeyword] Failed to fetch metrics for keyword.",
-                    keyword_id=keyword.id,
-                    project_id=project.id,
+                    extra={
+                        "keyword_id": keyword.id,
+                        "project_id": project.id,
+                    },
                 )
                 return {
                     "status": "error",
@@ -548,12 +571,17 @@ def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
     except Exception as e:
         logger.error(
             "[AddKeyword] Failed to add keyword to project",
-            error=str(e),
-            exc_info=True,
-            project_id=project.id,
-            keyword_text=data.keyword_text,
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "project_id": project.id,
+                "keyword_text": data.keyword_text,
+            },
         )
-        return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+        return {
+            "status": "error",
+            "message": "Failed to add keyword to project",
+        }
 
 
 @api.post("/keywords/toggle-use", response=ToggleProjectKeywordUseOut, auth=[session_auth])
@@ -569,14 +597,16 @@ def toggle_project_keyword_use(request: HttpRequest, data: ToggleProjectKeywordU
         return ToggleProjectKeywordUseOut(status="success", use=project_keyword.use)
     except Exception as e:
         logger.error(
-            "Failed to toggle ProjectKeyword use field",
-            error=str(e),
-            exc_info=True,
-            project_id=data.project_id,
-            keyword_id=data.keyword_id,
-            profile_id=profile.id,
+            "[Toggle ProjectKeyword Use] Failed to toggle ProjectKeyword use field",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "project_id": data.project_id,
+                "keyword_id": data.keyword_id,
+                "profile_id": profile.id,
+            },
         )
-        return ToggleProjectKeywordUseOut(status="error", message=f"Failed to toggle use: {str(e)}")
+        return ToggleProjectKeywordUseOut(status="error", message="Failed to toggle use")
 
 
 @api.post("/keywords/delete", response=DeleteProjectKeywordOut, auth=[session_auth])
@@ -594,16 +624,16 @@ def delete_project_keyword(request: HttpRequest, data: DeleteProjectKeywordIn):
         )
     except Exception as e:
         logger.error(
-            "Failed to delete ProjectKeyword",
-            error=str(e),
-            exc_info=True,
-            project_id=data.project_id,
-            keyword_id=data.keyword_id,
-            profile_id=profile.id,
+            "[Delete ProjectKeyword] Failed to delete ProjectKeyword",
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "project_id": data.project_id,
+                "keyword_id": data.keyword_id,
+                "profile_id": profile.id,
+            },
         )
-        return DeleteProjectKeywordOut(
-            status="error", message=f"Failed to delete keyword: {str(e)}"
-        )
+        return DeleteProjectKeywordOut(status="error", message="Failed to delete keyword")
 
 
 @api.get("/keywords/details", response=GetKeywordDetailsOut, auth=[session_auth])
@@ -634,9 +664,11 @@ def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int
             if not metrics_fetched:
                 logger.warning(
                     "[GetKeywordDetails] Failed to fetch metrics for new keyword",
-                    keyword_id=keyword.id,
-                    keyword_text=keyword_text_cleaned,
-                    project_id=project_id,
+                    extra={
+                        "keyword_id": keyword.id,
+                        "keyword_text": keyword_text_cleaned,
+                        "project_id": project_id,
+                    },
                 )
 
         # Check if keyword is already in the project and if it's in use
@@ -668,15 +700,15 @@ def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int
     except Exception as e:
         logger.error(
             "[GetKeywordDetails] Failed to get keyword details",
-            error=str(e),
-            exc_info=True,
-            keyword_text=keyword_text,
-            project_id=project_id,
-            profile_id=profile.id,
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "keyword_text": keyword_text,
+                "project_id": project_id,
+                "profile_id": profile.id,
+            },
         )
-        return GetKeywordDetailsOut(
-            status="error", message=f"Failed to get keyword details: {str(e)}"
-        )
+        return GetKeywordDetailsOut(status="error", message="Failed to get keyword details")
 
 
 @api.post("/blog-posts/submit", response=BlogPostOut, auth=[superuser_api_auth])
@@ -715,16 +747,16 @@ def post_generated_blog_post(request: HttpRequest, data: PostGeneratedBlogPostIn
             return {"status": "success", "message": "Blog post published!"}
         else:
             return {"status": "error", "message": "Failed to post blog."}
-    except GeneratedBlogPost.DoesNotExist:
-        return {"status": "error", "message": "Generated blog post not found."}
     except Exception as e:
         logger.error(
             "Failed to post generated blog post",
-            error=str(e),
-            blog_post_id=blog_post_id,
-            exc_info=True,
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "blog_post_id": blog_post_id,
+            },
         )
-        return {"status": "error", "message": str(e)}
+        return {"status": "error", "message": "Failed to post generated blog post"}
 
 
 @api.post("/fix-generated-blog-post", response=FixGeneratedBlogPostOut, auth=[session_auth])
@@ -749,13 +781,13 @@ def fix_generated_blog_post(request: HttpRequest, data: FixGeneratedBlogPostIn):
 
         return {"status": "success", "message": "Blog post issues have been fixed successfully."}
 
-    except GeneratedBlogPost.DoesNotExist:
-        return {"status": "error", "message": "Generated blog post not found."}
     except Exception as e:
         logger.error(
             "Failed to fix generated blog post",
-            error=str(e),
-            blog_post_id=blog_post_id,
-            exc_info=True,
+            extra={
+                "error": str(e),
+                "exc_info": True,
+                "blog_post_id": blog_post_id,
+            },
         )
-        return {"status": "error", "message": f"Failed to fix blog post: {str(e)}"}
+        return {"status": "error", "message": "Failed to fix blog post"}

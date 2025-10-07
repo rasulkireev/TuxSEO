@@ -2,10 +2,6 @@ import posthog
 from django.apps import AppConfig
 from django.conf import settings
 
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
-
 
 class CoreConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"

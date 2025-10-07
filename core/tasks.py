@@ -8,6 +8,7 @@ import requests
 from django.conf import settings
 from django.utils import timezone
 from django_q.tasks import async_task
+from sentry_sdk import logger
 
 from core.choices import ContentType
 from core.models import (
@@ -20,9 +21,6 @@ from core.models import (
     ProjectPage,
 )
 from core.utils import save_keyword
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
 
 
 def add_email_to_buttondown(email, tag):
@@ -101,15 +99,16 @@ def process_project_keywords(project_id: int):
     2. Fetches metrics for each keyword.
     3. Associates keywords with the project.
     """
-    try:
-        project = Project.objects.get(id=project_id)
-    except Project.DoesNotExist:
-        logger.error(f"[KeywordProcessing] Project with id {project_id} not found.")
-        return f"Project with id {project_id} not found."
+    project = Project.objects.get(id=project_id)
 
     if not project.proposed_keywords:
-        logger.info(
-            f"[KeywordProcessing] No proposed keywords for project {project.id} ({project.name})."
+        logger.warning(
+            "[KeywordProcessing] No proposed keywords for project.",
+            extra={
+                "project_id": project_id,
+                "project_name": project.name,
+                "project_url": project.url,
+            },
         )
         return f"No proposed keywords for project {project.name}."
 
@@ -125,19 +124,15 @@ def process_project_keywords(project_id: int):
             failed_count += 1
             logger.error(
                 "[KeywordProcessing] Error processing keyword",
-                error=str(e),
-                exc_info=True,
-                project_id=project.id,
-                keyword_text=keyword_str,
+                extra={
+                    "error": str(e),
+                    "exc_info": True,
+                    "project_id": project.id,
+                    "project_name": project.name,
+                    "project_url": project.url,
+                    "keyword_text": keyword_str,
+                },
             )
-
-    logger.info(
-        "Keyword Processing Complete",
-        project_id=project.id,
-        project_name=project.name,
-        processed_count=processed_count,
-        failed_count=failed_count,
-    )
 
     async_task(get_and_save_related_keywords, project_id, group="Get Related Keywords")
     async_task(get_and_save_pasf_keywords, project_id, group="Get PASF Keywords")
@@ -174,11 +169,12 @@ def try_create_posthog_alias(profile_id: int, cookies: dict, source_function: st
 
     posthog_cookie = cookies.get(f"ph_{settings.POSTHOG_API_KEY}_posthog")
     if not posthog_cookie:
-        logger.warning("[Try Create Posthog Alias] No PostHog cookie found.", **base_log_data)
+        logger.warning(
+            "[Try Create Posthog Alias] No PostHog cookie found.",
+            extra=base_log_data,
+        )
         return f"No PostHog cookie found for profile {profile_id}."
     base_log_data["posthog_cookie"] = posthog_cookie
-
-    logger.info("[Try Create Posthog Alias] Setting PostHog alias", **base_log_data)
 
     cookie_dict = json.loads(unquote(posthog_cookie))
     frontend_distinct_id = cookie_dict.get("distinct_id")
@@ -187,7 +183,10 @@ def try_create_posthog_alias(profile_id: int, cookies: dict, source_function: st
         posthog.alias(frontend_distinct_id, email)
         posthog.alias(frontend_distinct_id, str(profile_id))
 
-    logger.info("[Try Create Posthog Alias] Set PostHog alias", **base_log_data)
+    logger.info(
+        "[Try Create Posthog Alias] Set PostHog alias",
+        extra=base_log_data,
+    )
 
 
 def track_event(
@@ -200,11 +199,7 @@ def track_event(
         "source_function": source_function,
     }
 
-    try:
-        profile = Profile.objects.get(id=profile_id)
-    except Profile.DoesNotExist:
-        logger.error("[TrackEvent] Profile not found.", **base_log_data)
-        return f"Profile with id {profile_id} not found."
+    profile = Profile.objects.get(id=profile_id)
 
     if settings.POSTHOG_API_KEY:
         posthog.capture(
@@ -218,7 +213,7 @@ def track_event(
             },
         )
 
-    logger.info("[TrackEvent] Tracked event", **base_log_data)
+    logger.info("[TrackEvent] Tracked event", extra=base_log_data)
 
     return f"Tracked event {event_name} for profile {profile_id}"
 
@@ -240,14 +235,10 @@ def track_state_change(
         "source_function": source_function,
     }
 
-    try:
-        profile = Profile.objects.get(id=profile_id)
-    except Profile.DoesNotExist:
-        logger.error("[TrackStateChange] Profile not found.", **base_log_data)
-        return f"Profile with id {profile_id} not found."
+    profile = Profile.objects.get(id=profile_id)
 
     if from_state != to_state:
-        logger.info("[TrackStateChange] Tracking state change", **base_log_data)
+        logger.info("[TrackStateChange] Tracking state change", extra=base_log_data)
         ProfileStateTransition.objects.create(
             profile=profile,
             from_state=from_state,
@@ -289,9 +280,11 @@ def schedule_blog_post_posting():
 
         if time_since_last_post_in_seconds > time_between_posts_in_seconds:
             logger.info(
-                "[Schedule Blog Post Posting] Scheduling blog post for {project.name}",
-                project_id=project.id,
-                project_name=project.name,
+                "[Schedule Blog Post Posting] Scheduling blog post",
+                extra={
+                    "project_id": project.id,
+                    "project_name": project.name,
+                },
             )
             async_task(
                 "core.tasks.generate_and_post_blog_post", project.id, group="Submit Blog Post"
@@ -306,20 +299,17 @@ def generate_and_post_blog_post(project_id: int):
     blog_post_to_post = None
 
     logger.info(
-        "[Generate and Post Blog Post] Generating blog post for {project.name}",
-        project_id=project_id,
-        project_name=project.name,
+        "[Generate and Post Blog Post] Generating blog post.",
+        extra={
+            "project_id": project_id,
+            "project_name": project.name,
+        },
     )
 
     # first see if there are generated blog posts that are not posted yet
     blog_posts_to_post = GeneratedBlogPost.objects.filter(project=project, posted=False)
 
     if blog_posts_to_post.exists():
-        logger.info(
-            "[Generate and Post Blog Post] Found BlogPost to posts for {project.name}",
-            project_id=project_id,
-            project_name=project.name,
-        )
         blog_post_to_post = blog_posts_to_post.first()
 
     # then see if there are blog post title suggestions without generated blog posts
@@ -328,11 +318,6 @@ def generate_and_post_blog_post(project_id: int):
             project=project, generated_blog_posts__isnull=True
         )
         if ungenerated_blog_post_suggestions.exists():
-            logger.info(
-                "[Generate and Post Blog Post] Found BlogPostTitleSuggestion to generate and post for {project.name}",  # noqa: E501
-                project_id=project_id,
-                project_name=project.name,
-            )
             ungenerated_blog_post_suggestion = ungenerated_blog_post_suggestions.first()
             blog_post_to_post = ungenerated_blog_post_suggestion.generate_content(
                 content_type=ungenerated_blog_post_suggestion.content_type
@@ -340,55 +325,56 @@ def generate_and_post_blog_post(project_id: int):
 
     # if neither, create a new blog post title suggestion, generate the blog post
     if not blog_post_to_post:
-        logger.info(
-            "[Generate and Post Blog Post] No BlogPost or BlogPostTitleSuggestion found, so generating both.",  # noqa: E501
-            project_id=project_id,
-            project_name=project.name,
-        )
         content_type = random.choice([choice[0] for choice in ContentType.choices])
         suggestions = project.generate_title_suggestions(content_type=content_type, num_titles=1)
         blog_post_to_post = suggestions[0].generate_content(
             content_type=suggestions[0].content_type
         )
 
-    # once you have the generated blog post, submit it to the endpoint
-    if blog_post_to_post:
-        if blog_post_to_post.blog_post_content_is_valid is False:
-            logger.info(
-                "[Generate and Post Blog Post] Blog post content is not valid, so fixing it before posting.",  # noqa: E501
-                project_id=project_id,
-                project_name=project.name,
-            )
-            blog_post_to_post.fix_generated_blog_post()
-            async_task(
-                "core.tasks.generate_and_post_blog_post",
-                project.id,
-                group="Re-run Blog Post Generation/Posting",
-            )
-            return "Fixed blog post content and scheduled re-generation/posting."
-
-        logger.info(
-            "[Generate and Post Blog Post] Submitting blog post to endpoint",
-            project_id=project_id,
-            project_name=project.name,
-            blog_post_title=blog_post_to_post.title,
-        )
-        result = blog_post_to_post.submit_blog_post_to_endpoint()
-        if result is True:
-            blog_post_to_post.posted = True
-            blog_post_to_post.date_posted = timezone.now()
-            blog_post_to_post.save(update_fields=["posted", "date_posted"])
-            return f"Posted blog post for {project.name}"
-        else:
-            return f"Failed to post blog post for {project.name}."
-
-    else:
+    if not blog_post_to_post:
         logger.error(
             "[Generate and Post Blog Post] No blog post to post. This should not happen.",
-            project_id=project_id,
-            project_name=project.name,
+            extra={
+                "project_id": project_id,
+                "project_name": project.name,
+            },
         )
         return f"No blog post to post for {project.name}."
+
+    # once you have the generated blog post, submit it to the endpoint
+    if blog_post_to_post.blog_post_content_is_valid is False:
+        logger.info(
+            "[Generate and Post Blog Post] Blog post content is not valid, so fixing it before posting.",  # noqa: E501
+            extra={
+                "project_id": project_id,
+                "project_name": project.name,
+            },
+        )
+        blog_post_to_post.fix_generated_blog_post()
+        async_task(
+            "core.tasks.generate_and_post_blog_post",
+            project.id,
+            group="Re-run Blog Post Generation/Posting",
+        )
+        return "Fixed blog post content and scheduled re-generation/posting."
+
+    logger.info(
+        "[Generate and Post Blog Post] Submitting blog post to endpoint",
+        extra={
+            "project_id": project_id,
+            "project_name": project.name,
+            "blog_post_title": blog_post_to_post.title,
+        },
+    )
+
+    result = blog_post_to_post.submit_blog_post_to_endpoint()
+    if result is True:
+        blog_post_to_post.posted = True
+        blog_post_to_post.date_posted = timezone.now()
+        blog_post_to_post.save(update_fields=["posted", "date_posted"])
+        return f"Posted blog post for {project.name}"
+    else:
+        return f"Failed to post blog post for {project.name}."
 
 
 def save_title_suggestion_keywords(title_suggestion_id: int):
@@ -397,9 +383,11 @@ def save_title_suggestion_keywords(title_suggestion_id: int):
     if not title_suggestion.target_keywords or not title_suggestion.project:
         logger.warning(
             "[Save Title Suggestion Keywords] No target keywords or project found",
-            title_suggestion_id=title_suggestion_id,
-            has_keywords=bool(title_suggestion.target_keywords),
-            has_project=bool(title_suggestion.project),
+            extra={
+                "title_suggestion_id": title_suggestion_id,
+                "has_keywords": bool(title_suggestion.target_keywords),
+                "has_project": bool(title_suggestion.project),
+            },
         )
         return "No keywords or project to save"
 
@@ -408,15 +396,6 @@ def save_title_suggestion_keywords(title_suggestion_id: int):
         if keyword_text and keyword_text.strip():
             save_keyword(keyword_text.strip(), title_suggestion.project)
             saved_keywords_count += 1
-
-    logger.info(
-        "[Save Title Suggestion Keywords] Successfully saved keywords",
-        title_suggestion_id=title_suggestion_id,
-        project_id=title_suggestion.project_id,
-        project_name=title_suggestion.project.name,
-        saved_keywords_count=saved_keywords_count,
-        total_keywords=len(title_suggestion.target_keywords),
-    )
 
     return f"Saved {saved_keywords_count} keywords for project {title_suggestion.project.name}"
 
@@ -445,11 +424,7 @@ def get_and_save_related_keywords(
     Returns:
         String summary of processing results
     """
-    try:
-        project = Project.objects.get(id=project_id)
-    except Project.DoesNotExist:
-        logger.error(f"[GetRelatedKeywords] Project {project_id} not found.")
-        return f"Project {project_id} not found."
+    project = Project.objects.get(id=project_id)
 
     keywords_to_process = ProjectKeyword.objects.filter(
         project=project,
@@ -459,6 +434,13 @@ def get_and_save_related_keywords(
     ).select_related("keyword")[:limit]
 
     if not keywords_to_process.exists():
+        logger.warning(
+            "[GetRelatedKeywords] No unprocessed high-volume keywords found",
+            extra={
+                "project_id": project_id,
+                "project_name": project.name,
+            },
+        )
         return f"No unprocessed high-volume keywords found for {project.name}."
 
     stats = {
@@ -470,7 +452,14 @@ def get_and_save_related_keywords(
         "related_saved": 0,
     }
 
-    logger.info(f"[GetRelatedKeywords] Processing {stats['total']} keywords for {project.name}")
+    logger.info(
+        "[GetRelatedKeywords] Processing keywords",
+        extra={
+            "project_id": project_id,
+            "project_name": project.name,
+            "total": stats["total"],
+        },
+    )
 
     api_url = "https://api.keywordseverywhere.com/v1/get_related_keywords"
     headers = {
@@ -503,10 +492,12 @@ def get_and_save_related_keywords(
                             stats["related_saved"] += 1
                         except Exception as e:
                             logger.error(
-                                "[GetRelatedKeywords] Failed to save keyword",
-                                keyword_text=keyword_text,
-                                error=str(e),
-                                exc_info=True,
+                                "[GetRelatedKeywords] Failed to save keyword. Continuing.",
+                                extra={
+                                    "keyword_text": keyword_text,
+                                    "error": str(e),
+                                    "exc_info": True,
+                                },
                             )
 
                 keyword.got_related_keywords = True
@@ -516,9 +507,11 @@ def get_and_save_related_keywords(
                 stats["failed"] += 1
                 logger.warning(
                     "[GetRelatedKeywords] API error for Keyword",
-                    keyword_text=keyword.keyword_text,
-                    response_status_code=response.status_code,
-                    exc_info=True,
+                    extra={
+                        "keyword_text": keyword.keyword_text,
+                        "response_status_code": response.status_code,
+                        "response_content": response.content,
+                    },
                 )
 
         except Exception as e:
@@ -532,14 +525,16 @@ def get_and_save_related_keywords(
 
     logger.info(
         "[GetRelatedKeywords] Completed",
-        project_id=project_id,
-        project_name=project.name,
-        processed=stats["processed"],
-        total=stats["total"],
-        failed=stats["failed"],
-        credits_used=stats["credits_used"],
-        related_found=stats["related_found"],
-        related_saved=stats["related_saved"],
+        extra={
+            "project_id": project_id,
+            "project_name": project.name,
+            "processed": stats["processed"],
+            "total": stats["total"],
+            "failed": stats["failed"],
+            "credits_used": stats["credits_used"],
+            "related_found": stats["related_found"],
+            "related_saved": stats["related_saved"],
+        },
     )
 
     return f"""Related Keywords Processing Results for {project.name}:
@@ -575,11 +570,7 @@ def get_and_save_pasf_keywords(
     Returns:
         String summary of processing results
     """
-    try:
-        project = Project.objects.get(id=project_id)
-    except Project.DoesNotExist:
-        logger.error(f"[GetPASFKeywords] Project {project_id} not found.")
-        return f"Project {project_id} not found."
+    project = Project.objects.get(id=project_id)
 
     keywords_to_process = ProjectKeyword.objects.filter(
         project=project,
@@ -589,6 +580,13 @@ def get_and_save_pasf_keywords(
     ).select_related("keyword")[:limit]
 
     if not keywords_to_process.exists():
+        logger.warning(
+            "[GetPASFKeywords] No unprocessed high-volume keywords found for PASF processing",
+            extra={
+                "project_id": project_id,
+                "project_name": project.name,
+            },
+        )
         return f"No unprocessed high-volume keywords found for PASF processing in {project.name}."
 
     stats = {
@@ -600,8 +598,14 @@ def get_and_save_pasf_keywords(
         "pasf_saved": 0,
     }
 
-    logger.info(f"[GetPASFKeywords] Processing {stats['total']} keywords for {project.name}")
-
+    logger.info(
+        "[GetPASFKeywords] Processing keywords",
+        extra={
+            "project_id": project_id,
+            "project_name": project.name,
+            "total": stats["total"],
+        },
+    )
     api_url = "https://api.keywordseverywhere.com/v1/get_pasf_keywords"
     headers = {
         "Accept": "application/json",
@@ -634,9 +638,11 @@ def get_and_save_pasf_keywords(
                         except Exception as e:
                             logger.error(
                                 "[GetPASFKeywords] Failed to save keyword",
-                                keyword_text=keyword_text,
-                                error=str(e),
-                                exc_info=True,
+                                extra={
+                                    "keyword_text": keyword_text,
+                                    "error": str(e),
+                                    "exc_info": True,
+                                },
                             )
 
                 keyword.got_people_also_search_for_keywords = True
@@ -646,25 +652,36 @@ def get_and_save_pasf_keywords(
                 stats["failed"] += 1
                 logger.warning(
                     "[GetPASFKeywords] API error for Keyword",
-                    keyword_text=keyword.keyword_text,
-                    response_status_code=response.status_code,
-                    response_content=response.content.decode("utf-8")
-                    if response.content
-                    else "No content",
-                    exc_info=True,
+                    extra={
+                        "keyword_text": keyword.keyword_text,
+                        "response_status_code": response.status_code,
+                        "response_content": response.content,
+                    },
                 )
 
         except Exception as e:
             stats["failed"] += 1
             logger.error(
                 "[GetPASFKeywords] Error processing Keyword",
-                keyword_text=keyword.keyword_text,
-                error=str(e),
-                exc_info=True,
+                extra={
+                    "keyword_text": keyword.keyword_text,
+                    "error": str(e),
+                    "exc_info": True,
+                },
             )
 
     logger.info(
-        f"[GetPASFKeywords] Completed: {stats['processed']}/{stats['total']} keywords processed"
+        "[GetPASFKeywords] Completed",
+        extra={
+            "project_id": project_id,
+            "project_name": project.name,
+            "processed": stats["processed"],
+            "total": stats["total"],
+            "failed": stats["failed"],
+            "credits_used": stats["credits_used"],
+            "pasf_found": stats["pasf_found"],
+            "pasf_saved": stats["pasf_saved"],
+        },
     )
 
     return f"""PASF Keywords Processing Results for {project.name}:
