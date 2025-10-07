@@ -120,7 +120,6 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
             "[Scan Project] Unexpected error during project scan",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "project_id": project.id if project else None,
                 "url": data.url,
                 "profile_id": profile.id,
@@ -235,7 +234,6 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
             "[Generate Title From Idea] Failed to generate title from idea",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "project_id": project.id,
                 "user_prompt": data.user_prompt,
             },
@@ -281,7 +279,6 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
             "[Generate Blog Content] Unexpected error generating blog content",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "suggestion_id": suggestion_id,
                 "profile_id": profile.id,
             },
@@ -348,7 +345,6 @@ def update_title_score(request: HttpRequest, suggestion_id: int, data: UpdateTit
             "[Update Title Score] Failed to update title score",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "suggestion_id": suggestion_id,
                 "profile_id": profile.id,
             },
@@ -375,7 +371,6 @@ def update_archive_status(request: HttpRequest, suggestion_id: int, data: Update
             "[Update Suggestion Archive Status] Failed to update suggestion archive status",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "suggestion_id": suggestion_id,
                 "profile_id": profile.id,
             },
@@ -458,7 +453,6 @@ def add_competitor(request: HttpRequest, data: AddCompetitorIn):
             "[Add Competitor] Failed to add competitor",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "project_id": project.id,
                 "url": data.url,
             },
@@ -500,7 +494,6 @@ def user_settings(request: HttpRequest, project_id: int):
             "[User Settings] Error fetching user settings",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "project_id": project_id,
                 "profile_id": profile.id,
             },
@@ -576,7 +569,6 @@ def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
             "[AddKeyword] Failed to add keyword to project",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "project_id": project.id,
                 "keyword_text": data.keyword_text,
             },
@@ -603,7 +595,6 @@ def toggle_project_keyword_use(request: HttpRequest, data: ToggleProjectKeywordU
             "[Toggle ProjectKeyword Use] Failed to toggle ProjectKeyword use field",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "project_id": data.project_id,
                 "keyword_id": data.keyword_id,
                 "profile_id": profile.id,
@@ -630,7 +621,6 @@ def delete_project_keyword(request: HttpRequest, data: DeleteProjectKeywordIn):
             "[Delete ProjectKeyword] Failed to delete ProjectKeyword",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "project_id": data.project_id,
                 "keyword_id": data.keyword_id,
                 "profile_id": profile.id,
@@ -705,7 +695,6 @@ def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int
             "[GetKeywordDetails] Failed to get keyword details",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "keyword_text": keyword_text,
                 "project_id": project_id,
                 "profile_id": profile.id,
@@ -755,7 +744,6 @@ def post_generated_blog_post(request: HttpRequest, data: PostGeneratedBlogPostIn
             "Failed to post generated blog post",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "blog_post_id": blog_post_id,
             },
         )
@@ -789,7 +777,6 @@ def fix_generated_blog_post(request: HttpRequest, data: FixGeneratedBlogPostIn):
             "Failed to fix generated blog post",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "blog_post_id": blog_post_id,
             },
         )

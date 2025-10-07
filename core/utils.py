@@ -210,7 +210,6 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
             "[Blog Post Has Valid Ending] AI analysis failed",
             extra={
                 "error": str(e),
-                "exc_info": True,
                 "content_length": len(content),
             },
             content_length=len(content),

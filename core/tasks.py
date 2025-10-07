@@ -128,7 +128,6 @@ def process_project_keywords(project_id: int):
                 "[KeywordProcessing] Error processing keyword",
                 extra={
                     "error": str(e),
-                    "exc_info": True,
                     "project_id": project.id,
                     "project_name": project.name,
                     "project_url": project.url,
@@ -498,7 +497,6 @@ def get_and_save_related_keywords(
                                 extra={
                                     "keyword_text": keyword_text,
                                     "error": str(e),
-                                    "exc_info": True,
                                 },
                             )
 
@@ -522,7 +520,6 @@ def get_and_save_related_keywords(
                 "[GetRelatedKeywords] Error processing Keyword",
                 keyword_text=keyword.keyword_text,
                 error=str(e),
-                exc_info=True,
             )
 
     logger.info(
@@ -643,7 +640,6 @@ def get_and_save_pasf_keywords(
                                 extra={
                                     "keyword_text": keyword_text,
                                     "error": str(e),
-                                    "exc_info": True,
                                 },
                             )
 
@@ -668,7 +664,6 @@ def get_and_save_pasf_keywords(
                 extra={
                     "keyword_text": keyword.keyword_text,
                     "error": str(e),
-                    "exc_info": True,
                 },
             )
 
