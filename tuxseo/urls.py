@@ -19,7 +19,7 @@ from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path
 from django.views.generic import TemplateView
 
-from core.views import AccountSignupView
+from core.views import AccountSignupView, trigger_error
 from tuxseo.sitemaps import sitemaps
 
 urlpatterns = [
@@ -36,4 +36,5 @@ urlpatterns = [
         {"sitemaps": sitemaps},
         name="django.contrib.sitemaps.views.sitemap",
     ),
+    path("sentry-debug/", trigger_error),
 ]

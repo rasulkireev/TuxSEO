@@ -18,6 +18,9 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.django import DjangoIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
 from structlog_sentry import SentryProcessor
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -325,11 +328,7 @@ Q_CLUSTER = {
     "workers": 4,
     "max_attempts": 2,
     "redis": REDIS_URL,
-    "error_reporter": {
-        "sentry": {
-            "dsn": SENTRY_DSN,
-        },
-    },
+    "error_reporter": {},
 }
 
 LOGGING = {
@@ -383,20 +382,24 @@ structlog_processors = [
     structlog.processors.TimeStamper(fmt="iso"),
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
+    structlog.stdlib.PositionalArgumentsFormatter(),
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.format_exc_info,
 ]
 
 if SENTRY_DSN:
-    structlog_processors.append(SentryProcessor(event_level=logging.ERROR))
-
-structlog_processors.append(structlog.stdlib.PositionalArgumentsFormatter())
+    structlog_processors.append(
+        SentryProcessor(
+            event_level=logging.ERROR,
+            active=True,
+        )
+    )
 
 if LOGFIRE_TOKEN:
     structlog_processors.append(logfire.StructlogProcessor())
 
 structlog_processors.extend(
     [
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
     ]
@@ -415,7 +418,18 @@ if ENVIRONMENT == "prod":
     LOGGING["loggers"]["tuxseo"]["handlers"] = ["json_console"]
 
 if ENVIRONMENT == "prod" and SENTRY_DSN:
-    sentry_sdk.init(dsn=SENTRY_DSN)
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[
+            LoggingIntegration(event_level=None, level=None),
+            RedisIntegration(max_data_size=None),
+            DjangoIntegration(transaction_style="url"),
+        ],
+        send_default_pii=True,
+        traces_sample_rate=0.5,
+        profile_session_sample_rate=0.5,
+        profile_lifecycle="trace",
+    )
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")

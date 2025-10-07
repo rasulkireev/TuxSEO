@@ -515,3 +515,13 @@ class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
         )
 
         return super().form_valid(form)
+
+
+def trigger_error(request):
+    try:
+        division_by_zero = 1 / 0
+    except Exception as e:
+        logger.error("[Trigger Error] Division by zero", error=str(e), exc_info=True)
+        raise e
+
+    return division_by_zero
