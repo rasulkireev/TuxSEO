@@ -524,7 +524,6 @@ def trigger_error(request):
             "[Trigger Error] Division by zero",
             extra={
                 "error": str(e),
-                "exc_info": True,
             },
         )
         raise e
