@@ -325,11 +325,7 @@ Q_CLUSTER = {
     "workers": 4,
     "max_attempts": 2,
     "redis": REDIS_URL,
-    "error_reporter": {
-        "sentry": {
-            "dsn": SENTRY_DSN,
-        },
-    },
+    "error_reporter": {},
 }
 
 LOGGING = {
@@ -383,20 +379,24 @@ structlog_processors = [
     structlog.processors.TimeStamper(fmt="iso"),
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
+    structlog.stdlib.PositionalArgumentsFormatter(),
+    structlog.processors.StackInfoRenderer(),
+    structlog.processors.format_exc_info,
 ]
 
 if SENTRY_DSN:
-    structlog_processors.append(SentryProcessor(event_level=logging.ERROR))
-
-structlog_processors.append(structlog.stdlib.PositionalArgumentsFormatter())
+    structlog_processors.append(
+        SentryProcessor(
+            event_level=logging.ERROR,
+            active=True,
+        )
+    )
 
 if LOGFIRE_TOKEN:
     structlog_processors.append(logfire.StructlogProcessor())
 
 structlog_processors.extend(
     [
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
         structlog.processors.UnicodeDecoder(),
         structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
     ]
