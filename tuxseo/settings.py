@@ -18,6 +18,7 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.logging import LoggingIntegration
 from structlog_sentry import SentryProcessor
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -415,7 +416,13 @@ if ENVIRONMENT == "prod":
     LOGGING["loggers"]["tuxseo"]["handlers"] = ["json_console"]
 
 if ENVIRONMENT == "prod" and SENTRY_DSN:
-    sentry_sdk.init(dsn=SENTRY_DSN)
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        send_default_pii=True,
+        integrations=[
+            LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
+        ],
+    )
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
