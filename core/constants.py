@@ -36,6 +36,10 @@ PLACEHOLDER_PATTERNS = [
     "xxx",
     "yyy",
     "zzz",
+    "Image Suggestion",
+    "Link Suggestion",
+    "image suggestion",
+    "link suggestion",
 ]
 
 PLACEHOLDER_BRACKET_PATTERNS = [
