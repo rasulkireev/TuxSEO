@@ -6,9 +6,6 @@ from django_q.tasks import async_task
 
 from core.models import Profile, ProfileStates
 from core.tasks import add_email_to_buttondown
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
 
 
 @receiver(post_save, sender=User)
@@ -32,22 +29,12 @@ def save_user_profile(sender, instance, **kwargs):
 
 @receiver(email_confirmed)
 def add_email_to_buttondown_on_confirm(sender, **kwargs):
-    logger.info(
-        "Adding new user to buttondown newsletter, on email confirmation",
-        kwargs=kwargs,
-        sender=sender,
-    )
     async_task(add_email_to_buttondown, kwargs["email_address"], tag="user")
 
 
 @receiver(user_signed_up)
 def email_confirmation_callback(sender, request, user, **kwargs):
     if "sociallogin" in kwargs:
-        logger.info(
-            "Adding new user to buttondown newsletter on social signup",
-            kwargs=kwargs,
-            sender=sender,
-        )
         email = kwargs["sociallogin"].user.email
         if email:
             async_task(add_email_to_buttondown, email, tag="user")

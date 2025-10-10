@@ -1,10 +1,6 @@
 from allauth.socialaccount.models import SocialApp
 from django.conf import settings
 
-from tuxseo.utils import get_tuxseo_logger
-
-logger = get_tuxseo_logger(__name__)
-
 
 def pro_subscription_status(request):
     """
@@ -32,12 +28,9 @@ def available_social_providers(request):
 
     available_providers.update(configured_providers.keys())
 
-    try:
-        social_apps = SocialApp.objects.all()
-        for social_app in social_apps:
-            available_providers.add(social_app.provider)
-    except Exception as e:
-        logger.warning("Error retrieving SocialApp entries", error=str(e))
+    social_apps = SocialApp.objects.all()
+    for social_app in social_apps:
+        available_providers.add(social_app.provider)
 
     available_providers_list = sorted(list(available_providers))
 

@@ -1,3 +1,4 @@
+import logging
 from urllib.parse import urlencode
 
 import stripe
@@ -28,12 +29,10 @@ from core.models import (
 )
 from core.tasks import track_event, try_create_posthog_alias
 from core.utils import get_project_keywords_dict
-from tuxseo.utils import get_tuxseo_logger
+
+logger = logging.getLogger(__name__)
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
-
-
-logger = get_tuxseo_logger(__name__)
 
 
 class HomeView(TemplateView):
@@ -521,7 +520,12 @@ def trigger_error(request):
     try:
         division_by_zero = 1 / 0
     except Exception as e:
-        logger.error("[Trigger Error] Division by zero", error=str(e), exc_info=True)
+        logger.error(
+            "[Trigger Error] Division by zero",
+            extra={
+                "error": str(e),
+            },
+        )
         raise e
 
     return division_by_zero

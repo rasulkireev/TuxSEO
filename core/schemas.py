@@ -1,9 +1,10 @@
+import logging
+
 from pydantic import BaseModel, Field, field_validator
 
 from core.choices import Language, ProjectPageType, ProjectType
-from tuxseo.utils import get_tuxseo_logger
 
-logger = get_tuxseo_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class WebPageContent(BaseModel):
@@ -73,7 +74,12 @@ class ProjectDetails(BaseModel):
                 if v_lower in valid_type.lower():
                     return valid_type
 
-            logger.warning("[Project Details Schema] Type is not a valid option", provided_type=v)
+            logger.warning(
+                "[Project Details Schema] Type is not a valid option",
+                extra={
+                    "provided_type": v,
+                },
+            )
             if len(v) > 50:
                 return v
             else:
@@ -92,7 +98,10 @@ class ProjectDetails(BaseModel):
                     return valid_type
 
             logger.warning(
-                "[Project Details Schema] Language is not a valid option", provided_language=v
+                "[Project Details Schema] Language is not a valid option",
+                extra={
+                    "provided_language": v,
+                },
             )
             if len(v) > 50:
                 return v
@@ -123,7 +132,12 @@ class ProjectPageDetails(BaseModel):
                 if v_lower in valid_type.lower():
                     return valid_type
 
-            logger.warning("[Project Details Schema] Type is not a valid option", provided_type=v)
+            logger.warning(
+                "[Project Details Schema] Type is not a valid option",
+                extra={
+                    "provided_type": v,
+                },
+            )
             if len(v) > 50:
                 return v
             else:

@@ -623,6 +623,8 @@ def process_order(order_id: str):
 ```python
 import logging
 
+logger = logging.getLogger(__name__)
+
 def process_data(data):
     logging.info("Processing started")
     # process data
