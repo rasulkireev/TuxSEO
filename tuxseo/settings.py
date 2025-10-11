@@ -20,6 +20,8 @@ import sentry_sdk
 import structlog
 from structlog_sentry import SentryProcessor
 
+from tuxseo.sentry_utils import before_send
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 environ.Env.read_env(BASE_DIR / ".env")
@@ -430,6 +432,7 @@ if SENTRY_DSN:
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
+        before_send=before_send,
     )
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
