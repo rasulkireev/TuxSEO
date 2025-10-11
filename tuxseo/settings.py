@@ -17,7 +17,8 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
-from sentry_sdk.integrations.logging import LoggingIntegration
+
+from tuxseo.sentry_utils import before_send_hook
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -412,6 +413,7 @@ if ENVIRONMENT == "prod":
     LOGGING["loggers"]["tuxseo"]["handlers"] = ["json_console"]
 
 if SENTRY_DSN:
+    Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         enable_logs=True,
@@ -420,11 +422,8 @@ if SENTRY_DSN:
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
-        integrations=[
-            LoggingIntegration(event_level=None),
-        ],
+        before_send=before_send_hook,
     )
-    Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
 BUTTONDOWN_API_KEY = env("BUTTONDOWN_API_KEY", default="")
