@@ -324,6 +324,7 @@ Q_CLUSTER = {
     "workers": 4,
     "max_attempts": 2,
     "redis": REDIS_URL,
+    "error_reporter": {},
 }
 
 LOGGING = {
@@ -423,6 +424,7 @@ if SENTRY_DSN:
             LoggingIntegration(event_level=None),
         ],
     )
+    Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
 BUTTONDOWN_API_KEY = env("BUTTONDOWN_API_KEY", default="")
