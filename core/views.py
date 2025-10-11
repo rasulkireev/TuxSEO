@@ -28,8 +28,6 @@ from core.models import (
 )
 from core.tasks import (
     track_event,
-    trigger_index_error,
-    trigger_value_error,
     try_create_posthog_alias,
 )
 from core.utils import get_project_keywords_dict
@@ -523,11 +521,6 @@ class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
 
 
 def trigger_error(request):
-    logger.info("[TriggerError] Triggering errors")
-
-    async_task(trigger_value_error, group="Trigger Value Error")
-    async_task(trigger_index_error, group="Trigger Index Error")
-
     try:
         foo = 1 / 0
     except ZeroDivisionError as e:

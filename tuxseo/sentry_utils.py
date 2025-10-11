@@ -1,24 +1,35 @@
 import json
 
+from tuxseo.utils import get_tuxseo_logger
+
+logger = get_tuxseo_logger(__name__)
+
 
 def before_send(event, hint):
     """
-    Sentry before_send hook that filters out JSON-formatted log events.
-
-    This prevents structured log messages (typically from structlog) from being
-    sent to Sentry, reducing noise and focusing on actual errors and exceptions.
+    Drop log events from django_structlog.middlewares.request and JSON-formatted logs.
     """
-    if "logentry" not in event:
-        return event
+    # Check if this is a log message event (not an exception)
+    logentry = event.get("logentry")
+    if logentry:
+        logger.info("[BeforeSend] logentry", logentry=logentry)
+        message = logentry.get("message", "")
+        logger_name = event.get("logger", "")
 
-    log_entry = event.get("logentry", {})
-    message = log_entry.get("message", "")
+        # Drop django_structlog middleware request_failed logs
+        if logger_name == "django_structlog.middlewares.request" and "request_failed" in message:
+            logger.info("[BeforeSend] Dropping request_failed log", logentry=logentry)
+            return None  # Drop this event
 
-    if not message:
-        return event
+        # Try to parse the message as JSON
+        try:
+            # If parsing succeeds and it's a dict or list, drop the event
+            parsed = json.loads(message)
+            if isinstance(parsed, dict | list):
+                logger.info("[BeforeSend] Dropping JSON log", logentry=logentry)
+                return None  # Drop this event, do not send to Sentry
+        except (json.JSONDecodeError, TypeError):
+            # Not JSON, allow event to be sent
+            pass
 
-    try:
-        json.loads(message)
-        return None
-    except (json.JSONDecodeError, TypeError):
-        return event
+    return event
