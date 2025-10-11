@@ -341,7 +341,8 @@ LOGGING = {
         "key_value": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.processors.KeyValueRenderer(
-                key_order=["timestamp", "level", "event", "logger"]
+                key_order=["timestamp", "level", "event", "logger"],
+                drop_missing=True,
             ),
         },
     },
@@ -354,6 +355,11 @@ LOGGING = {
         "json_console": {
             "class": "logging.StreamHandler",
             "formatter": "json_formatter",
+            "level": "DEBUG",
+        },
+        "sentry_console": {
+            "class": "logging.StreamHandler",
+            "formatter": "key_value",
             "level": "DEBUG",
         },
     },
