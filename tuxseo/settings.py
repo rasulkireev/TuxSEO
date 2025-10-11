@@ -17,6 +17,7 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.logging import LoggingIntegration
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -412,6 +413,9 @@ if SENTRY_DSN:
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
+        integrations=[
+            LoggingIntegration(event_level=None),
+        ],
     )
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
