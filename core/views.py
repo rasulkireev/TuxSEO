@@ -528,4 +528,14 @@ def trigger_error(request):
     async_task(trigger_value_error, group="Trigger Value Error")
     async_task(trigger_index_error, group="Trigger Index Error")
 
-    return 1 / 0
+    try:
+        foo = 1 / 0
+    except ZeroDivisionError as e:
+        logger.exception("[TriggerError] Triggering zero division error", error=str(e))
+
+    try:
+        raise Exception("This is a test error")
+    except Exception as e:
+        raise e
+
+    return foo

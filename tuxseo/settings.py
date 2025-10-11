@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import logging
 import os
 from pathlib import Path
 
@@ -17,8 +18,8 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
-
-from tuxseo.sentry_utils import before_send_hook
+from sentry_sdk.integrations.logging import LoggingIntegration
+from structlog_sentry import SentryProcessor
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -385,10 +386,18 @@ structlog_processors = [
     structlog.processors.TimeStamper(fmt="iso"),
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
-    structlog.stdlib.PositionalArgumentsFormatter(),
-    structlog.processors.StackInfoRenderer(),
-    structlog.processors.format_exc_info,
 ]
+
+if SENTRY_DSN:
+    structlog_processors.append(SentryProcessor(event_level=logging.ERROR))
+
+structlog_processors.extend(
+    [
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+    ]
+)
 
 if LOGFIRE_TOKEN:
     structlog_processors.append(logfire.StructlogProcessor())
@@ -422,7 +431,9 @@ if SENTRY_DSN:
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
-        before_send=before_send_hook,
+        integrations=[
+            LoggingIntegration(event_level=None, level=None),
+        ],
     )
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")

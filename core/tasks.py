@@ -676,11 +676,13 @@ def get_and_save_pasf_keywords(
 
 
 def trigger_value_error():
-    logger.info("[TriggerValueError] Triggering value error")
+    logger.info("[TriggerValueError] Triggering value error", foo="bar")
+    logger.exception("[TriggerValueError] Triggering value error", foo="bar")
     int("not_an_integer")
 
 
 def trigger_index_error():
-    logger.info("[TriggerIndexError] Triggering index error")
+    logger.info("[TriggerIndexError] Triggering index error", foo="bar")
     empty_list = []
+    logger.error("[TriggerIndexError] Triggering index error", foo="bar")
     return empty_list[1]
