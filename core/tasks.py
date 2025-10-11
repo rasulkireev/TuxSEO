@@ -673,3 +673,8 @@ def get_and_save_pasf_keywords(
     API credits used: {stats["credits_used"]}
     PASF keywords found: {stats["pasf_found"]}
     PASF keywords saved: {stats["pasf_saved"]}"""
+
+
+def trigger_value_error():
+    logger.exception("[TriggerValueError] Triggering value error", foo="bar")
+    raise ValueError("This is a test value error")
