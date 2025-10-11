@@ -26,7 +26,12 @@ from core.models import (
     Profile,
     Project,
 )
-from core.tasks import track_event, trigger_value_error, try_create_posthog_alias
+from core.tasks import (
+    track_event,
+    trigger_index_error,
+    trigger_value_error,
+    try_create_posthog_alias,
+)
 from core.utils import get_project_keywords_dict
 from tuxseo.utils import get_tuxseo_logger
 
@@ -519,6 +524,6 @@ class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
 
 def trigger_error(request):
     async_task(trigger_value_error, group="Trigger Value Error")
-    async_task(trigger_error, group="Trigger Error")
+    async_task(trigger_index_error, group="Trigger Index Error")
 
     return 1 / 0
