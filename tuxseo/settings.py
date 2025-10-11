@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
-import logging
 import os
 from pathlib import Path
 
@@ -18,10 +17,6 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
-from sentry_sdk.integrations.django import DjangoIntegration
-from sentry_sdk.integrations.logging import LoggingIntegration
-from sentry_sdk.integrations.redis import RedisIntegration
-from structlog_sentry import SentryProcessor
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -328,7 +323,6 @@ Q_CLUSTER = {
     "workers": 4,
     "max_attempts": 2,
     "redis": REDIS_URL,
-    "error_reporter": {},
 }
 
 LOGGING = {
@@ -387,14 +381,6 @@ structlog_processors = [
     structlog.processors.format_exc_info,
 ]
 
-if SENTRY_DSN:
-    structlog_processors.append(
-        SentryProcessor(
-            event_level=logging.ERROR,
-            active=True,
-        )
-    )
-
 if LOGFIRE_TOKEN:
     structlog_processors.append(logfire.StructlogProcessor())
 
@@ -417,20 +403,16 @@ if ENVIRONMENT == "prod":
     LOGGING["loggers"]["tuxseo"]["level"] = log_level
     LOGGING["loggers"]["tuxseo"]["handlers"] = ["json_console"]
 
-if ENVIRONMENT == "prod" and SENTRY_DSN:
+if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        integrations=[
-            LoggingIntegration(event_level=None, level=None),
-            RedisIntegration(max_data_size=None),
-            DjangoIntegration(transaction_style="url"),
-        ],
+        enable_logs=True,
+        environment=ENVIRONMENT,
         send_default_pii=True,
-        traces_sample_rate=0.5,
-        profile_session_sample_rate=0.5,
+        traces_sample_rate=1,
+        profile_session_sample_rate=1,
         profile_lifecycle="trace",
     )
-    Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
 BUTTONDOWN_API_KEY = env("BUTTONDOWN_API_KEY", default="")
