@@ -523,6 +523,8 @@ class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
 
 
 def trigger_error(request):
+    logger.info("[TriggerError] Triggering errors")
+
     async_task(trigger_value_error, group="Trigger Value Error")
     async_task(trigger_index_error, group="Trigger Index Error")
 
