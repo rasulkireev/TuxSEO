@@ -676,5 +676,9 @@ def get_and_save_pasf_keywords(
 
 
 def trigger_value_error():
-    logger.exception("[TriggerValueError] Triggering value error", foo="bar")
-    raise ValueError("This is a test value error")
+    int("not_an_integer")
+
+
+def trigger_index_error():
+    empty_list = []
+    return empty_list[1]

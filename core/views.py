@@ -519,11 +519,6 @@ class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
 
 def trigger_error(request):
     async_task(trigger_value_error, group="Trigger Value Error")
+    async_task(trigger_error, group="Trigger Error")
 
-    try:
-        division_by_zero = 1 / 0
-    except Exception as e:
-        logger.exception("[Trigger Error] Division by zero", foo="bar")
-        raise e
-
-    return division_by_zero
+    return 1 / 0
