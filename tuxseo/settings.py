@@ -21,6 +21,7 @@ import structlog
 from sentry_sdk.integrations.logging import LoggingIntegration
 from structlog_sentry import SentryProcessor
 
+from tuxseo.logging_utils import scrubbing_callback
 from tuxseo.sentry_utils import before_send
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -40,7 +41,10 @@ SENTRY_DSN = env("SENTRY_DSN", default="")
 LOGFIRE_TOKEN = env("LOGFIRE_TOKEN", default="")
 
 if LOGFIRE_TOKEN != "":
-    logfire.configure(environment=ENVIRONMENT)
+    logfire.configure(
+        environment=ENVIRONMENT,
+        scrubbing=logfire.ScrubbingOptions(callback=scrubbing_callback),
+    )
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.0/howto/deployment/checklist/
