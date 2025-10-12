@@ -18,6 +18,7 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.logging import LoggingIntegration
 from structlog_sentry import SentryProcessor
 
 from tuxseo.sentry_utils import before_send
@@ -373,6 +374,22 @@ LOGGING = {
             "level": "INFO",
             "propagate": False,
         },
+        "django": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+        # django.server can log some low-level logs, but also does log requests,
+        # for some reason...
+        "django.server": {
+            "handlers": ["console"],
+            "level": "ERROR",
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console"],
+            "level": "ERROR",  # so we don't chunder 404s, etc
+            "propagate": False,
+        },
         "tuxseo": {
             "level": "DEBUG",
             "handlers": ["console"],
@@ -416,11 +433,11 @@ structlog.configure(
     cache_logger_on_first_use=True,
 )
 
-log_level = env("DJANGO_LOG_LEVEL", default="INFO")
 if ENVIRONMENT == "prod":
-    LOGGING["loggers"]["django_structlog"]["handlers"] = ["json_console"]
-    LOGGING["loggers"]["tuxseo"]["level"] = log_level
-    LOGGING["loggers"]["tuxseo"]["handlers"] = ["json_console"]
+    LOGGING["loggers"]["django.server"]["level"] = "WARNING"
+    LOGGING["loggers"]["django_structlog"]["handlers"].append("json_console")
+    LOGGING["loggers"]["tuxseo"]["level"] = env("DJANGO_LOG_LEVEL", default="INFO")
+    LOGGING["loggers"]["tuxseo"]["handlers"].append("json_console")
 
 if SENTRY_DSN:
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
@@ -433,6 +450,11 @@ if SENTRY_DSN:
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
         before_send=before_send,
+        integrations=[
+            LoggingIntegration(
+                event_level=logging.ERROR, level=logging.INFO, sentry_logs_level=logging.INFO
+            ),
+        ],
     )
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
