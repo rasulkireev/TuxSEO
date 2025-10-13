@@ -28,7 +28,11 @@ def before_send(event: Event, hint: Hint) -> Event | None:
     #     return None
 
     # We can set extra data on the event's "extra" field.
+    if "extra" not in event:
+        event["extra"] = {"foo-foo-foo": "bar-bar-bar"}
     event["extra"]["foo-foo"] = "bar-bar"
+
+    event["tags"].append(["Test Tag", "Hello"])
     # We have modified the event as desired, so return the event.
     # The SDK will then send the returned event to Sentry.
     return event
