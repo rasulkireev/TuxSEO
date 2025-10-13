@@ -924,6 +924,7 @@ class GeneratedBlogPost(BaseModel):
     content_too_short = models.BooleanField(default=False)
     has_valid_ending = models.BooleanField(default=True)
     placeholders = models.BooleanField(default=False)
+    starts_with_header = models.BooleanField(default=False)
 
     objects = GeneratedBlogPostManager()
 
@@ -940,6 +941,7 @@ class GeneratedBlogPost(BaseModel):
             self.content_too_short is False
             and self.has_valid_ending is True
             and self.placeholders is False
+            and self.starts_with_header is False
         )
 
     @property
@@ -953,7 +955,11 @@ class GeneratedBlogPost(BaseModel):
 
     def run_validation(self):
         """Run validation and update fields in a single query."""
-        from core.utils import blog_post_has_placeholders, blog_post_has_valid_ending
+        from core.utils import (
+            blog_post_has_placeholders,
+            blog_post_has_valid_ending,
+            blog_post_starts_with_header,
+        )
 
         base_logger_info = {
             "blog_post_id": self.id,
@@ -969,14 +975,23 @@ class GeneratedBlogPost(BaseModel):
             self.content_too_short = True
             self.has_valid_ending = False
             self.placeholders = False
+            self.starts_with_header = False
 
         else:
             content = self.content.strip()
             self.content_too_short = len(content) < 3000
             self.has_valid_ending = blog_post_has_valid_ending(self)
             self.placeholders = blog_post_has_placeholders(self)
+            self.starts_with_header = blog_post_starts_with_header(self)
 
-        self.save(update_fields=["content_too_short", "has_valid_ending", "placeholders"])
+        self.save(
+            update_fields=[
+                "content_too_short",
+                "has_valid_ending",
+                "placeholders",
+                "starts_with_header",
+            ]
+        )
 
         logger.info(
             "[Validation] Blog post validation complete",
@@ -985,7 +1000,30 @@ class GeneratedBlogPost(BaseModel):
             content_too_short=self.content_too_short,
             has_valid_ending=self.has_valid_ending,
             placeholders=self.placeholders,
+            starts_with_header=self.starts_with_header,
         )
+
+    def fix_header_start(self):
+        result = run_agent_synchronously(
+            content_editor_agent,
+            """
+            This blog post starts with a header (like # or ##) instead of regular text.
+
+            Please remove it such that the content starts with regular text, usually an introduction.
+            """,  # noqa: E501
+            deps=[
+                self.generated_blog_post_schema,
+                self.title.title_suggestion_schema,
+            ],
+            function_name="fix_header_start",
+            model_name="GeneratedBlogPost",
+        )
+
+        self.content = result.data
+        self.save(update_fields=["content"])
+        self.run_validation()
+
+        return True
 
     def submit_blog_post_to_endpoint(self):
         from core.utils import replace_placeholders
@@ -1106,6 +1144,9 @@ class GeneratedBlogPost(BaseModel):
 
         if self.placeholders is True:
             self.fix_placeholders()
+
+        if self.starts_with_header is True:
+            self.fix_header_start()
 
 
 class ProjectPage(BaseModel):
