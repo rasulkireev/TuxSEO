@@ -473,17 +473,16 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         enable_logs=True,
         environment=ENVIRONMENT,
-        send_default_pii=True,
+        send_default_pii=False,
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
         integrations=[
             DjangoIntegration(),
             RedisIntegration(),
-        ],
-        disabled_integrations=[
             LoggingIntegration(),
         ],
+        disabled_integrations=[],
         attach_stacktrace=True,
         include_local_variables=True,
     )
