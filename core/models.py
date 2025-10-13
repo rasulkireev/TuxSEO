@@ -816,6 +816,19 @@ class BlogPostTitleSuggestion(BaseModel):
                   ...
              """
 
+        @agent.system_prompt
+        def list_formatting() -> str:
+            return """
+                - When creating markdown lists (using * or -), always add an empty line above the list.
+                - This improves readability and ensures proper markdown rendering.
+                - Example:
+                  This is a paragraph.
+
+                  * First item
+                  * Second item
+                  * Third item
+            """  # noqa: E501
+
         project_pages = [
             ProjectPageContext(
                 url=page.url,
@@ -925,6 +938,7 @@ class GeneratedBlogPost(BaseModel):
     has_valid_ending = models.BooleanField(default=True)
     placeholders = models.BooleanField(default=False)
     starts_with_header = models.BooleanField(default=False)
+    lists_without_empty_line_above = models.BooleanField(default=False)
 
     objects = GeneratedBlogPostManager()
 
@@ -942,6 +956,7 @@ class GeneratedBlogPost(BaseModel):
             and self.has_valid_ending is True
             and self.placeholders is False
             and self.starts_with_header is False
+            and self.lists_without_empty_line_above is False
         )
 
     @property
@@ -956,6 +971,7 @@ class GeneratedBlogPost(BaseModel):
     def run_validation(self):
         """Run validation and update fields in a single query."""
         from core.utils import (
+            blog_post_has_lists_without_empty_line_above,
             blog_post_has_placeholders,
             blog_post_has_valid_ending,
             blog_post_starts_with_header,
@@ -976,6 +992,7 @@ class GeneratedBlogPost(BaseModel):
             self.has_valid_ending = False
             self.placeholders = False
             self.starts_with_header = False
+            self.lists_without_empty_line_above = False
 
         else:
             content = self.content.strip()
@@ -983,6 +1000,7 @@ class GeneratedBlogPost(BaseModel):
             self.has_valid_ending = blog_post_has_valid_ending(self)
             self.placeholders = blog_post_has_placeholders(self)
             self.starts_with_header = blog_post_starts_with_header(self)
+            self.lists_without_empty_line_above = blog_post_has_lists_without_empty_line_above(self)
 
         self.save(
             update_fields=[
@@ -990,6 +1008,7 @@ class GeneratedBlogPost(BaseModel):
                 "has_valid_ending",
                 "placeholders",
                 "starts_with_header",
+                "lists_without_empty_line_above",
             ]
         )
 
@@ -1001,6 +1020,7 @@ class GeneratedBlogPost(BaseModel):
             has_valid_ending=self.has_valid_ending,
             placeholders=self.placeholders,
             starts_with_header=self.starts_with_header,
+            lists_without_empty_line_above=self.lists_without_empty_line_above,
         )
 
     def fix_header_start(self):
@@ -1135,6 +1155,46 @@ class GeneratedBlogPost(BaseModel):
         self.save(update_fields=["content"])
         self.run_validation()
 
+    def fix_lists_without_empty_line_above(self):
+        content = self.content or ""
+
+        if not content:
+            return
+
+        lines = content.split("\n")
+        fixed_lines = []
+
+        for line_index, line in enumerate(lines):
+            line_stripped = line.strip()
+
+            is_list_item = line_stripped.startswith("* ") or line_stripped.startswith("- ")
+
+            if is_list_item and line_index > 0:
+                next_line_index = line_index + 1
+                has_next_line = next_line_index < len(lines)
+                next_line_is_list_item = has_next_line and (
+                    lines[next_line_index].strip().startswith("* ")
+                    or lines[next_line_index].strip().startswith("- ")
+                )
+
+                if next_line_is_list_item:
+                    previous_line = lines[line_index - 1].strip()
+
+                    if previous_line and (not fixed_lines or fixed_lines[-1].strip()):
+                        fixed_lines.append("")
+
+            fixed_lines.append(line)
+
+        self.content = "\n".join(fixed_lines)
+        self.save(update_fields=["content"])
+        self.run_validation()
+
+        logger.info(
+            "[Fix Lists Without Empty Line] Fixed list formatting",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+        )
+
     def fix_generated_blog_post(self):
         if self.content_too_short is True:
             self.fix_content_length()
@@ -1147,6 +1207,9 @@ class GeneratedBlogPost(BaseModel):
 
         if self.starts_with_header is True:
             self.fix_header_start()
+
+        if self.lists_without_empty_line_above is True:
+            self.fix_lists_without_empty_line_above()
 
 
 class ProjectPage(BaseModel):

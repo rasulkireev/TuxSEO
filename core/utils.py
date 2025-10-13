@@ -253,3 +253,49 @@ def blog_post_starts_with_header(blog_post: GeneratedBlogPost) -> bool:
         )
 
     return starts_with_header_or_asterisk
+
+
+def blog_post_has_lists_without_empty_line_above(blog_post: GeneratedBlogPost) -> bool:
+    content = blog_post.content or ""
+
+    if not content:
+        return False
+
+    lines = content.split("\n")
+
+    for line_index, line in enumerate(lines):
+        line_stripped = line.strip()
+
+        is_list_item = line_stripped.startswith("* ") or line_stripped.startswith("- ")
+
+        if is_list_item:
+            if line_index == 0:
+                continue
+
+            next_line_index = line_index + 1
+            has_next_line = next_line_index < len(lines)
+            next_line_is_list_item = has_next_line and (
+                lines[next_line_index].strip().startswith("* ")
+                or lines[next_line_index].strip().startswith("- ")
+            )
+
+            if not next_line_is_list_item:
+                continue
+
+            previous_line = lines[line_index - 1].strip()
+
+            if previous_line:
+                logger.warning(
+                    "[Blog Post Lists Without Empty Line] List without empty line above found",
+                    blog_post_id=blog_post.id,
+                    line_number=line_index + 1,
+                    list_item=line_stripped[:50],
+                )
+                return True
+
+    logger.info(
+        "[Blog Post Lists Without Empty Line] All lists have proper spacing",
+        blog_post_id=blog_post.id,
+    )
+
+    return False
