@@ -480,9 +480,10 @@ if SENTRY_DSN:
         integrations=[
             DjangoIntegration(),
             RedisIntegration(),
-            LoggingIntegration(event_level=None, level=None),
         ],
-        disabled_integrations=[],
+        disabled_integrations=[
+            LoggingIntegration(),
+        ],
         attach_stacktrace=True,
         include_local_variables=True,
     )

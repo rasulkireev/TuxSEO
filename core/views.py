@@ -527,7 +527,7 @@ def trigger_error(request):
         logger.exception("[TriggerError] Triggering zero division error", error=str(e), foo="bar")
 
     try:
-        raise Exception("This is a test error", foo="bar")
+        raise Exception("This is a test error")
     except Exception as e:
         raise e
 
