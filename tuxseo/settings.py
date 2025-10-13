@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
-import logging
 import os
 from pathlib import Path
 
@@ -21,7 +20,6 @@ import structlog
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
-from structlog_sentry import SentryProcessor
 
 from tuxseo.logging_utils import scrubbing_callback
 
@@ -437,9 +435,6 @@ structlog_processors = [
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
 ]
-
-if SENTRY_DSN:
-    structlog_processors.append(SentryProcessor(event_level=logging.ERROR))
 
 structlog_processors.extend(
     [
