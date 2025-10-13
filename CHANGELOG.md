@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.7] - 2025-10-13
 **Added**
 - new validation to see if content start with a header
+- new validation to make sure lists are generated correctly
 
 
 ## [0.0.7] - 2025-10-12
