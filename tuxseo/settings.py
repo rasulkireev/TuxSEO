@@ -471,7 +471,7 @@ if SENTRY_DSN:
     sentry_sdk.init(
         debug=DEBUG,
         dsn=SENTRY_DSN,
-        enable_logs=False,
+        enable_logs=True,
         environment=ENVIRONMENT,
         send_default_pii=True,
         traces_sample_rate=1,
