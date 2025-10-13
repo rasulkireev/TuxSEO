@@ -328,8 +328,8 @@ REDIS_URL = f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
 
 Q_CLUSTER = {
     "name": "tuxseo-q",
-    "timeout": 90,
-    "retry": 120,
+    "timeout": 3600,  # 1 hour
+    "retry": 4800,  # 80 minutes
     "workers": 4,
     "max_attempts": 2,
     "redis": REDIS_URL,
@@ -436,16 +436,10 @@ structlog_processors = [
     structlog.processors.TimeStamper(fmt="iso"),
     structlog.stdlib.add_logger_name,
     structlog.stdlib.add_log_level,
+    structlog.stdlib.PositionalArgumentsFormatter(),
+    structlog.processors.StackInfoRenderer(),
+    # structlog.processors.format_exc_info,
 ]
-
-structlog_processors.extend(
-    [
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.StackInfoRenderer(),
-        # structlog.processors.format_exc_info,
-    ]
-)
-
 
 if SENTRY_DSN:
     structlog_processors.append(
