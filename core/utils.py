@@ -229,3 +229,28 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
             content_length=len(content),
         )
         return False
+
+
+def blog_post_starts_with_header(blog_post: GeneratedBlogPost) -> bool:
+    """Check if blog post content starts with a markdown header instead of regular text."""
+    content = blog_post.content or ""
+    content = content.strip()
+
+    if not content:
+        return False
+
+    header_pattern = r"^#{1,6}\s+"
+    starts_with_header = bool(re.match(header_pattern, content))
+
+    if starts_with_header:
+        logger.warning(
+            "[Blog Post Starts With Header] Content starts with header",
+            blog_post_id=blog_post.id,
+        )
+    else:
+        logger.info(
+            "[Blog Post Starts With Header] Content starts with regular text",
+            blog_post_id=blog_post.id,
+        )
+
+    return starts_with_header
