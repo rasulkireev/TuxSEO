@@ -18,11 +18,12 @@ import environ
 import logfire
 import sentry_sdk
 import structlog
+from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.redis import RedisIntegration
 from structlog_sentry import SentryProcessor
 
 from tuxseo.logging_utils import scrubbing_callback
-from tuxseo.sentry_utils import before_send
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -335,13 +336,32 @@ Q_CLUSTER = {
     "error_reporter": {},
 }
 
+
+def extract_from_record(logger, name, event_dict):
+    """
+    Extract thread name and add them to the event dict.
+    """
+    record = event_dict["_record"]
+    event_dict["thread_id"] = record.thread
+    return event_dict
+
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
+        "simple": {"format": "%(levelname)s %(message)s"},
+        "verbose": {
+            "format": "%(levelname)s %(asctime)s %(module)s %(process)d %(thread)d %(message)s"
+        },
+        "json": {"format": "%(message)s"},
         "json_formatter": {
             "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.JSONRenderer(),
+            "processors": [
+                extract_from_record,
+                structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+                structlog.processors.JSONRenderer(),
+            ],
         },
         "plain_console": {
             "()": structlog.stdlib.ProcessorFormatter,
@@ -350,13 +370,26 @@ LOGGING = {
         "key_value": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.processors.KeyValueRenderer(
-                key_order=["timestamp", "level", "event", "logger"],
-                drop_missing=True,
+                key_order=["timestamp", "level", "event", "logger"]
             ),
+        },
+    },
+    "filters": {
+        "require_debug_false": {
+            "()": "django.utils.log.RequireDebugFalse",
+        },
+        "require_debug_true": {
+            "()": "django.utils.log.RequireDebugTrue",
         },
     },
     "handlers": {
         "console": {
+            "filters": ["require_debug_true"],
+            "class": "logging.StreamHandler",
+            "formatter": "plain_console",
+            "level": "DEBUG",
+        },
+        "prod_console": {
             "class": "logging.StreamHandler",
             "formatter": "plain_console",
             "level": "DEBUG",
@@ -364,11 +397,6 @@ LOGGING = {
         "json_console": {
             "class": "logging.StreamHandler",
             "formatter": "json_formatter",
-            "level": "DEBUG",
-        },
-        "sentry_console": {
-            "class": "logging.StreamHandler",
-            "formatter": "key_value",
             "level": "DEBUG",
         },
     },
@@ -417,7 +445,7 @@ structlog_processors.extend(
     [
         structlog.stdlib.PositionalArgumentsFormatter(),
         structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
+        # structlog.processors.format_exc_info,
     ]
 )
 
@@ -446,6 +474,7 @@ if ENVIRONMENT == "prod":
 if SENTRY_DSN:
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
     sentry_sdk.init(
+        debug=DEBUG,
         dsn=SENTRY_DSN,
         enable_logs=True,
         environment=ENVIRONMENT,
@@ -453,12 +482,14 @@ if SENTRY_DSN:
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
-        before_send=before_send,
         integrations=[
-            LoggingIntegration(
-                event_level=logging.ERROR, level=logging.INFO, sentry_logs_level=logging.INFO
-            ),
+            DjangoIntegration(),
+            RedisIntegration(),
+            LoggingIntegration(event_level=None, level=None),
         ],
+        disabled_integrations=[],
+        attach_stacktrace=True,
+        include_local_variables=True,
     )
 
 POSTHOG_API_KEY = env("POSTHOG_API_KEY", default="")
