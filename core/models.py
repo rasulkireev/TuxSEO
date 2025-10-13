@@ -1145,6 +1145,9 @@ class GeneratedBlogPost(BaseModel):
         if self.placeholders is True:
             self.fix_placeholders()
 
+        if self.starts_with_header is True:
+            self.fix_header_start()
+
 
 class ProjectPage(BaseModel):
     project = models.ForeignKey(
