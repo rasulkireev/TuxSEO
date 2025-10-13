@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.0/ref/settings/
 """
 
+import logging
 import os
 from pathlib import Path
 
@@ -20,9 +21,9 @@ import structlog
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
+from structlog_sentry import SentryProcessor
 
 from tuxseo.logging_utils import scrubbing_callback
-from tuxseo.sentry_utils import CustomLoggingIntegration, before_send
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -445,6 +446,19 @@ structlog_processors.extend(
     ]
 )
 
+
+if SENTRY_DSN:
+    structlog_processors.append(
+        SentryProcessor(
+            event_level=logging.ERROR,
+            level=logging.INFO,
+            active=True,
+            as_context=True,
+            tag_keys="__all__",
+            verbose=True,
+        )
+    )
+
 if LOGFIRE_TOKEN:
     structlog_processors.append(logfire.StructlogProcessor())
 
@@ -478,11 +492,9 @@ if SENTRY_DSN:
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
-        before_send=before_send,
         integrations=[
             DjangoIntegration(),
             RedisIntegration(),
-            CustomLoggingIntegration(),
         ],
         disabled_integrations=[
             LoggingIntegration(),
