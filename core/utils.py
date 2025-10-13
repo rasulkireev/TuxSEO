@@ -232,19 +232,18 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
 
 
 def blog_post_starts_with_header(blog_post: GeneratedBlogPost) -> bool:
-    """Check if blog post content starts with a markdown header instead of regular text."""
     content = blog_post.content or ""
     content = content.strip()
 
     if not content:
         return False
 
-    header_pattern = r"^#{1,6}\s+"
-    starts_with_header = bool(re.match(header_pattern, content))
+    header_or_asterisk_pattern = r"^(#{1,6}\s+|\*)"
+    starts_with_header_or_asterisk = bool(re.match(header_or_asterisk_pattern, content))
 
-    if starts_with_header:
+    if starts_with_header_or_asterisk:
         logger.warning(
-            "[Blog Post Starts With Header] Content starts with header",
+            "[Blog Post Starts With Header] Content starts with header or asterisk",
             blog_post_id=blog_post.id,
         )
     else:
@@ -253,4 +252,4 @@ def blog_post_starts_with_header(blog_post: GeneratedBlogPost) -> bool:
             blog_post_id=blog_post.id,
         )
 
-    return starts_with_header
+    return starts_with_header_or_asterisk
