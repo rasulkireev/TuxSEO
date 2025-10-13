@@ -22,6 +22,7 @@ from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 
 from tuxseo.logging_utils import scrubbing_callback
+from tuxseo.sentry_utils import CustomLoggingIntegration, before_send
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -477,12 +478,15 @@ if SENTRY_DSN:
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
+        before_send=before_send,
         integrations=[
             DjangoIntegration(),
             RedisIntegration(),
+            CustomLoggingIntegration(),
+        ],
+        disabled_integrations=[
             LoggingIntegration(),
         ],
-        disabled_integrations=[],
         attach_stacktrace=True,
         include_local_variables=True,
     )
