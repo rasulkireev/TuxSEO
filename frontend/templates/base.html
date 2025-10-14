@@ -64,178 +64,131 @@
   {% endif %}
 
   <div class="bg-white">
-    <header class="bg-white">
-      <nav class="flex justify-between items-center p-6 mx-auto max-w-7xl lg:px-8" aria-label="Global">
+    <header class="sticky left-0 top-3 z-10">
+      <div class="mx-auto w-full max-w-[1376px] px-4">
+        <div class="flex gap-2 items-center px-4 py-3.5 bg-white rounded-xl border border-gray-200 sm:gap-4 md:px-6 lg:rounded-full">
 
-        <!-- Small Screen -->
-        <div class="flex justify-between items-center w-full lg:hidden">
-
-          <div class="relative">
-            <div data-controller="dropdown">
-              <button type="button" data-action="dropdown#toggle click@window->dropdown#hide" id="user-menu-button" aria-expanded="false" aria-haspopup="true">
-                <span class="sr-only">Open user menu</span>
-                <svg class="w-6 h-6 group-[.open]:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path>
-                </svg>
-                <svg class="hidden w-6 h-6 group-[.open]:block" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-              </button>
-              <div data-dropdown-target="menu" class="hidden lg:hidden" role="dialog" aria-modal="true">
-                <!-- Background backdrop, show/hide based on slide-over state. -->
-                <div class="fixed inset-0 z-10"></div>
-                <div class="overflow-y-auto fixed inset-y-0 right-0 z-10 px-6 py-6 w-full bg-white sm:max-w-sm sm:ring-1 sm:ring-gray-900/10">
-                  <div class="flex justify-start items-center">
-                    <button data-action="dropdown#toggle click@window->dropdown#hide" type="button">
-                      <span class="sr-only">Close menu</span>
-                      <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                      </svg>
-                    </button>
-                  </div>
-                  <div class="flow-root mt-6">
-                    <div class="flex flex-col justify-start space-y-1">
-                      <a href="{% url 'home' %}" class="flex flex-row justify-center items-center p-1.5 -m-1.5 mb-2 space-x-2">
-                        <img class="w-auto h-8" src="{% static 'vendors/images/logo.png' %}" alt="TuxSEO Logo" />
-                        <span class="text-base font-semibold text-gray-700">TuxSEO</span>
-                      </a>
-                      <a href="{% url 'home' %}" class="px-3 py-2.5 -mx-3 text-base font-semibold leading-7 text-center text-gray-900 rounded-lg hover:bg-gray-50">
-                        Home
-                      </a>
-                      <a href="{% url 'blog_posts' %}" class="px-3 py-2.5 -mx-3 text-base font-semibold leading-7 text-center text-gray-900 rounded-lg hover:bg-gray-50">
-                        Blog
-                      </a>
-
-                      <a href="{% url 'pricing' %}" class="px-3 py-2.5 -mx-3 text-base font-semibold leading-7 text-center text-gray-900 rounded-lg hover:bg-gray-50">
-                        Pricing
-                      </a>
-
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Profile dropdown (right) -->
-          <div class="relative">
-            {% if user.is_authenticated %}
-            <div data-controller="dropdown">
-              <button type="button" data-action="dropdown#toggle click@window->dropdown#hide"
-                class="flex text-sm bg-gray-800 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white"
-                id="user-menu-button" aria-expanded="false" aria-haspopup="true">
-                <span class="sr-only">Open user menu</span>
-                <img class="object-cover p-1 w-10 h-10 bg-gray-100 rounded-full border-2 border-gray-500"
-                  src="{% static 'vendors/images/unknown-man.png' %}" alt="No Personal Photo" />
-              </button>
-              <div data-dropdown-target="menu" class="hidden lg:hidden" role="dialog" aria-modal="true">
-                <!-- Background backdrop, show/hide based on slide-over state. -->
-                <div class="fixed inset-0 z-10"></div>
-                <div class="overflow-y-auto fixed inset-y-0 right-0 z-10 px-6 py-6 w-full bg-white sm:max-w-sm sm:ring-1 sm:ring-gray-900/10">
-                  <div class="flex justify-end items-center">
-                    <button data-action="dropdown#toggle click@window->dropdown#hide" type="button"
-                      class="p-2.5 -m-2.5 text-gray-700 rounded-md">
-                      <span class="sr-only">Close menu</span>
-                      <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"
-                        aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                  <div class="flow-root mt-6">
-                    <div class="flex justify-end">
-                      <a href="{% url 'settings' %}" class="px-3 py-2.5 -mx-3 text-base font-semibold leading-7 text-center text-gray-900 rounded-lg hover:bg-gray-50">
-                        Settings
-                      </a>
-                    </div>
-                    <div class="-my-6 divide-y divide-gray-500/10">
-                      <div class="py-6">
-                        <form method="post" class="flex justify-end" action="{% url 'account_logout' %}">
-                          {% csrf_token %}
-                          <button
-                            class="px-3 py-2.5 -mx-3 text-base font-semibold leading-7 text-center text-gray-900 rounded-lg hover:bg-gray-50"
-                            role="menuitem"
-                            data-action="dropdown#toggle"
-                            tabindex="-1"
-                            id="user-menu-item-2"
-                            type="submit"
-                          >
-                              Sign Out
-                          </button>
-                        </form>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            {% else %}
-            <a href="{% url 'account_login' %}" class="text-base font-semibold leading-6 text-gray-900">
-              Log in <span aria-hidden="true">&rarr;</span>
-            </a>
-            {% endif %}
-          </div>
-        </div>
-
-        <!-- Large Screen -->
-        <div class="hidden lg:flex lg:justify-between lg:items-center lg:w-full"">
-          <div class="flex gap-x-12 items-center">
-            <a href="{% url 'home' %}" class="flex flex-row justify-between items-center p-1.5 -m-1.5 space-x-2">
+          <!-- Logo and Navigation -->
+          <div class="flex gap-6 items-center">
+            <a href="{% url 'home' %}" class="flex gap-2 items-center">
               <img class="w-auto h-8" src="{% static 'vendors/images/logo.png' %}" alt="TuxSEO Logo" />
-              <span class="text-base font-semibold text-gray-700">TuxSEO</span>
+              <span class="text-base font-semibold text-gray-900">TuxSEO</span>
             </a>
+
+            <!-- Desktop Navigation -->
+            <nav class="hidden lg:block">
+              <ul class="flex gap-4 items-center">
+                <li>
+                  <a href="{% url 'blog_posts' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
+                    Blog
+                  </a>
+                </li>
+                <li>
+                  <a href="{% url 'pricing' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
+                    Pricing
+                  </a>
+                </li>
+              </ul>
+            </nav>
           </div>
-          <div class="flex items-center space-x-8">
-            <a href="{% url 'blog_posts' %}" class="text-base font-semibold leading-6 text-gray-900 hover:text-gray-700">
-              Blog
-            </a>
 
-            <a href="{% url 'pricing' %}" class="text-base font-semibold leading-6 text-gray-900 hover:text-gray-700">
-              Pricing
-            </a>
-
+          <!-- Desktop Auth Buttons -->
+          <div class="flex gap-2 items-center ml-auto">
             {% if user.is_authenticated %}
             <!-- Profile dropdown -->
-            <div data-controller="dropdown" class="relative ml-3">
-              <div>
-                <button type="button" data-action="dropdown#toggle click@window->dropdown#hide"
-                  class="flex text-sm bg-gray-800 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-800 focus:ring-white"
-                  id="user-menu-button" aria-expanded="false" aria-haspopup="true">
-                  <span class="sr-only">Open user menu</span>
-                  <img class="object-cover p-1 w-10 h-10 bg-gray-100 rounded-full border-2 border-gray-500"
-                    src="{% static 'vendors/images/unknown-man.png' %}" alt="No Personal Photo" />
-                </button>
-              </div>
+            <div data-controller="dropdown" class="hidden relative lg:block">
+              <button type="button" data-action="dropdown#toggle click@window->dropdown#hide"
+                class="flex items-center gap-2 rounded-full border-[1.5px] border-gray-300 px-5 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100"
+                id="user-menu-button" aria-expanded="false" aria-haspopup="true">
+                <span class="sr-only">Open user menu</span>
+                <img class="w-5 h-5 rounded-full"
+                  src="{% static 'vendors/images/unknown-man.png' %}" alt="Profile" />
+                <span>Account</span>
+              </button>
               <div data-dropdown-target="menu"
-                class="hidden absolute right-0 z-10 py-1 mt-2 w-48 bg-white rounded-md ring-1 ring-black ring-opacity-5 shadow-lg origin-top-right focus:outline-none"
+                class="hidden absolute right-0 z-10 mt-2 w-48 bg-white rounded-xl border border-gray-200 shadow-lg origin-top-right"
                 role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
-                <a href="{% url 'settings' %}" class="flex justify-start px-4 py-2 w-full text-sm text-gray-700 hover:bg-gray-300">
-                  Settings
-                </a>
-                <form method="post" action="{% url 'account_logout' %}">
-                  {% csrf_token %}
-                  <button
-                    class="flex justify-start px-4 py-2 w-full text-sm text-gray-700 hover:bg-gray-300"
-                    role="menuitem"
-                    data-action="dropdown#toggle"
-                    tabindex="-1"
-                    id="user-menu-item-2"
-                    type="submit"
-                  >
+                <div class="py-1">
+                  <a href="{% url 'settings' %}" class="block px-4 py-2 text-sm text-gray-900 hover:bg-gray-100">
+                    Settings
+                  </a>
+                  <form method="post" action="{% url 'account_logout' %}">
+                    {% csrf_token %}
+                    <button
+                      class="block px-4 py-2 w-full text-sm text-left text-gray-900 hover:bg-gray-100"
+                      role="menuitem"
+                      type="submit"
+                    >
                       Sign Out
-                  </button>
-                </form>
+                    </button>
+                  </form>
+                </div>
               </div>
             </div>
             {% else %}
-            <a href="{% url 'account_login' %}" class="text-base font-semibold leading-6 text-gray-900">
-                Log in <span aria-hidden="true">&rarr;</span>
-            </a>
+            <div class="hidden gap-2 items-center lg:flex">
+              <a href="{% url 'account_login' %}" class="rounded-full border-[1.5px] border-gray-300 px-5 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100">
+                Sign In
+              </a>
+              <a href="{% url 'account_signup' %}" class="px-5 py-3 text-sm font-semibold text-white bg-red-600 rounded-full transition-colors hover:bg-red-700">
+                Start for Free
+              </a>
+            </div>
             {% endif %}
           </div>
-        </div>
 
-      </nav>
+          <!-- Mobile Menu Button -->
+          <div class="lg:hidden" data-controller="dropdown">
+            <button class="flex relative justify-center items-center w-10 h-10 rounded-full border border-gray-200"
+                    aria-label="Toggle mobile menu"
+                    data-action="dropdown#toggle click@window->dropdown#hide">
+              <span class="absolute left-1/2 top-[13px] flex h-[2px] w-4 -translate-x-1/2 rounded-full bg-black transition-transform"></span>
+              <span class="absolute left-1/2 top-1/2 flex h-[2px] w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black transition-transform"></span>
+              <span class="absolute bottom-[13px] left-1/2 flex h-[2px] w-4 -translate-x-1/2 rounded-full bg-black transition-transform"></span>
+            </button>
+
+            <!-- Mobile Menu Dropdown -->
+            <div data-dropdown-target="menu" class="hidden absolute right-4 left-4 top-full z-10 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg">
+              <nav class="flex-1 justify-center items-center">
+                <ul class="flex flex-col px-4">
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'blog_posts' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Blog
+                    </a>
+                  </li>
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'pricing' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Pricing
+                    </a>
+                  </li>
+                  {% if user.is_authenticated %}
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'settings' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Settings
+                    </a>
+                  </li>
+                  <li class="py-5 text-center">
+                    <form method="post" action="{% url 'account_logout' %}">
+                      {% csrf_token %}
+                      <button type="submit" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                        Sign Out
+                      </button>
+                    </form>
+                  </li>
+                  {% else %}
+                  <li class="py-5 text-center">
+                    <a href="{% url 'account_login' %}" class="inline-block rounded-full border-[1.5px] border-gray-300 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-100">
+                      Sign In
+                    </a>
+                  </li>
+                  {% endif %}
+                </ul>
+              </nav>
+            </div>
+          </div>
+
+        </div>
+      </div>
     </header>
 
     <div class="px-2 sm:px-0">
