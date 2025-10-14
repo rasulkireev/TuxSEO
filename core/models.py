@@ -783,6 +783,7 @@ class BlogPostTitleSuggestion(BaseModel):
 
                     Please incorporate these keywords naturally throughout the content where appropriate.
                     Don't force them in, but use them when they fit contextually and help improve the readability and SEO value of the post.
+                    Don't make them bold, just a regular part of the text.
                 """  # noqa: E501
             else:
                 return ""
