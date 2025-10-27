@@ -74,6 +74,19 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
             "message": "Project already exists",
         }
 
+    if not profile.can_create_project:
+        limit = profile.project_limit
+        if profile.is_on_free_plan:
+            message = f"Project creation limit reached ({limit} project on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> to create more projects."  # noqa: E501
+        elif profile.is_on_starter_plan:
+            message = f"Project creation limit reached ({limit} project on Starter plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited projects."  # noqa: E501
+        else:
+            message = "Project creation limit reached. <a class='underline' href='/settings'>Contact support</a> for assistance."  # noqa: E501
+        return {
+            "status": "error",
+            "message": message,
+        }
+
     project = get_or_create_project(profile.id, data.url, source="scan_project")
 
     try:
@@ -144,15 +157,19 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
             "message": f"Invalid content type: {data.content_type}",
         }
 
-    if (
-        profile.number_of_title_suggestions + data.num_titles >= 20
-        and not profile.has_active_subscription
+    if not profile.can_generate_title_suggestions or (
+        profile.title_suggestion_limit
+        and profile.number_of_title_suggestions_this_month + data.num_titles
+        > profile.title_suggestion_limit
     ):
+        limit = profile.title_suggestion_limit
+        current_count = profile.number_of_title_suggestions_this_month
+        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> for unlimited suggestions."  # noqa: E501
         return {
             "suggestions": [],
             "suggestions_html": [],
             "status": "error",
-            "message": "Title generation limit reached. Consider <a class='underline' href='/pricing'>upgrading</a>?",  # noqa: E501
+            "message": message,
         }
 
     suggestions = project.generate_title_suggestions(
@@ -184,9 +201,12 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     if profile.reached_title_generation_limit:
+        limit = profile.title_suggestion_limit
+        current_count = profile.number_of_title_suggestions_this_month
+        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> for unlimited suggestions."  # noqa: E501
         return {
             "status": "error",
-            "message": "Title generation limit reached. Consider <a class='underline' href='/pricing'>upgrading</a>?",  # noqa: E501
+            "message": message,
         }
 
     try:
@@ -247,9 +267,12 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
     )
 
     if profile.reached_content_generation_limit:
+        limit = profile.blog_post_generation_limit
+        current_count = profile.number_of_generated_blog_posts_this_month
+        message = f"Content generation limit reached ({current_count}/{limit} blog posts this month on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> for unlimited content."  # noqa: E501
         return {
             "status": "error",
-            "message": "Content generation limit reached. Consider <a class='underline' href='/pricing'>upgrading</a>?",  # noqa: E501
+            "message": message,
         }
 
     try:
@@ -494,6 +517,17 @@ def user_settings(request: HttpRequest, project_id: int):
 def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
     profile = request.auth
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
+
+    if not profile.can_add_keywords:
+        limit = profile.keyword_limit_per_month
+        current_count = profile.number_of_keywords_added_this_month
+        if profile.is_on_free_plan:
+            message = "Keyword additions are not available on the Free plan. <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> to add custom keywords."  # noqa: E501
+        elif profile.is_on_starter_plan:
+            message = f"Monthly keyword limit reached ({current_count}/{limit} keywords this month on Starter plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited keywords or wait until next month."  # noqa: E501
+        else:
+            message = "Keyword limit reached. <a class='underline' href='/settings'>Contact support</a> for assistance."  # noqa: E501
+        return {"status": "error", "message": message}
 
     keyword_text_cleaned = data.keyword_text.strip().lower()
     if not keyword_text_cleaned:

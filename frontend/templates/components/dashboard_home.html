@@ -12,8 +12,22 @@
       >
         Add project
       </button>
+    {% elif user.profile.reached_project_creation_limit %}
+      <button
+        disabled
+        class="px-6 py-3 text-sm font-medium text-gray-400 bg-gray-100 rounded-md border border-gray-200 shadow-sm cursor-not-allowed"
+        data-controller="tooltip"
+        data-tooltip-message-value="You've reached the project limit ({{ user.profile.project_limit }} project{% if user.profile.project_limit != 1 %}s{% endif %} on {{ user.profile.product_name }} plan).{% if user.profile.is_on_free_plan %}\nUpgrade to Starter or Pro in settings to create more projects.{% elif user.profile.is_on_starter_plan %}\nUpgrade to Pro in settings for unlimited projects.{% endif %}"
+        data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
+      >
+        Add project
+      </button>
     {% else %}
-      <button data-action="click->scan-progress#toggleForm" data-scan-progress-target="addButton" class="px-6 py-3 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+      <button
+        data-action="click->scan-progress#toggleForm"
+        data-scan-progress-target="addButton"
+        class="px-6 py-3 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+      >
         Add project
       </button>
     {% endif %}

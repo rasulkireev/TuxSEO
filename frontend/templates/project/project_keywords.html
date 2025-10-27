@@ -54,14 +54,28 @@
                      data-keyword-target="search"
                      data-action="input->keyword#filterKeywords">
             </div>
-            <button type="button"
-                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    data-action="click->keyword#showModal">
-              <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add New Keyword
-            </button>
+            {% if user.profile.reached_keyword_limit %}
+              <button type="button"
+                      disabled
+                      class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-400 bg-gray-100 rounded-md border border-gray-200 cursor-not-allowed"
+                      data-controller="tooltip"
+                      data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan.\nUpgrade to Starter or Pro in settings to add custom keywords.{% elif user.profile.is_on_starter_plan %}Monthly keyword limit reached ({{ user.profile.number_of_keywords_added_this_month }}/{{ user.profile.keyword_limit_per_month }} keywords on Starter plan).\nUpgrade to Pro in settings for unlimited keywords or wait until next month.{% endif %}"
+                      data-action="mouseenter->tooltip#show mouseleave->tooltip#hide">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </button>
+            {% else %}
+              <button type="button"
+                      class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      data-action="click->keyword#showModal">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </button>
+            {% endif %}
           </div>
         </div>
         <div class="overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -359,14 +373,28 @@
                      data-keyword-target="search"
                      data-action="input->keyword#filterKeywords">
             </div>
-            <button type="button"
-                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    data-action="click->keyword#showModal">
-              <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add New Keyword
-            </button>
+            {% if user.profile.reached_keyword_limit %}
+              <button type="button"
+                      disabled
+                      class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-400 bg-gray-100 rounded-md border border-gray-200 cursor-not-allowed"
+                      data-controller="tooltip"
+                      data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan.\nUpgrade to Starter or Pro in settings to add custom keywords.{% elif user.profile.is_on_starter_plan %}Monthly keyword limit reached ({{ user.profile.number_of_keywords_added_this_month }}/{{ user.profile.keyword_limit_per_month }} keywords on Starter plan).\nUpgrade to Pro in settings for unlimited keywords or wait until next month.{% endif %}"
+                      data-action="mouseenter->tooltip#show mouseleave->tooltip#hide">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </button>
+            {% else %}
+              <button type="button"
+                      class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      data-action="click->keyword#showModal">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </button>
+            {% endif %}
           </div>
         </div>
         <div class="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
