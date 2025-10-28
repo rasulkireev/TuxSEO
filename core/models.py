@@ -199,8 +199,6 @@ class Profile(BaseModel):
     def keyword_limit_per_month(self):
         if self.is_on_free_plan:
             return 0
-        elif self.is_on_starter_plan:
-            return 5
         return None
 
     @property

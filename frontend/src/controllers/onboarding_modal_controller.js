@@ -138,12 +138,12 @@ export default class extends Controller {
       }
 
       const data = await response.json();
-
-      if (data.status !== "success") {
-        throw new Error(data.message || "Failed to create project");
-      }
-
       this.createdProjectId = data.id;
+
+      // Update the project link href
+      if (this.createdProjectId && this.hasProjectLinkTarget) {
+        this.projectLinkTarget.href = `/project/${this.createdProjectId}/`;
+      }
 
       setTimeout(() => {
         this.goToStep(3);
@@ -187,25 +187,6 @@ export default class extends Controller {
       this.step3Target.classList.add("flex");
       this.step3IndicatorTarget.classList.remove("bg-gray-300", "border-gray-300", "w-4");
       this.step3IndicatorTarget.classList.add("bg-gray-800", "border-gray-800", "w-6");
-
-      // Update the project link href when showing step 3
-      if (this.createdProjectId) {
-        const project_url = `/project/${this.createdProjectId}/`;
-
-        if (this.hasProjectLinkTarget) {
-          this.projectLinkTarget.href = project_url;
-          console.log("Project link updated to:", project_url);
-        } else {
-          // Fallback: query the element directly using Stimulus convention
-          const link_element = this.element.querySelector('a[href="#"]');
-          if (link_element) {
-            link_element.href = project_url;
-            console.log("Project link updated via fallback to:", project_url);
-          } else {
-            console.error("Could not find project link element");
-          }
-        }
-      }
     }
   }
 

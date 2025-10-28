@@ -1,3 +1,4 @@
+import time
 from urllib.parse import urlencode
 
 import stripe
@@ -24,6 +25,7 @@ from core.models import (
     GeneratedBlogPost,
     KeywordTrend,
     Profile,
+    ProfileStateTransition,
     Project,
 )
 from core.tasks import (
@@ -193,131 +195,286 @@ class TermsOfServiceView(TemplateView):
     template_name = "pages/terms_of_service.html"
 
 
+# views.py
+
+
 @login_required
 def create_checkout_session(request, pk, product_name):
+    """Create a new subscription checkout session for users without active subscriptions."""
     user = request.user
+    profile = user.profile
 
-    price = djstripe_models.Price.objects.select_related("product").get(
-        product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
-    )
+    try:
+        price = djstripe_models.Price.objects.select_related("product").get(
+            product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
+        )
+    except djstripe_models.Price.DoesNotExist:
+        logger.error(
+            "[CreateCheckout] Price not found",
+            user_id=user.id,
+            product_name=product_name,
+        )
+        messages.error(request, "Product not found. Please contact support.")
+        return redirect(reverse("home"))
+
+    # Get or create customer
     customer, _ = djstripe_models.Customer.get_or_create(subscriber=user)
 
-    profile = user.profile
-    profile.customer = customer
-    profile.save(update_fields=["customer"])
+    if not profile.customer:
+        profile.customer = customer
+        profile.save(update_fields=["customer"])
 
-    # Check if user has an active subscription - if so, upgrade it instead
-    if profile.subscription and profile.subscription.status == "active":
-        logger.info(
-            "[CheckoutSession] Upgrading existing subscription",
+    # Check if user already has an active subscription
+    active_subscription = djstripe_models.Subscription.objects.filter(
+        customer=customer,
+        status__in=["active", "trialing"],
+    ).first()
+
+    if active_subscription:
+        logger.warning(
+            "[CreateCheckout] User already has active subscription",
             user_id=user.id,
-            profile_id=profile.id,
-            current_product=profile.product.name if profile.product else None,
-            new_product_name=product_name,
-            subscription_id=profile.subscription.id,
+            subscription_id=active_subscription.id,
         )
+        messages.info(
+            request,
+            "You already have an active subscription. Use the upgrade option to change plans.",
+        )
+        return redirect(reverse("home"))
 
-        try:
-            # Get the subscription from Stripe to ensure we have current items
-            stripe_subscription = stripe.Subscription.retrieve(profile.subscription.id)
-
-            if not stripe_subscription.items.data:
-                logger.error(
-                    "[CheckoutSession] No subscription items found",
-                    user_id=user.id,
-                    profile_id=profile.id,
-                    subscription_id=profile.subscription.id,
-                )
-                messages.error(request, "Unable to upgrade subscription. Please contact support.")
-                return redirect(reverse("home"))
-
-            first_item_id = stripe_subscription.items.data[0].id
-
-            # Update the existing subscription to the new price
-            updated_subscription = stripe.Subscription.modify(
-                profile.subscription.id,
-                items=[
-                    {
-                        "id": first_item_id,
-                        "price": price.id,
-                    }
-                ],
-                proration_behavior="create_prorations",
-            )
-
-            # Update local subscription reference and product
-            djstripe_models.Subscription.sync_from_stripe_data(updated_subscription)
-
-            # Update profile product reference
-            profile.product = price.product
-            profile.save(update_fields=["product", "updated_at"])
-
-            success_url = request.build_absolute_uri(reverse("home")) + "?payment=success"
-            messages.success(request, f"Successfully upgraded to {product_name}!")
-
-            logger.info(
-                "[CheckoutSession] Successfully upgraded subscription",
-                user_id=user.id,
-                profile_id=profile.id,
-                subscription_id=profile.subscription.id,
-                new_product_name=product_name,
-            )
-
-            return redirect(success_url)
-
-        except stripe.error.StripeError as e:
-            logger.error(
-                "[CheckoutSession] Error upgrading subscription",
-                user_id=user.id,
-                profile_id=profile.id,
-                error=str(e),
-                error_type=type(e).__name__,
-                exc_info=True,
-            )
-            messages.error(
-                request, "Unable to upgrade subscription. Please try again or contact support."
-            )
-            return redirect(reverse("home"))
-
-    # No existing subscription - create a new checkout session
-    base_success_url = request.build_absolute_uri(reverse("home"))
-    base_cancel_url = request.build_absolute_uri(reverse("home"))
-
-    success_params = {"payment": "success"}
-    success_url = f"{base_success_url}?{urlencode(success_params)}"
-
-    cancel_params = {"payment": "failed"}
-    cancel_url = f"{base_cancel_url}?{urlencode(cancel_params)}"
-
-    checkout_session = stripe.checkout.Session.create(
-        customer=customer.id,
-        payment_method_types=["card"],
-        allow_promotion_codes=True,
-        automatic_tax={"enabled": True},
-        line_items=[
-            {
-                "price": price.id,
-                "quantity": 1,
-            }
-        ],
-        mode="subscription",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        customer_update={
-            "address": "auto",
-        },
-        metadata={"user_id": user.id, "pk": pk, "price_id": price.id},
-    )
-
+    # Create checkout session
     logger.info(
-        "[CheckoutSession] Created new checkout session",
+        "[CreateCheckout] Creating new checkout session",
         user_id=user.id,
         profile_id=profile.id,
         product_name=product_name,
-        checkout_session_id=checkout_session.id,
     )
 
-    return redirect(checkout_session.url, code=303)
+    base_success_url = request.build_absolute_uri(reverse("home"))
+    base_cancel_url = request.build_absolute_uri(reverse("home"))
+
+    success_url = f"{base_success_url}?{urlencode({'payment': 'success'})}"
+    cancel_url = f"{base_cancel_url}?{urlencode({'payment': 'cancelled'})}"
+
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            customer=customer.id,
+            payment_method_types=["card"],
+            allow_promotion_codes=True,
+            automatic_tax={"enabled": True},
+            line_items=[
+                {
+                    "price": price.id,
+                    "quantity": 1,
+                }
+            ],
+            mode="subscription",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            customer_update={
+                "address": "auto",
+            },
+            subscription_data={
+                "metadata": {
+                    "user_id": user.id,
+                    "profile_id": profile.id,
+                    "product_name": product_name,
+                }
+            },
+            metadata={
+                "user_id": user.id,
+                "profile_id": profile.id,
+                "price_id": price.id,
+                "action": "new_subscription",
+            },
+            client_reference_id=f"user_{user.id}_profile_{profile.id}_{int(time.time())}",
+        )
+
+        logger.info(
+            "[CreateCheckout] Created checkout session",
+            user_id=user.id,
+            profile_id=profile.id,
+            product_name=product_name,
+            checkout_session_id=checkout_session.id,
+        )
+
+        return redirect(checkout_session.url, code=303)
+
+    except stripe.error.StripeError as e:
+        logger.error(
+            "[CreateCheckout] Stripe error creating checkout session",
+            user_id=user.id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
+        messages.error(request, "Unable to create checkout session. Please try again.")
+        return redirect(reverse("home"))
+
+
+@login_required
+def upgrade_subscription(request, product_name):
+    """Upgrade or downgrade an existing active subscription."""
+    user = request.user
+    profile = user.profile
+
+    # Must use POST to prevent accidental upgrades
+    if request.method != "POST":
+        messages.error(request, "Invalid request method.")
+        return redirect(reverse("home"))
+
+    try:
+        new_price = djstripe_models.Price.objects.select_related("product").get(
+            product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
+        )
+    except djstripe_models.Price.DoesNotExist:
+        logger.error(
+            "[UpgradeSubscription] Price not found",
+            user_id=user.id,
+            product_name=product_name,
+        )
+        messages.error(request, "Product not found. Please contact support.")
+        return redirect(reverse("home"))
+
+    # Get active subscription from profile
+    active_subscription = profile.subscription
+
+    if not active_subscription:
+        logger.warning(
+            "[UpgradeSubscription] No active subscription found",
+            user_id=user.id,
+            profile_id=profile.id,
+        )
+        messages.error(request, "No active subscription found. Please create a new subscription.")
+        return redirect(reverse("home"))
+
+    # Get customer
+    customer = active_subscription.customer
+    if not customer:
+        logger.error(
+            "[UpgradeSubscription] Customer not found",
+            user_id=user.id,
+            subscription_id=active_subscription.id,
+        )
+        messages.error(request, "No customer found. Please contact support.")
+        return redirect(reverse("home"))
+
+    logger.info(
+        "[UpgradeSubscription] Processing subscription change",
+        user_id=user.id,
+        profile_id=profile.id,
+        subscription_id=active_subscription.id,
+        new_product_name=product_name,
+    )
+
+    try:
+        # Get current subscription item
+        subscription_item = active_subscription.items.first()
+
+        if not subscription_item:
+            logger.error(
+                "[UpgradeSubscription] No subscription items found",
+                user_id=user.id,
+                subscription_id=active_subscription.id,
+            )
+            messages.error(request, "Unable to modify subscription. Please contact support.")
+            return redirect(reverse("home"))
+
+        current_price = subscription_item.price
+        current_product = current_price.product
+
+        # Check if already on this plan
+        if current_price.id == new_price.id:
+            messages.info(request, f"You are already subscribed to {product_name}.")
+            return redirect(reverse("home"))
+
+        # Determine if upgrade or downgrade
+        is_upgrade = new_price.unit_amount > current_price.unit_amount
+        action_type = "upgrade" if is_upgrade else "downgrade"
+
+        # Update the subscription
+        updated_subscription = stripe.Subscription.modify(
+            active_subscription.id,
+            items=[
+                {
+                    "id": subscription_item.id,
+                    "price": new_price.id,
+                }
+            ],
+            proration_behavior="create_prorations",
+            metadata={
+                "user_id": user.id,
+                "profile_id": profile.id,
+                "action": action_type,
+                "from_product": current_product.name,
+                "to_product": product_name,
+            },
+        )
+
+        # Sync with dj-stripe
+        synced_subscription = djstripe_models.Subscription.sync_from_stripe_data(
+            updated_subscription
+        )
+
+        # Update profile
+        profile.subscription = synced_subscription
+        profile.product = new_price.product
+        profile.save(update_fields=["subscription", "product", "updated_at"])
+
+        # Log state transition
+        ProfileStateTransition.objects.create(
+            profile=profile,
+            from_state=profile.state if hasattr(profile, "state") else "active",
+            to_state="active",
+            backup_profile_id=profile.id,
+            metadata={
+                "action": f"subscription_{action_type}",
+                "from_product": current_product.name,
+                "from_price_id": current_price.id,
+                "to_product": product_name,
+                "to_price_id": new_price.id,
+                "subscription_id": synced_subscription.id,
+            },
+        )
+
+        action_word = "upgraded" if is_upgrade else "changed"
+        messages.success(request, f"Successfully {action_word} to {product_name}!")
+
+        logger.info(
+            "[UpgradeSubscription] Successfully modified subscription",
+            user_id=user.id,
+            profile_id=profile.id,
+            subscription_id=synced_subscription.id,
+            action=action_type,
+            from_product=current_product.name,
+            to_product=product_name,
+        )
+
+        return redirect(reverse("home") + "?payment=success")
+
+    except stripe.error.StripeError as e:
+        logger.error(
+            "[UpgradeSubscription] Stripe error",
+            user_id=user.id,
+            subscription_id=active_subscription.id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
+        messages.error(
+            request, "Unable to modify subscription. Please try again or contact support."
+        )
+        return redirect(reverse("home"))
+
+    except Exception as e:
+        logger.error(
+            "[UpgradeSubscription] Unexpected error",
+            user_id=user.id,
+            error=str(e),
+            exc_info=True,
+        )
+        messages.error(request, "An unexpected error occurred. Please contact support.")
+        return redirect(reverse("home"))
 
 
 @login_required
