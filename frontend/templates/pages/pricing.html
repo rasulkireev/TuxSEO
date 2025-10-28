@@ -115,10 +115,10 @@
                 <a href="#" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Current plan</a>
               {% else %}
                 <div data-pricing-toggle-target="monthlyCheckout">
-                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id plan='starter-monthly-oct-2025' %}" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
+                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id product_name='Starter - Monthly' %}" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
                 </div>
                 <div data-pricing-toggle-target="yearlyCheckout" class="hidden">
-                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id plan='starter-yearly-oct-2025' %}" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
+                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id product_name='Starter - Annual' %}" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
                 </div>
               {% endif %}
             {% else %}
@@ -178,10 +178,10 @@
                 <a href="#" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Current plan</a>
               {% else %}
                 <div data-pricing-toggle-target="monthlyCheckout">
-                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id plan='monthly-june-2025' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
+                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id product_name='Pro - Monthly' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
                 </div>
                 <div data-pricing-toggle-target="yearlyCheckout" class="hidden">
-                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id plan='yearly-june-2025' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
+                    <a href="{% url 'user_upgrade_checkout_session' pk=user.id product_name='Pro - Yearly' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">Buy plan</a>
                 </div>
               {% endif %}
             {% else %}

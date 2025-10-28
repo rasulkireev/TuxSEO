@@ -60,6 +60,8 @@ SITE_URL = env("SITE_URL")
 
 # Remove the port from the SITE_URL and the https prefix (mostly for dev)
 ALLOWED_HOSTS = [SITE_URL.replace("http://", "").replace("https://", "").split(":")[0]]
+if DEBUG:
+    ALLOWED_HOSTS.append("backend")
 
 CSRF_TRUSTED_ORIGINS = [SITE_URL]
 
@@ -85,6 +87,7 @@ INSTALLED_APPS = [
     "django_q",
     "django_extensions",
     "django_structlog",
+    "mjml",
     "core.apps.CoreConfig",
 ]
 
@@ -475,7 +478,7 @@ if ENVIRONMENT == "prod":
     LOGGING["loggers"]["tuxseo"]["level"] = env("DJANGO_LOG_LEVEL", default="INFO")
     LOGGING["loggers"]["tuxseo"]["handlers"].append("json_console")
 
-if SENTRY_DSN:
+if SENTRY_DSN and ENVIRONMENT == "prod":
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
     sentry_sdk.init(
         debug=DEBUG,
@@ -517,3 +520,11 @@ GEMINI_API_KEY = env("GEMINI_API_KEY")
 PERPLEXITY_API_KEY = env("PERPLEXITY_API_KEY")
 
 KEYWORDS_EVERYWHERE_API_KEY = env("KEYWORDS_EVERYWHERE_API_KEY")
+
+MJML_BACKEND_MODE = "httpserver"
+MJML_URL = env("MJML_URL", default="")
+MJML_HTTPSERVERS = [
+    {
+        "URL": f"{MJML_URL}/v1/render",
+    }
+]

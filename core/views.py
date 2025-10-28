@@ -45,6 +45,11 @@ class HomeView(TemplateView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
+        welcome_status = self.request.GET.get("welcome")
+        if welcome_status == "true":
+            context["show_onboarding_modal"] = True
+            context["show_confetti"] = True
+
         payment_status = self.request.GET.get("payment")
         if payment_status == "success":
             messages.success(self.request, "Thanks for subscribing, I hope you enjoy the app!")
@@ -120,6 +125,11 @@ class AccountSignupView(SignupView):
 
         return response
 
+    def get_success_url(self):
+        success_url = super().get_success_url() or reverse("home")
+        welcome_params = {"welcome": "true"}
+        return f"{success_url}?{urlencode(welcome_params)}"
+
 
 class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     login_url = "account_login"
@@ -140,6 +150,8 @@ class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         context["email_verified"] = email_address.verified
         context["resend_confirmation_url"] = reverse("resend_confirmation")
         context["has_subscription"] = user.profile.has_product_or_subscription
+        context["has_starter_subscription"] = user.profile.is_on_starter_plan
+        context["has_pro_subscription"] = user.profile.is_on_pro_plan
 
         return context
 
@@ -181,16 +193,93 @@ class TermsOfServiceView(TemplateView):
     template_name = "pages/terms_of_service.html"
 
 
-def create_checkout_session(request, pk, plan):
+@login_required
+def create_checkout_session(request, pk, product_name):
     user = request.user
 
-    price = djstripe_models.Price.objects.get(nickname=plan)
+    price = djstripe_models.Price.objects.select_related("product").get(
+        product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
+    )
     customer, _ = djstripe_models.Customer.get_or_create(subscriber=user)
 
     profile = user.profile
     profile.customer = customer
     profile.save(update_fields=["customer"])
 
+    # Check if user has an active subscription - if so, upgrade it instead
+    if profile.subscription and profile.subscription.status == "active":
+        logger.info(
+            "[CheckoutSession] Upgrading existing subscription",
+            user_id=user.id,
+            profile_id=profile.id,
+            current_product=profile.product.name if profile.product else None,
+            new_product_name=product_name,
+            subscription_id=profile.subscription.id,
+        )
+
+        try:
+            # Get the subscription from Stripe to ensure we have current items
+            stripe_subscription = stripe.Subscription.retrieve(profile.subscription.id)
+
+            if not stripe_subscription.items.data:
+                logger.error(
+                    "[CheckoutSession] No subscription items found",
+                    user_id=user.id,
+                    profile_id=profile.id,
+                    subscription_id=profile.subscription.id,
+                )
+                messages.error(request, "Unable to upgrade subscription. Please contact support.")
+                return redirect(reverse("home"))
+
+            first_item_id = stripe_subscription.items.data[0].id
+
+            # Update the existing subscription to the new price
+            updated_subscription = stripe.Subscription.modify(
+                profile.subscription.id,
+                items=[
+                    {
+                        "id": first_item_id,
+                        "price": price.id,
+                    }
+                ],
+                proration_behavior="create_prorations",
+            )
+
+            # Update local subscription reference and product
+            djstripe_models.Subscription.sync_from_stripe_data(updated_subscription)
+
+            # Update profile product reference
+            profile.product = price.product
+            profile.save(update_fields=["product", "updated_at"])
+
+            success_url = request.build_absolute_uri(reverse("home")) + "?payment=success"
+            messages.success(request, f"Successfully upgraded to {product_name}!")
+
+            logger.info(
+                "[CheckoutSession] Successfully upgraded subscription",
+                user_id=user.id,
+                profile_id=profile.id,
+                subscription_id=profile.subscription.id,
+                new_product_name=product_name,
+            )
+
+            return redirect(success_url)
+
+        except stripe.error.StripeError as e:
+            logger.error(
+                "[CheckoutSession] Error upgrading subscription",
+                user_id=user.id,
+                profile_id=profile.id,
+                error=str(e),
+                error_type=type(e).__name__,
+                exc_info=True,
+            )
+            messages.error(
+                request, "Unable to upgrade subscription. Please try again or contact support."
+            )
+            return redirect(reverse("home"))
+
+    # No existing subscription - create a new checkout session
     base_success_url = request.build_absolute_uri(reverse("home"))
     base_cancel_url = request.build_absolute_uri(reverse("home"))
 
@@ -211,13 +300,21 @@ def create_checkout_session(request, pk, plan):
                 "quantity": 1,
             }
         ],
-        mode="payment" if "one-time" in plan else "subscription",
+        mode="subscription",
         success_url=success_url,
         cancel_url=cancel_url,
         customer_update={
             "address": "auto",
         },
         metadata={"user_id": user.id, "pk": pk, "price_id": price.id},
+    )
+
+    logger.info(
+        "[CheckoutSession] Created new checkout session",
+        user_id=user.id,
+        profile_id=profile.id,
+        product_name=product_name,
+        checkout_session_id=checkout_session.id,
     )
 
     return redirect(checkout_session.url, code=303)
@@ -263,9 +360,7 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         project = self.object
-
-        context["has_content_access"] = self.request.user.profile.has_active_subscription
-        context["has_pricing_page"] = project.has_pricing_page
+        profile = self.request.user.profile
 
         # Use a single query with annotation to count posted blog posts
         all_suggestions = project.blog_post_title_suggestions.annotate(
@@ -311,7 +406,8 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         context["archived_suggestions"] = archived_suggestions
         context["active_suggestions"] = active_suggestions
 
-        context["has_pro_subscription"] = self.request.user.profile.has_active_subscription
+        context["has_starter_subscription"] = profile.is_on_starter_plan
+        context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project
         ).exists()
@@ -440,8 +536,10 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         generated_post = self.object
         project = generated_post.project
+        profile = self.request.user.profile
 
-        context["has_pro_subscription"] = self.request.user.profile.has_active_subscription
+        context["has_starter_subscription"] = profile.is_on_starter_plan
+        context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project
         ).exists()

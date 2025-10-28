@@ -112,17 +112,6 @@ class Profile(BaseModel):
         return latest_transition.to_state
 
     @property
-    def has_active_subscription(self):
-        return (
-            self.current_state
-            in [
-                ProfileStates.SUBSCRIBED,
-                ProfileStates.CANCELLED,
-            ]
-            or self.user.is_superuser
-        )
-
-    @property
     def has_product_or_subscription(self):
         return self.product is not None or self.subscription is not None
 
@@ -390,10 +379,6 @@ class Project(BaseModel):
                 .first()
             )
         return None
-
-    @property
-    def has_pricing_page(self):
-        return ProjectPage.objects.filter(project=self, type=ProjectPageType.PRICING).exists()
 
     @property
     def has_auto_submission_setting(self):

@@ -1,5 +1,6 @@
 import markdown as md
 from django import template
+from django.conf import settings
 from django.template.defaultfilters import stringfilter
 from django.utils.safestring import mark_safe
 
@@ -20,3 +21,8 @@ def markdown(value):
 @stringfilter
 def replace_quotes(value):
     return value.replace('"', "'")
+
+
+@register.simple_tag
+def mjml_configured():
+    return bool(settings.MJML_URL)

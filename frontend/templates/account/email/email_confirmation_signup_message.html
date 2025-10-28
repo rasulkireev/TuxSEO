@@ -1,0 +1,208 @@
+{% load mjml %}
+{% load markdown_extras %}
+{% block subject %}Welcome to TuxSEO! Please Confirm Your Email{% endblock subject %}
+
+{% mjml_configured as has_mjml %}
+{% if has_mjml %}
+{% mjml %}
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-text font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" padding="0" />
+      <mj-section padding="0" />
+    </mj-attributes>
+    <mj-style>
+      .text-link {
+        color: #3b82f6;
+        text-decoration: none;
+      }
+      .text-link:hover {
+        text-decoration: underline;
+      }
+    </mj-style>
+  </mj-head>
+
+  <mj-body background-color="#f3f4f6">
+    <!-- Header -->
+    <mj-section background-color="#ffffff" padding="40px 25px 30px">
+      <mj-column>
+        <mj-text
+          font-size="28px"
+          font-weight="bold"
+          color="#111827"
+          align="center"
+        >
+          TuxSEO
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Main Content -->
+    <mj-section background-color="#ffffff" padding="0 25px 40px">
+      <mj-column>
+        <mj-text
+          font-size="20px"
+          font-weight="600"
+          color="#111827"
+          padding-bottom="20px"
+        >
+          Welcome to TuxSEO! 🎉
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#4b5563"
+          line-height="24px"
+          padding-bottom="10px"
+        >
+          Hi there,
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#4b5563"
+          line-height="24px"
+          padding-bottom="10px"
+        >
+          Thanks for signing up! We're excited to have you on board.
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#4b5563"
+          line-height="24px"
+          padding-bottom="20px"
+        >
+          To get started and unlock all features, please confirm your email address by clicking the button below:
+        </mj-text>
+
+        <!-- CTA Button -->
+        <mj-button
+          background-color="#3b82f6"
+          color="#ffffff"
+          font-size="16px"
+          font-weight="600"
+          border-radius="6px"
+          padding="30px 0"
+          href="{{ activate_url }}"
+        >
+          Confirm Email & Get Started
+        </mj-button>
+
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          line-height="20px"
+          padding-top="20px"
+        >
+          If the button above doesn't work, copy and paste this link into your browser:
+        </mj-text>
+
+        <mj-text
+          font-size="14px"
+          color="#3b82f6"
+          line-height="20px"
+          padding-top="10px"
+          padding-bottom="30px"
+        >
+          <a href="{{ activate_url }}" class="text-link">{{ activate_url }}</a>
+        </mj-text>
+
+        <mj-divider border-color="#e5e7eb" border-width="1px" padding="20px 0"></mj-divider>
+
+        <mj-text
+          font-size="16px"
+          color="#111827"
+          font-weight="600"
+          line-height="24px"
+          padding-top="10px"
+          padding-bottom="10px"
+        >
+          What's next?
+        </mj-text>
+
+        <mj-text
+          font-size="15px"
+          color="#4b5563"
+          line-height="22px"
+          padding-bottom="8px"
+        >
+          ✨ Create your first project
+        </mj-text>
+
+        <mj-text
+          font-size="15px"
+          color="#4b5563"
+          line-height="22px"
+          padding-bottom="8px"
+        >
+          🚀 Explore keyword opportunities
+        </mj-text>
+
+        <mj-text
+          font-size="15px"
+          color="#4b5563"
+          line-height="22px"
+          padding-bottom="20px"
+        >
+          💡 Generate your first SEO-optimized blog post
+        </mj-text>
+
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          line-height="20px"
+          padding-top="20px"
+        >
+          If you didn't create an account with TuxSEO, you can safely ignore this email.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section background-color="#f9fafb" padding="30px 25px">
+      <mj-column>
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          align="center"
+          line-height="20px"
+        >
+          This email was sent by TuxSEO
+        </mj-text>
+        <mj-text
+          font-size="12px"
+          color="#9ca3af"
+          align="center"
+          line-height="18px"
+          padding-top="10px"
+        >
+          © {% now 'Y' %} TuxSEO. All rights reserved.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
+{% endmjml %}
+{% else %}
+Welcome to TuxSEO! 🎉
+
+Hi there,
+
+Thanks for signing up! We're excited to have you on board.
+
+To get started and unlock all features, please confirm your email address by clicking this link:
+
+{{ activate_url }}
+
+What's next?
+
+✨ Create your first project
+🚀 Explore keyword opportunities
+💡 Generate your first SEO-optimized blog post
+
+If you didn't create an account with TuxSEO, you can safely ignore this email.
+
+Thank you for using TuxSEO!
+{{ site_domain }}
+{% endif %}

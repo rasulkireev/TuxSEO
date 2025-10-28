@@ -63,9 +63,9 @@
                 <div class="mb-6 text-center">
                   <div class="flex flex-col gap-3 justify-center items-center sm:flex-row">
                     {% if user.profile.reached_title_generation_limit %}
-                      <button
-                        disabled
-                        class="inline-flex items-center px-6 py-3 text-base font-medium text-gray-400 bg-gray-100 rounded-md border border-gray-200 cursor-not-allowed"
+                      <a
+                        href="{% url 'settings ' %}"
+                        class="inline-flex items-center px-6 py-3 text-base font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
                         data-controller="tooltip"
                         data-tooltip-message-value="You've reached the suggestion limit ({{ user.profile.number_of_title_suggestions_this_month }}/{{ user.profile.title_suggestion_limit }} suggestions this month on {{ user.profile.product_name }} plan).\nUpgrade to Starter or Pro in settings for unlimited suggestions."
                         data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
@@ -74,13 +74,13 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
                         Share Content Ideas
-                      </button>
+                      </a>
 
                       <span class="text-gray-400">or</span>
 
-                      <button
-                        disabled
-                        class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-400 bg-gray-100 rounded-md border border-gray-200 cursor-not-allowed"
+                      <a
+                        href="{% url 'settings' %}"
+                        class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
                         data-controller="tooltip"
                         data-tooltip-message-value="You've reached the suggestion limit ({{ user.profile.number_of_title_suggestions_this_month }}/{{ user.profile.title_suggestion_limit }} suggestions this month on {{ user.profile.product_name }} plan).\nUpgrade to Starter or Pro in settings for unlimited suggestions."
                         data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
@@ -89,7 +89,7 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
                         </svg>
                         Generate More Ideas
-                      </button>
+                      </a>
                     {% else %}
                       <button
                         data-action="content-idea#toggleForm"

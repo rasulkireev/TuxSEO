@@ -24,6 +24,16 @@ class ProjectScanIn(Schema):
     url: str
 
 
+class ValidateUrlIn(Schema):
+    url: str
+
+
+class ValidateUrlOut(Schema):
+    status: str
+    reachable: bool
+    message: str = ""
+
+
 class ProjectScanOut(Schema):
     status: str
     message: str = ""

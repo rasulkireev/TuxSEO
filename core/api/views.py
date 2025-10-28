@@ -1,3 +1,4 @@
+import requests
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -33,6 +34,8 @@ from core.api.schemas import (
     UpdateArchiveStatusIn,
     UpdateTitleScoreIn,
     UserSettingsOut,
+    ValidateUrlIn,
+    ValidateUrlOut,
 )
 from core.choices import ContentType, ProjectPageType
 from core.models import (
@@ -52,6 +55,157 @@ from tuxseo.utils import get_tuxseo_logger
 logger = get_tuxseo_logger(__name__)
 
 api = NinjaAPI(docs_url=None)
+
+
+@api.post("/validate-url", response=ValidateUrlOut, auth=[session_auth])
+def validate_url(request: HttpRequest, data: ValidateUrlIn):
+    url_to_check = data.url.strip()
+
+    if not url_to_check:
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "URL cannot be empty",
+        }
+
+    if not url_to_check.startswith(("http://", "https://")):
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "URL must start with http:// or https://",
+        }
+
+    try:
+        response = requests.get(
+            url_to_check,
+            timeout=10.0,
+            allow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+        )
+
+        is_reachable = response.status_code < 400
+
+        return {
+            "status": "success",
+            "reachable": is_reachable,
+            "message": "URL is reachable"
+            if is_reachable
+            else f"URL returned status code {response.status_code}",
+        }
+
+    except requests.Timeout:
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "Request timed out - website took too long to respond",
+        }
+    except requests.ConnectionError:
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "Cannot connect to this URL",
+        }
+    except Exception as error:
+        logger.error(
+            "[ValidateUrl] Unexpected error validating URL",
+            error=str(error),
+            exc_info=True,
+            url=url_to_check,
+        )
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "Could not validate URL",
+        }
+
+
+@api.post("/projects/", response=ProjectScanOut, auth=[session_auth])
+def create_project(request: HttpRequest, data: ProjectScanIn):
+    profile = request.auth
+
+    project = Project.objects.filter(profile=profile, url=data.url).first()
+    if project:
+        return {
+            "status": "success",
+            "project_id": project.id,
+            "id": project.id,
+            "has_details": bool(project.name),
+            "has_suggestions": project.blog_post_title_suggestions.exists(),
+        }
+
+    if Project.objects.filter(url=data.url).exists():
+        return {
+            "status": "error",
+            "message": "Project already exists",
+        }
+
+    if not profile.can_create_project:
+        limit = profile.project_limit
+        if profile.is_on_free_plan:
+            message = f"Project creation limit reached ({limit} project on Free plan). Upgrade to Starter or Pro to create more projects."  # noqa: E501
+        elif profile.is_on_starter_plan:
+            message = f"Project creation limit reached ({limit} project on Starter plan). Upgrade to Pro for unlimited projects."  # noqa: E501
+        else:
+            message = "Project creation limit reached. Contact support for assistance."
+        return {
+            "status": "error",
+            "message": message,
+        }
+
+    project = get_or_create_project(profile.id, data.url, source="create_project_onboarding")
+
+    try:
+        got_content = project.get_page_content()
+
+        analyzed_project = False
+        if got_content:
+            analyzed_project = project.analyze_content()
+        else:
+            project.delete()
+            return {
+                "status": "error",
+                "message": "Failed to get page content",
+            }
+
+        if analyzed_project:
+            return {
+                "status": "success",
+                "project_id": project.id,
+                "id": project.id,
+                "name": project.name,
+                "type": project.get_type_display(),
+                "url": project.url,
+                "summary": project.summary,
+            }
+        else:
+            logger.error(
+                "[Create Project] Failed to analyze project",
+                got_content=got_content,
+                analyzed_project=analyzed_project,
+                project_id=project.id if project else None,
+                url=data.url,
+            )
+            project.delete()
+            return {
+                "status": "error",
+                "message": "Failed to analyze project",
+            }
+
+    except Exception as e:
+        logger.error(
+            "[Create Project] Unexpected error during project creation",
+            error=str(e),
+            exc_info=True,
+            project_id=project.id if project else None,
+            url=data.url,
+            profile_id=profile.id,
+        )
+        if project and project.id:
+            project.delete()
+        return {
+            "status": "error",
+            "message": "An unexpected error occurred while creating the project",
+        }
 
 
 @api.post("/scan", response=ProjectScanOut, auth=[session_auth])
@@ -157,11 +311,7 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
             "message": f"Invalid content type: {data.content_type}",
         }
 
-    if not profile.can_generate_title_suggestions or (
-        profile.title_suggestion_limit
-        and profile.number_of_title_suggestions_this_month + data.num_titles
-        > profile.title_suggestion_limit
-    ):
+    if not profile.can_generate_title_suggestions:
         limit = profile.title_suggestion_limit
         current_count = profile.number_of_title_suggestions_this_month
         message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> for unlimited suggestions."  # noqa: E501
@@ -172,8 +322,15 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
             "message": message,
         }
 
+    titles_to_generate = data.num_titles
+    if profile.title_suggestion_limit:
+        remaining_ideas = (
+            profile.title_suggestion_limit - profile.number_of_title_suggestions_this_month
+        )
+        titles_to_generate = min(data.num_titles, remaining_ideas)
+
     suggestions = project.generate_title_suggestions(
-        content_type=content_type, num_titles=data.num_titles
+        content_type=content_type, num_titles=titles_to_generate
     )
 
     # Render HTML for each suggestion using the Django template
@@ -181,7 +338,8 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
     for suggestion in suggestions:
         context = {
             "suggestion": suggestion,
-            "has_pro_subscription": profile.has_active_subscription,
+            "has_starter_subscription": profile.is_on_starter_plan,
+            "has_pro_subscription": profile.is_on_pro_plan,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
         html = render_to_string("components/blog_post_suggestion_card.html", context)
@@ -227,7 +385,8 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
         # Render HTML for the suggestion using the Django template
         context = {
             "suggestion": suggestion,
-            "has_pro_subscription": profile.has_active_subscription,
+            "has_starter_subscription": profile.is_on_starter_plan,
+            "has_pro_subscription": profile.is_on_pro_plan,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
         suggestion_html = render_to_string("components/blog_post_suggestion_card.html", context)
@@ -490,7 +649,8 @@ def user_settings(request: HttpRequest, project_id: int):
         project = get_object_or_404(Project, id=project_id, profile=profile)
 
         profile_data = {
-            "has_pro_subscription": profile.has_active_subscription,
+            "has_starter_subscription": profile.is_on_starter_plan,
+            "has_pro_subscription": profile.is_on_pro_plan,
             "reached_content_generation_limit": profile.reached_content_generation_limit,
             "reached_title_generation_limit": profile.reached_title_generation_limit,
         }
