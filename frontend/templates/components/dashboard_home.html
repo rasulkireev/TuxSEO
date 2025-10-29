@@ -10,7 +10,7 @@
             href="{% url 'settings' %}"
             class="px-6 py-3 text-sm font-medium text-gray-500 bg-gray-100 rounded-md border border-gray-200 shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-200 hover:text-gray-600"
             data-controller="tooltip"
-            data-tooltip-message-value="You've reached the project limit ({{ user.profile.project_limit }} project{% if user.profile.project_limit != 1 %}s{% endif %} on {{ user.profile.product_name }} plan).{% if user.profile.is_on_free_plan %} Upgrade to Starter or Pro to create more projects.{% elif user.profile.is_on_starter_plan %} Upgrade to Pro for unlimited projects.{% endif %}"
+            data-tooltip-message-value="You've reached the project limit ({{ user.profile.project_limit }} project{% if user.profile.project_limit != 1 %}s{% endif %} on {{ user.profile.product_name }} plan).{% if user.profile.is_on_free_plan %} Upgrade to Pro to create more projects.{% endif %}"
             data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
           >
             Add project

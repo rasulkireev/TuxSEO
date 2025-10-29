@@ -152,7 +152,6 @@ class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         context["email_verified"] = email_address.verified
         context["resend_confirmation_url"] = reverse("resend_confirmation")
         context["has_subscription"] = user.profile.has_product_or_subscription
-        context["has_starter_subscription"] = user.profile.is_on_starter_plan
         context["has_pro_subscription"] = user.profile.is_on_pro_plan
 
         return context
@@ -563,7 +562,6 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         context["archived_suggestions"] = archived_suggestions
         context["active_suggestions"] = active_suggestions
 
-        context["has_starter_subscription"] = profile.is_on_starter_plan
         context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project
@@ -695,7 +693,6 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         project = generated_post.project
         profile = self.request.user.profile
 
-        context["has_starter_subscription"] = profile.is_on_starter_plan
         context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project

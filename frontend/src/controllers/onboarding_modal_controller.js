@@ -130,7 +130,7 @@ export default class extends Controller {
           "Content-Type": "application/json",
           "X-CSRFToken": csrf_token,
         },
-        body: JSON.stringify({ url: url_value }),
+        body: JSON.stringify({ url: url_value, source: "onboarding_modal" }),
       });
 
       if (!response.ok) {

@@ -142,9 +142,7 @@ def create_project(request: HttpRequest, data: ProjectScanIn):
     if not profile.can_create_project:
         limit = profile.project_limit
         if profile.is_on_free_plan:
-            message = f"Project creation limit reached ({limit} project on Free plan). Upgrade to Starter or Pro to create more projects."  # noqa: E501
-        elif profile.is_on_starter_plan:
-            message = f"Project creation limit reached ({limit} project on Starter plan). Upgrade to Pro for unlimited projects."  # noqa: E501
+            message = f"Project creation limit reached ({limit} project on Free plan). Upgrade to Pro to create more projects."  # noqa: E501
         else:
             message = "Project creation limit reached. Contact support for assistance."
         return {
@@ -152,7 +150,7 @@ def create_project(request: HttpRequest, data: ProjectScanIn):
             "message": message,
         }
 
-    project = get_or_create_project(profile.id, data.url, source="create_project_onboarding")
+    project = get_or_create_project(profile.id, data.url, source=data.source)
 
     try:
         got_content = project.get_page_content()
@@ -208,94 +206,6 @@ def create_project(request: HttpRequest, data: ProjectScanIn):
         }
 
 
-@api.post("/scan", response=ProjectScanOut, auth=[session_auth])
-def scan_project(request: HttpRequest, data: ProjectScanIn):
-    profile = request.auth
-
-    # TODO(Rasul): Why do we need this?
-    project = Project.objects.filter(profile=profile, url=data.url).first()
-    if project:
-        return {
-            "status": "success",
-            "project_id": project.id,
-            "has_details": bool(project.name),
-            "has_suggestions": project.blog_post_title_suggestions.exists(),
-        }
-
-    if Project.objects.filter(url=data.url).exists():
-        return {
-            "status": "error",
-            "message": "Project already exists",
-        }
-
-    if not profile.can_create_project:
-        limit = profile.project_limit
-        if profile.is_on_free_plan:
-            message = f"Project creation limit reached ({limit} project on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> to create more projects."  # noqa: E501
-        elif profile.is_on_starter_plan:
-            message = f"Project creation limit reached ({limit} project on Starter plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited projects."  # noqa: E501
-        else:
-            message = "Project creation limit reached. <a class='underline' href='/settings'>Contact support</a> for assistance."  # noqa: E501
-        return {
-            "status": "error",
-            "message": message,
-        }
-
-    project = get_or_create_project(profile.id, data.url, source="scan_project")
-
-    try:
-        got_content = project.get_page_content()
-
-        analyzed_project = False
-        if got_content:
-            analyzed_project = project.analyze_content()
-        else:
-            project.delete()
-            return {
-                "status": "error",
-                "message": "Failed to get page content",
-            }
-
-        if analyzed_project:
-            return {
-                "status": "success",
-                "project_id": project.id,
-                "name": project.name,
-                "type": project.get_type_display(),
-                "url": project.url,
-                "summary": project.summary,
-            }
-        else:
-            logger.error(
-                "[Scan Project] Failed to analyze project",
-                got_content=got_content,
-                analyzed_project=analyzed_project,
-                project_id=project.id if project else None,
-                url=data.url,
-            )
-            project.delete()
-            return {
-                "status": "error",
-                "message": "Failed to analyze project",
-            }
-
-    except Exception as e:
-        logger.error(
-            "[Scan Project] Unexpected error during project scan",
-            error=str(e),
-            exc_info=True,
-            project_id=project.id if project else None,
-            url=data.url,
-            profile_id=profile.id,
-        )
-        if project and project.id:
-            project.delete()
-        return {
-            "status": "error",
-            "message": "An unexpected error occurred while scanning the project",
-        }
-
-
 @api.post("/generate-title-suggestions", response=GenerateTitleSuggestionsOut, auth=[session_auth])
 def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggestionsIn):
     profile = request.auth
@@ -314,7 +224,7 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
     if not profile.can_generate_title_suggestions:
         limit = profile.title_suggestion_limit
         current_count = profile.number_of_title_suggestions_this_month
-        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> for unlimited suggestions."  # noqa: E501
+        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited suggestions."  # noqa: E501
         return {
             "suggestions": [],
             "suggestions_html": [],
@@ -338,7 +248,6 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
     for suggestion in suggestions:
         context = {
             "suggestion": suggestion,
-            "has_starter_subscription": profile.is_on_starter_plan,
             "has_pro_subscription": profile.is_on_pro_plan,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
@@ -361,7 +270,7 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
     if profile.reached_title_generation_limit:
         limit = profile.title_suggestion_limit
         current_count = profile.number_of_title_suggestions_this_month
-        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> for unlimited suggestions."  # noqa: E501
+        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited suggestions."  # noqa: E501
         return {
             "status": "error",
             "message": message,
@@ -385,7 +294,6 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
         # Render HTML for the suggestion using the Django template
         context = {
             "suggestion": suggestion,
-            "has_starter_subscription": profile.is_on_starter_plan,
             "has_pro_subscription": profile.is_on_pro_plan,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
@@ -428,7 +336,7 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
     if profile.reached_content_generation_limit:
         limit = profile.blog_post_generation_limit
         current_count = profile.number_of_generated_blog_posts_this_month
-        message = f"Content generation limit reached ({current_count}/{limit} blog posts this month on Free plan). <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> for unlimited content."  # noqa: E501
+        message = f"Content generation limit reached ({current_count}/{limit} blog posts this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited content."  # noqa: E501
         return {
             "status": "error",
             "message": message,
@@ -649,7 +557,6 @@ def user_settings(request: HttpRequest, project_id: int):
         project = get_object_or_404(Project, id=project_id, profile=profile)
 
         profile_data = {
-            "has_starter_subscription": profile.is_on_starter_plan,
             "has_pro_subscription": profile.is_on_pro_plan,
             "reached_content_generation_limit": profile.reached_content_generation_limit,
             "reached_title_generation_limit": profile.reached_title_generation_limit,
@@ -679,12 +586,8 @@ def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     if not profile.can_add_keywords:
-        limit = profile.keyword_limit_per_month
-        current_count = profile.number_of_keywords_added_this_month
         if profile.is_on_free_plan:
-            message = "Keyword additions are not available on the Free plan. <a class='underline' href='/settings'>Upgrade to Starter or Pro</a> to add custom keywords."  # noqa: E501
-        elif profile.is_on_starter_plan:
-            message = f"Monthly keyword limit reached ({current_count}/{limit} keywords this month on Starter plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited keywords or wait until next month."  # noqa: E501
+            message = "Keyword additions are not available on the Free plan. <a class='underline' href='/settings'>Upgrade to Pro</a> to add custom keywords."  # noqa: E501
         else:
             message = "Keyword limit reached. <a class='underline' href='/settings'>Contact support</a> for assistance."  # noqa: E501
         return {"status": "error", "message": message}

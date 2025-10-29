@@ -58,7 +58,7 @@
               <a href="{% url 'settings' %}"
                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-gray-100 rounded-md border border-gray-200 shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-200 hover:text-gray-600"
                  data-controller="tooltip"
-                 data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan. Upgrade to Starter or Pro to add custom keywords.{% elif user.profile.is_on_starter_plan %}Monthly keyword limit reached ({{ user.profile.number_of_keywords_added_this_month }}/{{ user.profile.keyword_limit_per_month }} keywords on Starter plan). Upgrade to Pro for unlimited keywords or wait until next month.{% endif %}"
+                 data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan. Upgrade to Pro to add custom keywords.{% endif %}"
                  data-action="mouseenter->tooltip#show mouseleave->tooltip#hide">
                 <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -376,7 +376,7 @@
               <a href="{% url 'settings' %}"
                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-gray-100 rounded-md border border-gray-200 shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-200 hover:text-gray-600"
                  data-controller="tooltip"
-                 data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan. Upgrade to Starter or Pro to add custom keywords.{% elif user.profile.is_on_starter_plan %}Monthly keyword limit reached ({{ user.profile.number_of_keywords_added_this_month }}/{{ user.profile.keyword_limit_per_month }} keywords on Starter plan). Upgrade to Pro for unlimited keywords or wait until next month.{% endif %}"
+                 data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan. Upgrade to Pro to add custom keywords.{% endif %}"
                  data-action="mouseenter->tooltip#show mouseleave->tooltip#hide">
                 <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />

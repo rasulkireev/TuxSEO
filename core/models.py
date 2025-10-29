@@ -164,11 +164,6 @@ class Profile(BaseModel):
         return self.product_name == "Free"
 
     @property
-    def is_on_starter_plan(self):
-        product_name_lower = self.product_name.lower()
-        return "starter" in product_name_lower
-
-    @property
     def is_on_pro_plan(self):
         product_name_lower = self.product_name.lower()
         return "pro" in product_name_lower

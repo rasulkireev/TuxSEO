@@ -79,10 +79,10 @@
             </div>
 
             <!-- Pro Plan -->
-            <div class="p-6 bg-white rounded-lg border-2 {% if has_pro_subscription or has_starter_subscription %}border-gray-900{% else %}border-gray-200{% endif %} shadow-sm">
+            <div class="p-6 bg-white rounded-lg border-2 {% if has_pro_subscription %}border-gray-900{% else %}border-gray-200{% endif %} shadow-sm">
               <div class="flex gap-x-4 justify-between items-center">
                 <h3 class="font-semibold text-gray-900 text-lg/8">Pro</h3>
-                {% if has_pro_subscription or has_starter_subscription %}
+                {% if has_pro_subscription %}
                   <span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium text-green-800 bg-green-100 rounded-full">
                     Current Plan
                   </span>
@@ -104,9 +104,9 @@
                 </p>
               </div>
 
-              {% if has_pro_subscription or has_starter_subscription %}
+              {% if has_pro_subscription %}
                 <div data-pricing-toggle-target="monthlyCheckout">
-                  {% if user.profile.product.name == 'Pro - Monthly' or user.profile.product.name == 'Starter - Monthly' %}
+                  {% if user.profile.product.name == 'Pro - Monthly' %}
                     <button
                       disabled
                       class="block px-3 py-2 mt-6 w-full font-semibold text-center text-gray-700 bg-gray-100 rounded-md border border-gray-300 shadow-sm cursor-not-allowed text-sm/6"
@@ -136,7 +136,7 @@
                   {% endif %}
                 </div>
                 <div data-pricing-toggle-target="yearlyCheckout" class="hidden">
-                  {% if user.profile.product.name == 'Pro - Yearly' or user.profile.product.name == 'Starter - Annual' %}
+                  {% if user.profile.product.name == 'Pro - Yearly' %}
                     <button
                       disabled
                       class="block px-3 py-2 mt-6 w-full font-semibold text-center text-gray-700 bg-gray-100 rounded-md border border-gray-300 shadow-sm cursor-not-allowed text-sm/6"

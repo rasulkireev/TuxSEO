@@ -22,6 +22,7 @@ class UserSettingsOut(Schema):
 
 class ProjectScanIn(Schema):
     url: str
+    source: str = "default"
 
 
 class ValidateUrlIn(Schema):
