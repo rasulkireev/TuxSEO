@@ -194,11 +194,8 @@ class TermsOfServiceView(TemplateView):
     template_name = "pages/terms_of_service.html"
 
 
-# views.py
-
-
 @login_required
-def create_checkout_session(request, pk, product_name):
+def create_checkout_session(request, product_name):
     """Create a new subscription checkout session for users without active subscriptions."""
     user = request.user
     profile = user.profile
@@ -317,7 +314,6 @@ def upgrade_subscription(request, product_name):
     user = request.user
     profile = user.profile
 
-    # Must use POST to prevent accidental upgrades
     if request.method != "POST":
         messages.error(request, "Invalid request method.")
         return redirect(reverse("home"))
@@ -335,7 +331,6 @@ def upgrade_subscription(request, product_name):
         messages.error(request, "Product not found. Please contact support.")
         return redirect(reverse("home"))
 
-    # Get active subscription from profile
     active_subscription = profile.subscription
 
     if not active_subscription:
@@ -345,17 +340,6 @@ def upgrade_subscription(request, product_name):
             profile_id=profile.id,
         )
         messages.error(request, "No active subscription found. Please create a new subscription.")
-        return redirect(reverse("home"))
-
-    # Get customer
-    customer = active_subscription.customer
-    if not customer:
-        logger.error(
-            "[UpgradeSubscription] Customer not found",
-            user_id=user.id,
-            subscription_id=active_subscription.id,
-        )
-        messages.error(request, "No customer found. Please contact support.")
         return redirect(reverse("home"))
 
     logger.info(
@@ -387,8 +371,10 @@ def upgrade_subscription(request, product_name):
             messages.info(request, f"You are already subscribed to {product_name}.")
             return redirect(reverse("home"))
 
-        # Determine if upgrade or downgrade
-        is_upgrade = new_price.unit_amount > current_price.unit_amount
+        # Determine if upgrade or downgrade based on unit amount
+        current_amount = current_price.unit_amount or 0
+        new_amount = new_price.unit_amount or 0
+        is_upgrade = new_amount > current_amount
         action_type = "upgrade" if is_upgrade else "downgrade"
 
         # Update the subscription
@@ -463,16 +449,6 @@ def upgrade_subscription(request, product_name):
         messages.error(
             request, "Unable to modify subscription. Please try again or contact support."
         )
-        return redirect(reverse("home"))
-
-    except Exception as e:
-        logger.error(
-            "[UpgradeSubscription] Unexpected error",
-            user_id=user.id,
-            error=str(e),
-            exc_info=True,
-        )
-        messages.error(request, "An unexpected error occurred. Please contact support.")
         return redirect(reverse("home"))
 
 

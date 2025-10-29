@@ -37,7 +37,7 @@ urlpatterns = [
     # payments
     path("pricing", views.PricingView.as_view(), name="pricing"),
     path(
-        "create-checkout-session/<int:pk>/<str:product_name>/",
+        "create-checkout-session/<str:product_name>/",
         views.create_checkout_session,
         name="user_upgrade_checkout_session",
     ),

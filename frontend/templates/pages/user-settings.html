@@ -168,7 +168,7 @@
               {% else %}
                 <div data-pricing-toggle-target="monthlyCheckout">
                   <a
-                    href="{% url 'user_upgrade_checkout_session' pk=user.id product_name='Pro - Monthly' %}"
+                    href="{% url 'user_upgrade_checkout_session' product_name='Pro - Monthly' %}"
                     class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700"
                   >
                     Upgrade to Pro
@@ -176,7 +176,7 @@
                 </div>
                 <div data-pricing-toggle-target="yearlyCheckout" class="hidden">
                   <a
-                    href="{% url 'user_upgrade_checkout_session' pk=user.id product_name='Pro - Yearly' %}"
+                    href="{% url 'user_upgrade_checkout_session' product_name='Pro - Yearly' %}"
                     class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700"
                   >
                     Upgrade to Pro

@@ -140,13 +140,12 @@ export default class extends Controller {
       const data = await response.json();
       this.createdProjectId = data.id;
 
-      // Update the project link href
-      if (this.createdProjectId && this.hasProjectLinkTarget) {
-        this.projectLinkTarget.href = `/project/${this.createdProjectId}/`;
-      }
-
       setTimeout(() => {
         this.goToStep(3);
+
+        if (this.createdProjectId && this.hasProjectLinkTarget) {
+          this.projectLinkTarget.href = `/project/${this.createdProjectId}/`;
+        }
       }, 1500);
 
     } catch (error) {
