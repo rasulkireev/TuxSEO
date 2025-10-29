@@ -23,14 +23,11 @@ export default class extends Controller {
 
   updateUI() {
     if (this.isMonthly) {
-      this.monthlyPriceDisplayTarget.classList.remove("hidden");
-      this.yearlyPriceDisplayTarget.classList.add("hidden");
+      this.monthlyPriceDisplayTargets.forEach(target => target.classList.remove("hidden"));
+      this.yearlyPriceDisplayTargets.forEach(target => target.classList.add("hidden"));
 
-      // Only update checkout buttons if they exist
-      if (this.hasMonthlyCheckoutTarget && this.hasYearlyCheckoutTarget) {
-        this.monthlyCheckoutTarget.classList.remove("hidden");
-        this.yearlyCheckoutTarget.classList.add("hidden");
-      }
+      this.monthlyCheckoutTargets.forEach(target => target.classList.remove("hidden"));
+      this.yearlyCheckoutTargets.forEach(target => target.classList.add("hidden"));
 
       this.monthlyLabelTarget.classList.add("bg-white", "text-gray-900", "shadow-md");
       this.monthlyLabelTarget.classList.remove("text-gray-500", "bg-transparent");
@@ -38,14 +35,11 @@ export default class extends Controller {
       this.yearlyLabelTarget.classList.remove("bg-white", "text-gray-900", "shadow-md");
 
     } else {
-      this.yearlyPriceDisplayTarget.classList.remove("hidden");
-      this.monthlyPriceDisplayTarget.classList.add("hidden");
+      this.yearlyPriceDisplayTargets.forEach(target => target.classList.remove("hidden"));
+      this.monthlyPriceDisplayTargets.forEach(target => target.classList.add("hidden"));
 
-      // Only update checkout buttons if they exist
-      if (this.hasMonthlyCheckoutTarget && this.hasYearlyCheckoutTarget) {
-        this.yearlyCheckoutTarget.classList.remove("hidden");
-        this.monthlyCheckoutTarget.classList.add("hidden");
-      }
+      this.yearlyCheckoutTargets.forEach(target => target.classList.remove("hidden"));
+      this.monthlyCheckoutTargets.forEach(target => target.classList.add("hidden"));
 
       this.yearlyLabelTarget.classList.add("bg-white", "text-gray-900", "shadow-md");
       this.yearlyLabelTarget.classList.remove("text-gray-500", "bg-transparent");

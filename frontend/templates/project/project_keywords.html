@@ -54,14 +54,27 @@
                      data-keyword-target="search"
                      data-action="input->keyword#filterKeywords">
             </div>
-            <button type="button"
-                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    data-action="click->keyword#showModal">
-              <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add New Keyword
-            </button>
+            {% if user.profile.reached_keyword_limit %}
+              <a href="{% url 'settings' %}"
+                 class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-gray-100 rounded-md border border-gray-200 shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-200 hover:text-gray-600"
+                 data-controller="tooltip"
+                 data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan. Upgrade to Pro to add custom keywords.{% endif %}"
+                 data-action="mouseenter->tooltip#show mouseleave->tooltip#hide">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </a>
+            {% else %}
+              <button type="button"
+                      class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      data-action="click->keyword#showModal">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </button>
+            {% endif %}
           </div>
         </div>
         <div class="overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
@@ -359,14 +372,27 @@
                      data-keyword-target="search"
                      data-action="input->keyword#filterKeywords">
             </div>
-            <button type="button"
-                    class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                    data-action="click->keyword#showModal">
-              <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Add New Keyword
-            </button>
+            {% if user.profile.reached_keyword_limit %}
+              <a href="{% url 'settings' %}"
+                 class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-500 bg-gray-100 rounded-md border border-gray-200 shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-200 hover:text-gray-600"
+                 data-controller="tooltip"
+                 data-tooltip-message-value="{% if user.profile.is_on_free_plan %}Keyword additions are not available on the Free plan. Upgrade to Pro to add custom keywords.{% endif %}"
+                 data-action="mouseenter->tooltip#show mouseleave->tooltip#hide">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </a>
+            {% else %}
+              <button type="button"
+                      class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                      data-action="click->keyword#showModal">
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Add New Keyword
+              </button>
+            {% endif %}
           </div>
         </div>
         <div class="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">

@@ -11,6 +11,10 @@
   </div>
 </div>
 
+{% if show_onboarding_modal %}
+  {% include 'components/onboarding_modal.html' %}
+{% endif %}
+
 {% if show_confetti %}
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
 <script>

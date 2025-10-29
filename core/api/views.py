@@ -1,3 +1,4 @@
+import requests
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -33,6 +34,8 @@ from core.api.schemas import (
     UpdateArchiveStatusIn,
     UpdateTitleScoreIn,
     UserSettingsOut,
+    ValidateUrlIn,
+    ValidateUrlOut,
 )
 from core.choices import ContentType, ProjectPageType
 from core.models import (
@@ -54,16 +57,78 @@ logger = get_tuxseo_logger(__name__)
 api = NinjaAPI(docs_url=None)
 
 
-@api.post("/scan", response=ProjectScanOut, auth=[session_auth])
-def scan_project(request: HttpRequest, data: ProjectScanIn):
+@api.post("/validate-url", response=ValidateUrlOut, auth=[session_auth])
+def validate_url(request: HttpRequest, data: ValidateUrlIn):
+    url_to_check = data.url.strip()
+
+    if not url_to_check:
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "URL cannot be empty",
+        }
+
+    if not url_to_check.startswith(("http://", "https://")):
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "URL must start with http:// or https://",
+        }
+
+    try:
+        response = requests.get(
+            url_to_check,
+            timeout=10.0,
+            allow_redirects=True,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"},
+        )
+
+        is_reachable = response.status_code < 400
+
+        return {
+            "status": "success",
+            "reachable": is_reachable,
+            "message": "URL is reachable"
+            if is_reachable
+            else f"URL returned status code {response.status_code}",
+        }
+
+    except requests.Timeout:
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "Request timed out - website took too long to respond",
+        }
+    except requests.ConnectionError:
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "Cannot connect to this URL",
+        }
+    except Exception as error:
+        logger.error(
+            "[ValidateUrl] Unexpected error validating URL",
+            error=str(error),
+            exc_info=True,
+            url=url_to_check,
+        )
+        return {
+            "status": "error",
+            "reachable": False,
+            "message": "Could not validate URL",
+        }
+
+
+@api.post("/projects/", response=ProjectScanOut, auth=[session_auth])
+def create_project(request: HttpRequest, data: ProjectScanIn):
     profile = request.auth
 
-    # TODO(Rasul): Why do we need this?
     project = Project.objects.filter(profile=profile, url=data.url).first()
     if project:
         return {
             "status": "success",
             "project_id": project.id,
+            "id": project.id,
             "has_details": bool(project.name),
             "has_suggestions": project.blog_post_title_suggestions.exists(),
         }
@@ -74,7 +139,18 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
             "message": "Project already exists",
         }
 
-    project = get_or_create_project(profile.id, data.url, source="scan_project")
+    if not profile.can_create_project:
+        limit = profile.project_limit
+        if profile.is_on_free_plan:
+            message = f"Project creation limit reached ({limit} project on Free plan). Upgrade to Pro to create more projects."  # noqa: E501
+        else:
+            message = "Project creation limit reached. Contact support for assistance."
+        return {
+            "status": "error",
+            "message": message,
+        }
+
+    project = get_or_create_project(profile.id, data.url, source=data.source)
 
     try:
         got_content = project.get_page_content()
@@ -93,6 +169,7 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
             return {
                 "status": "success",
                 "project_id": project.id,
+                "id": project.id,
                 "name": project.name,
                 "type": project.get_type_display(),
                 "url": project.url,
@@ -100,7 +177,7 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
             }
         else:
             logger.error(
-                "[Scan Project] Failed to analyze project",
+                "[Create Project] Failed to analyze project",
                 got_content=got_content,
                 analyzed_project=analyzed_project,
                 project_id=project.id if project else None,
@@ -114,7 +191,7 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
 
     except Exception as e:
         logger.error(
-            "[Scan Project] Unexpected error during project scan",
+            "[Create Project] Unexpected error during project creation",
             error=str(e),
             exc_info=True,
             project_id=project.id if project else None,
@@ -125,7 +202,7 @@ def scan_project(request: HttpRequest, data: ProjectScanIn):
             project.delete()
         return {
             "status": "error",
-            "message": "An unexpected error occurred while scanning the project",
+            "message": "An unexpected error occurred while creating the project",
         }
 
 
@@ -144,19 +221,26 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
             "message": f"Invalid content type: {data.content_type}",
         }
 
-    if (
-        profile.number_of_title_suggestions + data.num_titles >= 20
-        and not profile.has_active_subscription
-    ):
+    if not profile.can_generate_title_suggestions:
+        limit = profile.title_suggestion_limit
+        current_count = profile.number_of_title_suggestions_this_month
+        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited suggestions."  # noqa: E501
         return {
             "suggestions": [],
             "suggestions_html": [],
             "status": "error",
-            "message": "Title generation limit reached. Consider <a class='underline' href='/pricing'>upgrading</a>?",  # noqa: E501
+            "message": message,
         }
 
+    titles_to_generate = data.num_titles
+    if profile.title_suggestion_limit:
+        remaining_ideas = (
+            profile.title_suggestion_limit - profile.number_of_title_suggestions_this_month
+        )
+        titles_to_generate = min(data.num_titles, remaining_ideas)
+
     suggestions = project.generate_title_suggestions(
-        content_type=content_type, num_titles=data.num_titles
+        content_type=content_type, num_titles=titles_to_generate
     )
 
     # Render HTML for each suggestion using the Django template
@@ -164,7 +248,7 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
     for suggestion in suggestions:
         context = {
             "suggestion": suggestion,
-            "has_pro_subscription": profile.has_active_subscription,
+            "has_pro_subscription": profile.is_on_pro_plan,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
         html = render_to_string("components/blog_post_suggestion_card.html", context)
@@ -184,9 +268,12 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     if profile.reached_title_generation_limit:
+        limit = profile.title_suggestion_limit
+        current_count = profile.number_of_title_suggestions_this_month
+        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited suggestions."  # noqa: E501
         return {
             "status": "error",
-            "message": "Title generation limit reached. Consider <a class='underline' href='/pricing'>upgrading</a>?",  # noqa: E501
+            "message": message,
         }
 
     try:
@@ -207,7 +294,7 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
         # Render HTML for the suggestion using the Django template
         context = {
             "suggestion": suggestion,
-            "has_pro_subscription": profile.has_active_subscription,
+            "has_pro_subscription": profile.is_on_pro_plan,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
         suggestion_html = render_to_string("components/blog_post_suggestion_card.html", context)
@@ -247,9 +334,12 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
     )
 
     if profile.reached_content_generation_limit:
+        limit = profile.blog_post_generation_limit
+        current_count = profile.number_of_generated_blog_posts_this_month
+        message = f"Content generation limit reached ({current_count}/{limit} blog posts this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited content."  # noqa: E501
         return {
             "status": "error",
-            "message": "Content generation limit reached. Consider <a class='underline' href='/pricing'>upgrading</a>?",  # noqa: E501
+            "message": message,
         }
 
     try:
@@ -467,7 +557,7 @@ def user_settings(request: HttpRequest, project_id: int):
         project = get_object_or_404(Project, id=project_id, profile=profile)
 
         profile_data = {
-            "has_pro_subscription": profile.has_active_subscription,
+            "has_pro_subscription": profile.is_on_pro_plan,
             "reached_content_generation_limit": profile.reached_content_generation_limit,
             "reached_title_generation_limit": profile.reached_title_generation_limit,
         }
@@ -494,6 +584,13 @@ def user_settings(request: HttpRequest, project_id: int):
 def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
     profile = request.auth
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
+
+    if not profile.can_add_keywords:
+        if profile.is_on_free_plan:
+            message = "Keyword additions are not available on the Free plan. <a class='underline' href='/settings'>Upgrade to Pro</a> to add custom keywords."  # noqa: E501
+        else:
+            message = "Keyword limit reached. <a class='underline' href='/settings'>Contact support</a> for assistance."  # noqa: E501
+        return {"status": "error", "message": message}
 
     keyword_text_cleaned = data.keyword_text.strip().lower()
     if not keyword_text_cleaned:

@@ -45,3 +45,11 @@ def available_social_providers(request):
         "available_social_providers": available_providers_list,
         "has_social_providers": len(available_providers_list) > 0,
     }
+
+
+def turnstile_site_key(request):
+    """
+    Returns the Cloudflare Turnstile site key if configured.
+    Used to conditionally enable Turnstile CAPTCHA on forms.
+    """
+    return {"turnstile_site_key": settings.CLOUDFLARE_TURNSTILE_SITEKEY}

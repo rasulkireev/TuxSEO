@@ -151,6 +151,11 @@ def process_project_keywords(project_id: int):
 
 def generate_blog_post_suggestions(project_id: int):
     project = Project.objects.get(id=project_id)
+    profile = project.profile
+
+    if profile.reached_title_generation_limit:
+        return "Title generation limit reached for free plan"
+
     project.generate_title_suggestions(content_type=ContentType.SHARING, num_titles=3)
     project.generate_title_suggestions(content_type=ContentType.SEO, num_titles=3)
     return "Blog post suggestions generated"
@@ -303,7 +308,11 @@ def schedule_blog_post_posting():
 
 def generate_and_post_blog_post(project_id: int):
     project = Project.objects.get(id=project_id)
+    profile = project.profile
     blog_post_to_post = None
+
+    if not profile.has_auto_posting_enabled:
+        return f"Auto-posting not available on {profile.product_name} plan"
 
     logger.info(
         "[Generate and Post Blog Post] Generating blog post for {project.name}",

@@ -1,3 +1,4 @@
+import time
 from urllib.parse import urlencode
 
 import stripe
@@ -24,6 +25,7 @@ from core.models import (
     GeneratedBlogPost,
     KeywordTrend,
     Profile,
+    ProfileStateTransition,
     Project,
 )
 from core.tasks import (
@@ -44,6 +46,11 @@ class HomeView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+
+        welcome_status = self.request.GET.get("welcome")
+        if welcome_status == "true":
+            context["show_onboarding_modal"] = True
+            context["show_confetti"] = True
 
         payment_status = self.request.GET.get("payment")
         if payment_status == "success":
@@ -120,6 +127,11 @@ class AccountSignupView(SignupView):
 
         return response
 
+    def get_success_url(self):
+        success_url = super().get_success_url() or reverse("home")
+        welcome_params = {"welcome": "true"}
+        return f"{success_url}?{urlencode(welcome_params)}"
+
 
 class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
     login_url = "account_login"
@@ -140,6 +152,7 @@ class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):
         context["email_verified"] = email_address.verified
         context["resend_confirmation_url"] = reverse("resend_confirmation")
         context["has_subscription"] = user.profile.has_product_or_subscription
+        context["has_pro_subscription"] = user.profile.is_on_pro_plan
 
         return context
 
@@ -181,46 +194,257 @@ class TermsOfServiceView(TemplateView):
     template_name = "pages/terms_of_service.html"
 
 
-def create_checkout_session(request, pk, plan):
+@login_required
+def create_checkout_session(request, product_name):
+    """Create a new subscription checkout session for users without active subscriptions."""
     user = request.user
+    profile = user.profile
 
-    price = djstripe_models.Price.objects.get(nickname=plan)
+    try:
+        price = djstripe_models.Price.objects.select_related("product").get(
+            product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
+        )
+    except djstripe_models.Price.DoesNotExist:
+        logger.error(
+            "[CreateCheckout] Price not found",
+            user_id=user.id,
+            product_name=product_name,
+        )
+        messages.error(request, "Product not found. Please contact support.")
+        return redirect(reverse("home"))
+
+    # Get or create customer
     customer, _ = djstripe_models.Customer.get_or_create(subscriber=user)
 
-    profile = user.profile
-    profile.customer = customer
-    profile.save(update_fields=["customer"])
+    if not profile.customer:
+        profile.customer = customer
+        profile.save(update_fields=["customer"])
+
+    # Check if user already has an active subscription
+    if profile.subscription:
+        logger.warning(
+            "[CreateCheckout] User already has active subscription",
+            user_id=user.id,
+            subscription_id=profile.subscription.id,
+        )
+        messages.info(
+            request,
+            "You already have an active subscription. Use the upgrade option to change plans.",
+        )
+        return redirect(reverse("home"))
+
+    # Create checkout session
+    logger.info(
+        "[CreateCheckout] Creating new checkout session",
+        user_id=user.id,
+        profile_id=profile.id,
+        product_name=product_name,
+    )
 
     base_success_url = request.build_absolute_uri(reverse("home"))
     base_cancel_url = request.build_absolute_uri(reverse("home"))
 
-    success_params = {"payment": "success"}
-    success_url = f"{base_success_url}?{urlencode(success_params)}"
+    success_url = f"{base_success_url}?{urlencode({'payment': 'success'})}"
+    cancel_url = f"{base_cancel_url}?{urlencode({'payment': 'cancelled'})}"
 
-    cancel_params = {"payment": "failed"}
-    cancel_url = f"{base_cancel_url}?{urlencode(cancel_params)}"
+    try:
+        checkout_session = stripe.checkout.Session.create(
+            customer=customer.id,
+            payment_method_types=["card"],
+            allow_promotion_codes=True,
+            automatic_tax={"enabled": True},
+            line_items=[
+                {
+                    "price": price.id,
+                    "quantity": 1,
+                }
+            ],
+            mode="subscription",
+            success_url=success_url,
+            cancel_url=cancel_url,
+            customer_update={
+                "address": "auto",
+            },
+            subscription_data={
+                "metadata": {
+                    "user_id": user.id,
+                    "profile_id": profile.id,
+                    "product_name": product_name,
+                }
+            },
+            metadata={
+                "user_id": user.id,
+                "profile_id": profile.id,
+                "price_id": price.id,
+                "action": "new_subscription",
+            },
+            client_reference_id=f"user_{user.id}_profile_{profile.id}_{int(time.time())}",
+        )
 
-    checkout_session = stripe.checkout.Session.create(
-        customer=customer.id,
-        payment_method_types=["card"],
-        allow_promotion_codes=True,
-        automatic_tax={"enabled": True},
-        line_items=[
-            {
-                "price": price.id,
-                "quantity": 1,
-            }
-        ],
-        mode="payment" if "one-time" in plan else "subscription",
-        success_url=success_url,
-        cancel_url=cancel_url,
-        customer_update={
-            "address": "auto",
-        },
-        metadata={"user_id": user.id, "pk": pk, "price_id": price.id},
+        logger.info(
+            "[CreateCheckout] Created checkout session",
+            user_id=user.id,
+            profile_id=profile.id,
+            product_name=product_name,
+            checkout_session_id=checkout_session.id,
+        )
+
+        return redirect(checkout_session.url, code=303)
+
+    except stripe.error.StripeError as e:
+        logger.error(
+            "[CreateCheckout] Stripe error creating checkout session",
+            user_id=user.id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
+        messages.error(request, "Unable to create checkout session. Please try again.")
+        return redirect(reverse("home"))
+
+
+@login_required
+def upgrade_subscription(request, product_name):
+    """Upgrade or downgrade an existing active subscription."""
+    user = request.user
+    profile = user.profile
+
+    if request.method != "POST":
+        messages.error(request, "Invalid request method.")
+        return redirect(reverse("home"))
+
+    try:
+        new_price = djstripe_models.Price.objects.select_related("product").get(
+            product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
+        )
+    except djstripe_models.Price.DoesNotExist:
+        logger.error(
+            "[UpgradeSubscription] Price not found",
+            user_id=user.id,
+            product_name=product_name,
+        )
+        messages.error(request, "Product not found. Please contact support.")
+        return redirect(reverse("home"))
+
+    active_subscription = profile.subscription
+
+    if not active_subscription:
+        logger.warning(
+            "[UpgradeSubscription] No active subscription found",
+            user_id=user.id,
+            profile_id=profile.id,
+        )
+        messages.error(request, "No active subscription found. Please create a new subscription.")
+        return redirect(reverse("home"))
+
+    logger.info(
+        "[UpgradeSubscription] Processing subscription change",
+        user_id=user.id,
+        profile_id=profile.id,
+        subscription_id=active_subscription.id,
+        new_product_name=product_name,
     )
 
-    return redirect(checkout_session.url, code=303)
+    try:
+        # Get current subscription item
+        subscription_item = active_subscription.items.first()
+
+        if not subscription_item:
+            logger.error(
+                "[UpgradeSubscription] No subscription items found",
+                user_id=user.id,
+                subscription_id=active_subscription.id,
+            )
+            messages.error(request, "Unable to modify subscription. Please contact support.")
+            return redirect(reverse("home"))
+
+        current_price = subscription_item.price
+        current_product = current_price.product
+
+        # Check if already on this plan
+        if current_price.id == new_price.id:
+            messages.info(request, f"You are already subscribed to {product_name}.")
+            return redirect(reverse("home"))
+
+        # Determine if upgrade or downgrade based on unit amount
+        current_amount = current_price.unit_amount or 0
+        new_amount = new_price.unit_amount or 0
+        is_upgrade = new_amount > current_amount
+        action_type = "upgrade" if is_upgrade else "downgrade"
+
+        # Update the subscription
+        updated_subscription = stripe.Subscription.modify(
+            active_subscription.id,
+            items=[
+                {
+                    "id": subscription_item.id,
+                    "price": new_price.id,
+                }
+            ],
+            proration_behavior="create_prorations",
+            metadata={
+                "user_id": user.id,
+                "profile_id": profile.id,
+                "action": action_type,
+                "from_product": current_product.name,
+                "to_product": product_name,
+            },
+        )
+
+        # Sync with dj-stripe
+        synced_subscription = djstripe_models.Subscription.sync_from_stripe_data(
+            updated_subscription
+        )
+
+        # Update profile
+        profile.subscription = synced_subscription
+        profile.product = new_price.product
+        profile.save(update_fields=["subscription", "product", "updated_at"])
+
+        # Log state transition
+        ProfileStateTransition.objects.create(
+            profile=profile,
+            from_state=profile.state if hasattr(profile, "state") else "active",
+            to_state="active",
+            backup_profile_id=profile.id,
+            metadata={
+                "action": f"subscription_{action_type}",
+                "from_product": current_product.name,
+                "from_price_id": current_price.id,
+                "to_product": product_name,
+                "to_price_id": new_price.id,
+                "subscription_id": synced_subscription.id,
+            },
+        )
+
+        action_word = "upgraded" if is_upgrade else "changed"
+        messages.success(request, f"Successfully {action_word} to {product_name}!")
+
+        logger.info(
+            "[UpgradeSubscription] Successfully modified subscription",
+            user_id=user.id,
+            profile_id=profile.id,
+            subscription_id=synced_subscription.id,
+            action=action_type,
+            from_product=current_product.name,
+            to_product=product_name,
+        )
+
+        return redirect(reverse("home") + "?payment=success")
+
+    except stripe.error.StripeError as e:
+        logger.error(
+            "[UpgradeSubscription] Stripe error",
+            user_id=user.id,
+            subscription_id=active_subscription.id,
+            error=str(e),
+            error_type=type(e).__name__,
+            exc_info=True,
+        )
+        messages.error(
+            request, "Unable to modify subscription. Please try again or contact support."
+        )
+        return redirect(reverse("home"))
 
 
 @login_required
@@ -263,9 +487,7 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         project = self.object
-
-        context["has_content_access"] = self.request.user.profile.has_active_subscription
-        context["has_pricing_page"] = project.has_pricing_page
+        profile = self.request.user.profile
 
         # Use a single query with annotation to count posted blog posts
         all_suggestions = project.blog_post_title_suggestions.annotate(
@@ -311,7 +533,7 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         context["archived_suggestions"] = archived_suggestions
         context["active_suggestions"] = active_suggestions
 
-        context["has_pro_subscription"] = self.request.user.profile.has_active_subscription
+        context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project
         ).exists()
@@ -440,8 +662,9 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         generated_post = self.object
         project = generated_post.project
+        profile = self.request.user.profile
 
-        context["has_pro_subscription"] = self.request.user.profile.has_active_subscription
+        context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project
         ).exists()

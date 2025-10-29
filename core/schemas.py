@@ -10,10 +10,6 @@ class WebPageContent(BaseModel):
     title: str
     description: str
     markdown_content: str
-    html_content: str = Field(
-        description="HTML content of the web page",
-        default="",
-    )
 
 
 class ProjectDetails(BaseModel):

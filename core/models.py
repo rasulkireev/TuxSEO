@@ -26,7 +26,6 @@ from core.choices import (
 )
 from core.model_utils import (
     generate_random_key,
-    get_html_content,
     get_markdown_content,
     run_agent_synchronously,
 )
@@ -112,17 +111,6 @@ class Profile(BaseModel):
         return latest_transition.to_state
 
     @property
-    def has_active_subscription(self):
-        return (
-            self.current_state
-            in [
-                ProfileStates.SUBSCRIBED,
-                ProfileStates.CANCELLED,
-            ]
-            or self.user.is_superuser
-        )
-
-    @property
     def has_product_or_subscription(self):
         return self.product is not None or self.subscription is not None
 
@@ -136,17 +124,132 @@ class Profile(BaseModel):
         return sum(project.generated_blog_posts.count() for project in projects)
 
     @property
+    def number_of_generated_blog_posts_this_month(self):
+        now = timezone.now()
+        first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        projects = self.projects.all()
+        blog_post_count = 0
+        for project in projects:
+            blog_post_count += project.generated_blog_posts.filter(
+                created_at__gte=first_day_of_month
+            ).count()
+        return blog_post_count
+
+    @property
     def number_of_title_suggestions(self):
         projects = self.projects.all()
         return sum(project.blog_post_title_suggestions.count() for project in projects)
 
     @property
-    def reached_content_generation_limit(self):
-        return self.number_of_generated_blog_posts >= 5 and not self.has_active_subscription
+    def number_of_title_suggestions_this_month(self):
+        now = timezone.now()
+        first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        projects = self.projects.all()
+        suggestion_count = 0
+        for project in projects:
+            suggestion_count += project.blog_post_title_suggestions.filter(
+                created_at__gte=first_day_of_month
+            ).count()
+        return suggestion_count
+
+    @property
+    def product_name(self):
+        if self.product and hasattr(self.product, "name"):
+            return self.product.name
+        return "Free"
+
+    @property
+    def is_on_free_plan(self):
+        return self.product_name == "Free"
+
+    @property
+    def is_on_pro_plan(self):
+        product_name_lower = self.product_name.lower()
+        return "pro" in product_name_lower
+
+    @property
+    def project_limit(self):
+        if self.is_on_pro_plan:
+            return None
+        return 1
+
+    @property
+    def title_suggestion_limit(self):
+        if self.is_on_free_plan:
+            return 10
+        return None
+
+    @property
+    def blog_post_generation_limit(self):
+        if self.is_on_free_plan:
+            return 3
+        return None
+
+    @property
+    def has_auto_posting_enabled(self):
+        return not self.is_on_free_plan
+
+    @property
+    def keyword_limit_per_month(self):
+        if self.is_on_free_plan:
+            return 0
+        return None
+
+    @property
+    def number_of_keywords_added_this_month(self):
+        now = timezone.now()
+        first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        projects = self.projects.all()
+        keyword_count = 0
+        for project in projects:
+            keyword_count += project.project_keywords.filter(
+                date_associated__gte=first_day_of_month
+            ).count()
+        return keyword_count
+
+    @property
+    def reached_keyword_limit(self):
+        limit = self.keyword_limit_per_month
+        if limit is None:
+            return False
+        return self.number_of_keywords_added_this_month >= limit
+
+    @property
+    def can_add_keywords(self):
+        return not self.reached_keyword_limit
+
+    @property
+    def reached_project_creation_limit(self):
+        limit = self.project_limit
+        if limit is None:
+            return False
+        return self.number_of_active_projects >= limit
 
     @property
     def reached_title_generation_limit(self):
-        return self.number_of_title_suggestions >= 20 and not self.has_active_subscription
+        limit = self.title_suggestion_limit
+        if limit is None:
+            return False
+        return self.number_of_title_suggestions_this_month >= limit
+
+    @property
+    def reached_content_generation_limit(self):
+        limit = self.blog_post_generation_limit
+        if limit is None:
+            return False
+        return self.number_of_generated_blog_posts_this_month >= limit
+
+    @property
+    def can_create_project(self):
+        return not self.reached_project_creation_limit
+
+    @property
+    def can_generate_title_suggestions(self):
+        return not self.reached_title_generation_limit
+
+    @property
+    def can_generate_blog_posts(self):
+        return not self.reached_content_generation_limit
 
 
 class ProfileStateTransition(BaseModel):
@@ -270,10 +373,6 @@ class Project(BaseModel):
         return None
 
     @property
-    def has_pricing_page(self):
-        return ProjectPage.objects.filter(project=self, type=ProjectPageType.PRICING).exists()
-
-    @property
     def has_auto_submission_setting(self):
         return self.auto_submission_settings.exists()
 
@@ -314,8 +413,6 @@ class Project(BaseModel):
         """
         from core.agents import analyze_project_agent
 
-        html_content = get_html_content(self.url)
-
         result = run_agent_synchronously(
             analyze_project_agent,
             "Analyze this web page content and extract the key information.",
@@ -323,7 +420,6 @@ class Project(BaseModel):
                 title=self.title,
                 description=self.description,
                 markdown_content=self.markdown_content,
-                html_content=html_content,
             ),
             function_name="analyze_content",
             model_name="Project",
@@ -1235,7 +1331,6 @@ class ProjectPage(BaseModel):
                 f"Content: {ctx.deps.markdown_content}"
             )
 
-        html_content = get_html_content(self.url)
         result = run_agent_synchronously(
             agent,
             "Please analyze this web page.",
@@ -1243,7 +1338,6 @@ class ProjectPage(BaseModel):
                 title=self.title,
                 description=self.description,
                 markdown_content=self.markdown_content,
-                html_content=html_content,
             ),
             function_name="analyze_content",
             model_name="ProjectPage",

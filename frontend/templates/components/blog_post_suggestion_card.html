@@ -22,14 +22,28 @@
         <div data-generate-content-target="buttonContainer">
           {% with generated_post=suggestion.generated_blog_posts.first %}
             {% if not generated_post %}
-              <button
-                data-action="generate-content#generate"
-                class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
-                <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                </svg>
-                Generate
-              </button>
+              {% if request.user.profile.reached_content_generation_limit %}
+                <a
+                  href="{% url 'settings' %}"
+                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-400 bg-gray-100 rounded-md border border-gray-200 hover:bg-gray-200 hover:text-gray-500"
+                  data-controller="tooltip"
+                  data-tooltip-message-value="You've reached the content generation limit ({{ request.user.profile.number_of_generated_blog_posts_this_month }}/{{ request.user.profile.blog_post_generation_limit }} blog posts this month on {{ request.user.profile.product_name }} plan).\nUpgrade to Pro in settings for unlimited content."
+                  data-action="mouseenter->tooltip#show mouseleave->tooltip#hide">
+                  <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                  </svg>
+                  Generate
+                </a>
+              {% else %}
+                <button
+                  data-action="generate-content#generate"
+                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                  <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                  </svg>
+                  Generate
+                </button>
+              {% endif %}
             {% elif generated_post.content %}
               <a
                 href="{% url 'generated_blog_post_detail' suggestion.project.id generated_post.id %}"

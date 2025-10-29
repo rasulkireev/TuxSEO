@@ -50,13 +50,13 @@ export default class extends Controller {
   }
 
   async performScan(url) {
-    const scanResponse = await fetch('/api/scan', {
+    const scanResponse = await fetch('/api/projects/', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-CSRFToken': this.getCSRFToken(),
       },
-      body: JSON.stringify({ url })
+      body: JSON.stringify({ url, source: "scan_project" })
     });
 
     if (!scanResponse.ok) {
@@ -152,32 +152,32 @@ export default class extends Controller {
 
   createProjectElement(data) {
     const element = document.createElement('div');
-    element.className = 'overflow-hidden p-6 rounded-xl border border-gray-200 shadow-sm transition-all duration-300 transform bg-white hover:shadow-lg hover:border-gray-300 hover:-translate-y-1';
+    element.className = 'overflow-hidden p-6 bg-white rounded-xl border border-gray-200 shadow-sm transition-all duration-300 transform hover:shadow-lg hover:border-gray-300 hover:-translate-y-1';
 
     element.innerHTML = `
       <div class="flex flex-col h-full">
         <!-- Header -->
         <div class="flex flex-col gap-3 items-start mb-4 md:flex-row md:items-center md:justify-between">
-          <div class="flex flex-col gap-2 min-w-0 flex-1">
-            <div class="flex items-center gap-3">
+          <div class="flex flex-col flex-1 gap-2 min-w-0">
+            <div class="flex gap-3 items-center">
               <h3 class="text-xl font-bold text-gray-900 truncate">
                 ${data.name || data.url}
               </h3>
-              <span class="px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-full ring-1 ring-inset ring-gray-300 whitespace-nowrap">
+              <span class="px-2.5 py-1 text-xs font-medium text-gray-700 whitespace-nowrap bg-gray-100 rounded-full ring-1 ring-inset ring-gray-300">
                 ${data.type}
               </span>
             </div>
 
             ${data.url ? `
               <a href="${data.url}" target="_blank" rel="noopener noreferrer"
-                 class="text-sm text-gray-500 hover:text-gray-700 truncate max-w-fit">
+                 class="text-sm text-gray-500 truncate hover:text-gray-700 max-w-fit">
                 ${data.url.length > 50 ? data.url.substring(0, 47) + '...' : data.url} ↗
               </a>
             ` : ''}
           </div>
         </div>
 
-        ${data.summary ? `<p class="mb-4 text-sm text-gray-600 line-clamp-3 leading-relaxed">${data.summary}</p>` : ''}
+        ${data.summary ? `<p class="mb-4 text-sm leading-relaxed text-gray-600 line-clamp-3">${data.summary}</p>` : ''}
 
         <!-- Stats Grid -->
         <div class="grid grid-cols-3 gap-3 mb-6">

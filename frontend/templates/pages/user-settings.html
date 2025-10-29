@@ -8,8 +8,8 @@
 
 {% block content %}
   <div class="py-12 min-h-screen bg-gray-50">
-    <div class="px-6 mx-auto max-w-4xl lg:px-8">
-      {% include "components/confirm-email.html" with email_verified=email_verified %}
+    <div class="px-6 mx-auto max-w-7xl lg:px-8">
+      {% include "components/confirm-email-message.html" with email_verified=email_verified %}
 
       <!-- Page Header -->
       <div class="mb-8">
@@ -18,15 +18,10 @@
       </div>
 
       <!-- Upgrade/Subscription Section -->
-      {% if not has_subscription %}
-      <div class="p-8 mb-8 bg-white rounded-lg border border-gray-200 shadow-sm" data-controller="pricing-toggle">
-        <div class="flex gap-x-4 justify-between items-center">
-          <h3 class="font-semibold text-gray-900 text-lg/8">Upgrade to Pro</h3>
-        </div>
-        <p class="mt-4 text-gray-600 text-sm/6">Unlock AI-powered blog content generation and advanced features.</p>
+      <div class="mb-12" data-controller="pricing-toggle">
+        <h2 class="mb-6 text-2xl font-bold tracking-tight text-gray-900">Subscription Plans</h2>
 
-        <!-- Billing Toggle -->
-        <div class="flex justify-center mt-6">
+        <div class="flex justify-center mb-8">
           <fieldset aria-label="Payment frequency" data-action="change->pricing-toggle#switch">
             <div class="grid relative grid-cols-2 gap-x-1 p-1 font-semibold text-center bg-gray-100 rounded-full ring-1 ring-inset ring-gray-300 text-xs/5">
               <label data-pricing-toggle-target="monthlyLabel" class="relative z-10 px-2.5 py-1 text-gray-900 bg-white rounded-full shadow-md transition-colors duration-200 cursor-pointer">
@@ -41,81 +36,193 @@
           </fieldset>
         </div>
 
-        <!-- Monthly Price Display -->
-        <div data-pricing-toggle-target="monthlyPriceDisplay">
-          <p class="flex gap-x-1 items-baseline mt-6">
-            <span class="text-4xl font-semibold tracking-tight text-gray-900">$100</span>
-            <span class="font-semibold text-gray-600 text-sm/6">/month</span>
-          </p>
+        <div class="grid grid-cols-1 gap-6 mx-auto max-w-4xl lg:grid-cols-2">
+            <!-- Free Plan -->
+            <div class="p-6 bg-white rounded-lg border-2 {% if not has_subscription %}border-gray-900{% else %}border-gray-200{% endif %} shadow-sm">
+              <div class="flex gap-x-4 justify-between items-center">
+                <h3 class="font-semibold text-gray-900 text-lg/8">Free</h3>
+                {% if not has_subscription %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium text-green-800 bg-green-100 rounded-full">
+                    Current Plan
+                  </span>
+                {% endif %}
+              </div>
+              <p class="mt-4 text-gray-600 text-sm/6">Perfect for trying out TuxSEO.</p>
+              <p class="flex gap-x-1 items-baseline mt-6">
+                <span class="text-3xl font-semibold tracking-tight text-gray-900">$0</span>
+                <span class="font-semibold text-gray-600 text-sm/6">/forever</span>
+              </p>
+
+              {% if not has_subscription %}
+                <button
+                  disabled
+                  class="block px-3 py-2 mt-6 w-full font-semibold text-center text-gray-700 bg-gray-100 rounded-md border border-gray-300 shadow-sm cursor-not-allowed text-sm/6"
+                >
+                  You're on this plan
+                </button>
+              {% endif %}
+
+              <ul role="list" class="mt-6 space-y-3 text-gray-600 text-sm/6">
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span>1 project</span>
+                </li>
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span>10 blog post suggestions</span>
+                </li>
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span>3 generated blog posts</span>
+                </li>
+              </ul>
+            </div>
+
+            <!-- Pro Plan -->
+            <div class="p-6 bg-white rounded-lg border-2 {% if has_pro_subscription %}border-gray-900{% else %}border-gray-200{% endif %} shadow-sm">
+              <div class="flex gap-x-4 justify-between items-center">
+                <h3 class="font-semibold text-gray-900 text-lg/8">Pro</h3>
+                {% if has_pro_subscription %}
+                  <span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium text-green-800 bg-green-100 rounded-full">
+                    Current Plan
+                  </span>
+                {% else %}
+                  <span class="px-3 py-1 text-xs font-semibold text-gray-900 bg-gray-100 rounded-full">Popular</span>
+                {% endif %}
+              </div>
+              <p class="mt-4 text-gray-600 text-sm/6">For agencies managing multiple projects.</p>
+              <div data-pricing-toggle-target="monthlyPriceDisplay">
+                <p class="flex gap-x-1 items-baseline mt-6">
+                  <span class="text-3xl font-semibold tracking-tight text-gray-900">$100</span>
+                  <span class="font-semibold text-gray-600 text-sm/6">/month</span>
+                </p>
+              </div>
+              <div data-pricing-toggle-target="yearlyPriceDisplay" class="hidden">
+                <p class="flex gap-x-1 items-baseline mt-6">
+                  <span class="text-3xl font-semibold tracking-tight text-gray-900">$1000</span>
+                  <span class="font-semibold text-gray-600 text-sm/6">/year</span>
+                </p>
+              </div>
+
+              {% if has_pro_subscription %}
+                <div data-pricing-toggle-target="monthlyCheckout">
+                  {% if user.profile.product.name == 'Pro - Monthly' %}
+                    <button
+                      disabled
+                      class="block px-3 py-2 mt-6 w-full font-semibold text-center text-gray-700 bg-gray-100 rounded-md border border-gray-300 shadow-sm cursor-not-allowed text-sm/6"
+                    >
+                      You're on this plan
+                    </button>
+                  {% else %}
+                    <form
+                      method="post"
+                      action="{% url 'upgrade_subscription' product_name='Pro - Monthly' %}"
+                      data-controller="subscription-form"
+                      data-action="submit->subscription-form#submit"
+                    >
+                      {% csrf_token %}
+                      <button
+                        type="submit"
+                        data-subscription-form-target="button"
+                        class="block px-3 py-2 mt-6 w-full font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span data-subscription-form-target="buttonText">Switch to Monthly</span>
+                        <svg data-subscription-form-target="spinner" class="inline hidden ml-2 w-4 h-4 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </button>
+                    </form>
+                  {% endif %}
+                </div>
+                <div data-pricing-toggle-target="yearlyCheckout" class="hidden">
+                  {% if user.profile.product.name == 'Pro - Yearly' %}
+                    <button
+                      disabled
+                      class="block px-3 py-2 mt-6 w-full font-semibold text-center text-gray-700 bg-gray-100 rounded-md border border-gray-300 shadow-sm cursor-not-allowed text-sm/6"
+                    >
+                      You're on this plan
+                    </button>
+                  {% else %}
+                    <form
+                      method="post"
+                      action="{% url 'upgrade_subscription' product_name='Pro - Yearly' %}"
+                      data-controller="subscription-form"
+                      data-action="submit->subscription-form#submit"
+                    >
+                      {% csrf_token %}
+                      <button
+                        type="submit"
+                        data-subscription-form-target="button"
+                        class="block px-3 py-2 mt-6 w-full font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <span data-subscription-form-target="buttonText">Switch to Annual</span>
+                        <svg data-subscription-form-target="spinner" class="inline hidden ml-2 w-4 h-4 text-white animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      </button>
+                    </form>
+                  {% endif %}
+                </div>
+              {% else %}
+                <div data-pricing-toggle-target="monthlyCheckout">
+                  <a
+                    href="{% url 'user_upgrade_checkout_session' product_name='Pro - Monthly' %}"
+                    class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700"
+                  >
+                    Upgrade to Pro
+                  </a>
+                </div>
+                <div data-pricing-toggle-target="yearlyCheckout" class="hidden">
+                  <a
+                    href="{% url 'user_upgrade_checkout_session' product_name='Pro - Yearly' %}"
+                    class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700"
+                  >
+                    Upgrade to Pro
+                  </a>
+                </div>
+              {% endif %}
+
+              <ul role="list" class="mt-6 space-y-3 text-gray-600 text-sm/6">
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span><strong>Unlimited</strong> projects</span>
+                </li>
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span><strong>Unlimited</strong> blog posts</span>
+                </li>
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span><strong>Unlimited</strong> keywords</span>
+                </li>
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span>Automatic posting</span>
+                </li>
+                <li class="flex gap-x-3">
+                  <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" /></svg>
+                  <span><strong>Priority support</strong></span>
+                </li>
+              </ul>
+            </div>
         </div>
 
-        <!-- Annual Price Display -->
-        <div data-pricing-toggle-target="yearlyPriceDisplay" class="hidden">
-          <p class="flex gap-x-1 items-baseline mt-6">
-            <span class="text-4xl font-semibold tracking-tight text-gray-900">$1000</span>
-            <span class="font-semibold text-gray-600 text-sm/6">/year</span>
-          </p>
-        </div>
-
-        <!-- Monthly Checkout Button -->
-        <div data-pricing-toggle-target="monthlyCheckout">
-          <a
-            href="{% url 'user_upgrade_checkout_session' pk=user.id plan='monthly-june-2025' %}"
-            class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
-          >
-            Upgrade to Pro - Monthly
-          </a>
-        </div>
-
-        <!-- Annual Checkout Button -->
-        <div data-pricing-toggle-target="yearlyCheckout" class="hidden">
-          <a
-            href="{% url 'user_upgrade_checkout_session' pk=user.id plan='yearly-june-2025' %}"
-            class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600"
-          >
-            Upgrade to Pro - Annual
-          </a>
-        </div>
-        <ul role="list" class="mt-8 space-y-3 text-gray-600 text-sm/6">
-          <li class="flex gap-x-3">
-            <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
-            </svg>
-            <span><strong class="text-gray-900">AI Blog Content Generation</strong> - Generate complete blog posts with SEO optimization</span>
-          </li>
-          <li class="flex gap-x-3">
-            <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
-            </svg>
-            <span><strong class="text-gray-900">Website Analysis & Content Strategy</strong> - Targeted blog post ideas</span>
-          </li>
-          <li class="flex gap-x-3">
-            <svg class="flex-none w-5 h-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-              <path fill-rule="evenodd" d="M16.704 4.153a.75.75 0 0 1 .143 1.052l-8 10.5a.75.75 0 0 1-1.127.075l-4.5-4.5a.75.75 0 0 1 1.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 0 1 1.05-.143Z" clip-rule="evenodd" />
-            </svg>
-            <span><strong class="text-gray-900">Priority Support</strong> - Get help when you need it</span>
-          </li>
-        </ul>
+        {% if has_subscription %}
+          <div class="mt-8 text-center">
+            <a
+              href="{% url 'create_customer_portal_session' %}"
+              class="inline-flex items-center px-6 py-3 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              Manage Subscription
+            </a>
+          </div>
+        {% endif %}
       </div>
-      {% else %}
-      <div class="p-8 mb-8 bg-white rounded-lg border border-gray-200 shadow-sm">
-        <div class="flex gap-x-4 justify-between items-center">
-          <h3 class="font-semibold text-gray-900 text-lg/8">Pro Plan Active</h3>
-          <span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium text-green-800 bg-green-100 rounded-full">
-            Active
-          </span>
-        </div>
-        <p class="mt-4 text-gray-600 text-sm/6">You have access to all Pro features including AI content generation and advanced analytics.</p>
-        <a
-          href="{% url 'create_customer_portal_session' %}"
-          class="inline-flex items-center px-4 py-2 mt-6 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-        >
-          Manage Subscription
-        </a>
-      </div>
-      {% endif %}
 
       <!-- Personal Information Section -->
+      <div class="mb-8">
       <div class="p-8 bg-white rounded-lg border border-gray-200 shadow-sm">
         <h3 class="mb-6 text-xl font-semibold text-gray-900">Personal Information</h3>
         <form action="" method="post" class="space-y-6">
@@ -157,6 +264,7 @@
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   </div>

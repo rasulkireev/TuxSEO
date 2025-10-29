@@ -1,5 +1,5 @@
 from djstripe.event_handlers import djstripe_receiver
-from djstripe.models import Customer, Event, Price, Product, Subscription
+from djstripe.models import Customer, Product, Subscription
 
 from core.models import Profile, ProfileStates
 from tuxseo.utils import get_tuxseo_logger
@@ -9,298 +9,251 @@ logger = get_tuxseo_logger(__name__)
 
 @djstripe_receiver("customer.subscription.created")
 def handle_created_subscription(**kwargs):
-    logger.info("handle_created_subscription webhook received", kwargs=kwargs)
-    event_id = kwargs["event"].id
-    event = Event.objects.get(id=event_id)
+    """
+    Handle subscription creation webhook.
+    Updates profile subscription, product, and customer, then tracks state change.
+    """
+    event = kwargs.get("event")
+    if not event:
+        logger.error("[SubscriptionCreated] No event provided")
+        return
 
-    customer = Customer.objects.get(id=event.data["object"]["customer"])
-    subscription = Subscription.objects.get(id=event.data["object"]["id"])
+    try:
+        event_data = event.data.get("object", {})
+        subscription_id = event_data.get("id")
+        customer_id = event_data.get("customer")
 
-    product_id = subscription.plan.product
-    product = Product.objects.get(id=product_id)
+        # Get djstripe objects
+        subscription = Subscription.objects.get(id=subscription_id)
+        customer = Customer.objects.get(id=customer_id)
 
-    profile = Profile.objects.get(customer=customer)
-    profile.subscription = subscription
-    profile.product = product
-    profile.save(update_fields=["subscription", "product"])
+        # Get product from subscription items
+        items_data = event_data.get("items", {}).get("data", [])
+        product_id = items_data[0].get("price", {}).get("product")
+        product = Product.objects.get(id=product_id)
 
-    profile.track_state_change(
-        to_state=ProfileStates.SUBSCRIBED,
-        metadata={
-            "event": "subscription_created",
-            "subscription_id": subscription.id,
-            "stripe_event_id": event_id,
-        },
-    )
+        # Update profile
+        profile = Profile.objects.get(customer=customer)
+        profile.subscription = subscription
+        profile.product = product
+        profile.customer = customer
+        profile.save(update_fields=["subscription", "product", "customer", "updated_at"])
 
-    logger.info(
-        "Subscription created and state updated for profile",
-        profile_id=profile.id,
-        webhook="handle_created_subscription",
-        subscription_id=subscription.id,
-        event_id=event_id,
-    )
+        # Track state change
+        profile.track_state_change(
+            to_state=ProfileStates.SUBSCRIBED,
+            metadata={
+                "event": "subscription_created",
+                "subscription_id": subscription_id,
+                "product_id": product_id,
+                "stripe_event_id": event.id,
+            },
+        )
+
+        logger.info(
+            "[SubscriptionCreated] Success",
+            profile_id=profile.id,
+            subscription_id=subscription_id,
+            product_id=product_id,
+        )
+
+    except Exception as e:
+        logger.error(
+            "[SubscriptionCreated] Error",
+            error=str(e),
+            event_id=event.id,
+            exc_info=True,
+        )
+        raise
 
 
 @djstripe_receiver("customer.subscription.updated")
 def handle_updated_subscription(**kwargs):
-    logger.info("handle_updated_subscription webhook received", kwargs=kwargs)
-    event_id = kwargs["event"].id
-    event = Event.objects.get(id=event_id)
-
-    subscription_data = event.data["object"]
-
-    customer_id = subscription_data["customer"]
-    subscription_id = subscription_data["id"]
-
-    logger.info(
-        "Subscription updated",
-        webhook="handle_updated_subscription",
-        event_id=event_id,
-        subscription_id=subscription_id,
-        subscription_data=subscription_data,
-    )
+    """
+    Handle subscription updates for cancellations and upgrades.
+    Updates profile subscription/product and tracks state changes.
+    """
+    event = kwargs.get("event")
+    if not event:
+        logger.error("[SubscriptionUpdated] No event provided")
+        return
 
     try:
-        customer = Customer.objects.get(id=customer_id)
+        event_data = event.data.get("object", {})
+        previous_attributes = event.data.get("previous_attributes", {})
+
+        subscription_id = event_data.get("id")
+        customer_id = event_data.get("customer")
+
+        # Get djstripe objects
         subscription = Subscription.objects.get(id=subscription_id)
+        customer = Customer.objects.get(id=customer_id)
         profile = Profile.objects.get(customer=customer)
 
-        if (
-            subscription_data.get("cancel_at_period_end")
-            and subscription_data.get("cancellation_details", {}).get("reason")
-            == "cancellation_requested"
-        ):
-            # The subscription has been cancelled and will end at the end of the current period
+        # Check if it's a cancellation
+        cancel_at_period_end = event_data.get("cancel_at_period_end", False)
+        cancellation_details = event_data.get("cancellation_details") or {}
+        is_cancellation = (
+            cancel_at_period_end and cancellation_details.get("reason") == "cancellation_requested"
+        )
+
+        # Check if it's an upgrade (plan changed)
+        is_upgrade = "items" in previous_attributes or "plan" in previous_attributes
+
+        # Update profile
+        profile.subscription = subscription
+
+        if is_upgrade:
+            # Get new product from subscription items
+            items_data = event_data.get("items", {}).get("data", [])
+            product_id = items_data[0].get("price", {}).get("product")
+            product = Product.objects.get(id=product_id)
+            profile.product = product
+            profile.save(update_fields=["subscription", "product", "updated_at"])
+
+            # Track state change (remains SUBSCRIBED)
+            profile.track_state_change(
+                to_state=ProfileStates.SUBSCRIBED,
+                metadata={
+                    "event": "subscription_upgraded",
+                    "subscription_id": subscription_id,
+                    "product_id": product_id,
+                    "stripe_event_id": event.id,
+                },
+            )
+            logger.info(
+                "[SubscriptionUpdated] Upgrade processed",
+                profile_id=profile.id,
+                product_id=product_id,
+            )
+
+        elif is_cancellation:
+            profile.save(update_fields=["subscription", "updated_at"])
+
+            # Track state change to CANCELLED
             profile.track_state_change(
                 to_state=ProfileStates.CANCELLED,
                 metadata={
                     "event": "subscription_cancelled",
                     "subscription_id": subscription_id,
-                    "cancel_at": subscription_data.get("cancel_at"),
-                    "current_period_end": subscription_data.get("current_period_end"),
-                    "cancellation_feedback": subscription_data.get("cancellation_details", {}).get(
-                        "feedback"
-                    ),
-                    "cancellation_comment": subscription_data.get("cancellation_details", {}).get(
-                        "comment"
-                    ),
+                    "cancel_at": event_data.get("cancel_at"),
+                    "current_period_end": event_data.get("current_period_end"),
+                    "cancellation_reason": cancellation_details.get("reason"),
+                    "stripe_event_id": event.id,
                 },
             )
-
             logger.info(
-                "Subscription cancelled for profile.",
+                "[SubscriptionUpdated] Cancellation processed",
                 profile_id=profile.id,
-                subscription_id=subscription_id,
-                end_date=subscription_data.get("current_period_end"),
+                cancel_at=event_data.get("cancel_at"),
             )
 
-        profile.subscription = subscription
-        profile.save(update_fields=["subscription"])
+        else:
+            # Other updates - just update subscription reference
+            profile.save(update_fields=["subscription", "updated_at"])
+            logger.info(
+                "[SubscriptionUpdated] Other update processed",
+                profile_id=profile.id,
+                changed_fields=list(previous_attributes.keys()),
+            )
 
-    except (Customer.DoesNotExist, Subscription.DoesNotExist, Profile.DoesNotExist) as e:
+    except Exception as e:
         logger.error(
-            "Error processing subscription update",
-            event_id=event_id,
-            subscription_id=subscription_id,
-            customer_id=customer_id,
+            "[SubscriptionUpdated] Error",
             error=str(e),
+            event_id=event.id,
             exc_info=True,
         )
+        raise
 
 
 @djstripe_receiver("customer.subscription.deleted")
 def handle_deleted_subscription(**kwargs):
-    logger.info("handle_deleted_subscription webhook received", kwargs=kwargs)
-    event_id = kwargs["event"].id
-    event = Event.objects.get(id=event_id)
-
-    subscription_data = event.data["object"]
-    customer_id = subscription_data["customer"]
-    subscription_id = subscription_data["id"]
-
-    logger.info(
-        "Subscription deleted event received",
-        webhook="handle_deleted_subscription",
-        event_id=event_id,
-        subscription_id=subscription_id,
-        subscription_data=subscription_data,
-    )
+    """
+    Handle subscription deletion.
+    Removes subscription/product references and transitions state to CHURNED.
+    """
+    event = kwargs.get("event")
+    if not event:
+        logger.error("[SubscriptionDeleted] No event provided")
+        return
 
     try:
+        event_data = event.data.get("object", {})
+        customer_id = event_data.get("customer")
+        subscription_id = event_data.get("id")
+
+        # Get customer and profile
         customer = Customer.objects.get(id=customer_id)
         profile = Profile.objects.get(customer=customer)
 
+        # Track state change to CHURNED
+        cancellation_details = event_data.get("cancellation_details") or {}
         profile.track_state_change(
             to_state=ProfileStates.CHURNED,
             metadata={
                 "event": "subscription_deleted",
                 "subscription_id": subscription_id,
-                "ended_at": subscription_data.get("ended_at"),
+                "ended_at": event_data.get("ended_at"),
+                "cancellation_reason": cancellation_details.get("reason"),
+                "stripe_event_id": event.id,
             },
         )
 
+        # Clear subscription and product references
         profile.subscription = None
-        profile.save(update_fields=["subscription"])
+        profile.product = None
+        profile.save(update_fields=["subscription", "product", "updated_at"])
 
         logger.info(
-            "Subscription deleted for profile.",
+            "[SubscriptionDeleted] Success",
             profile_id=profile.id,
             subscription_id=subscription_id,
-            ended_at=subscription_data.get("ended_at"),
         )
 
-        # TODO: Implement any necessary clean-up or follow-up actions
-        # For example: Revoke access to paid features, send a farewell email, etc.
-
-    except (Customer.DoesNotExist, Profile.DoesNotExist) as e:
+    except Exception as e:
         logger.error(
-            "Error processing subscription deletion",
-            event_id=event_id,
-            subscription_id=subscription_id,
-            customer_id=customer_id,
+            "[SubscriptionDeleted] Error",
             error=str(e),
+            event_id=event.id,
             exc_info=True,
         )
+        raise
 
 
 @djstripe_receiver("checkout.session.completed")
 def handle_checkout_completed(**kwargs):
-    logger.info("handle_checkout_completed webhook received", kwargs=kwargs)
-    event_id = kwargs["event"].id
-    event = Event.objects.get(id=event_id)
+    """
+    Handle checkout.session.completed webhook.
 
-    checkout_data = event.data["object"]
-    customer_id = checkout_data.get("customer")
-    checkout_id = checkout_data.get("id")
-    subscription_id = checkout_data.get("subscription")
-    payment_status = checkout_data.get("payment_status")
-    mode = checkout_data.get("mode")  # 'subscription', 'payment', or 'setup'
+    This is handled by other webhooks:
+    - Subscriptions: handled by customer.subscription.created
+    - Payments: not part of our current flow
+    - Setup: doesn't require state changes
 
-    # Get metadata from checkout
-    metadata = checkout_data.get("metadata", {})
-    price_id = metadata.get("price_id")
-
-    logger.info(
-        "Checkout session completed",
-        webhook="handle_checkout_completed",
-        event_id=event_id,
-        checkout_id=checkout_id,
-        customer_id=customer_id,
-        payment_status=payment_status,
-        mode=mode,
-        metadata=metadata,
-    )
-
-    if payment_status != "paid":
-        logger.warning(
-            "Checkout completed but payment not successful",
-            event_id=event_id,
-            checkout_id=checkout_id,
-            payment_status=payment_status,
-        )
+    We log this for tracking purposes only.
+    """
+    event = kwargs.get("event")
+    if not event:
+        logger.error("[CheckoutCompleted] No event provided")
         return
 
     try:
-        # Get the customer and profile
-        customer = Customer.objects.get(id=customer_id)
-        profile = Profile.objects.get(customer=customer)
+        event_data = event.data.get("object", {})
 
-        # Fields to update on the profile
-        update_fields = []
-
-        if mode == "payment":
-            # One-time payment checkout
-            amount_total = checkout_data.get("amount_total")
-            currency = checkout_data.get("currency")
-            payment_intent = checkout_data.get("payment_intent")
-
-            # Get the product associated with the price
-            product = None
-            product_data = {}
-
-            if price_id:
-                try:
-                    price = Price.objects.get(id=price_id)
-                    product = price.product
-
-                    # Update profile with product
-                    profile.product = product
-                    update_fields.append("product")
-
-                    product_data = {"product_id": product.id, "product_name": product.name}
-
-                    logger.info(
-                        "Associated product with profile from one-time payment",
-                        profile_id=profile.id,
-                        product_id=product.id,
-                        product_name=product.name,
-                    )
-                except Price.DoesNotExist:
-                    logger.warning("Price not found in database", price_id=price_id)
-                except Exception as e:
-                    logger.error(
-                        "Error retrieving product from price", price_id=price_id, error=str(e)
-                    )
-
-            if update_fields:
-                profile.save(update_fields=update_fields)
-
-            profile.track_state_change(
-                to_state=ProfileStates.SUBSCRIBED,
-                metadata={
-                    "event": "checkout_payment_completed",
-                    "payment_intent": payment_intent,
-                    "checkout_id": checkout_id,
-                    "amount": amount_total,
-                    "currency": currency,
-                    "price_id": price_id,
-                    "stripe_event_id": event_id,
-                    **product_data,
-                },
-            )
-
-            logger.info(
-                "User completed one-time payment",
-                profile_id=profile.id,
-                payment_intent=payment_intent,
-                checkout_id=checkout_id,
-                amount=amount_total,
-                currency=currency,
-                metadata=metadata,
-            )
-
-        else:
-            logger.info(
-                "Checkout completed with unsupported mode",
-                checkout_id=checkout_id,
-                mode=mode,
-                profile_id=profile.id,
-            )
-
-    except (Customer.DoesNotExist, Profile.DoesNotExist) as e:
-        logger.error(
-            "Error processing checkout completion: customer or profile not found",
-            event_id=event_id,
-            checkout_id=checkout_id,
-            customer_id=customer_id,
-            error=str(e),
-            exc_info=True,
+        logger.info(
+            "[CheckoutCompleted] Checkout completed",
+            checkout_id=event_data.get("id"),
+            customer_id=event_data.get("customer"),
+            mode=event_data.get("mode"),
+            payment_status=event_data.get("payment_status"),
+            subscription_id=event_data.get("subscription"),
         )
-    except Subscription.DoesNotExist as e:
-        logger.error(
-            "Error processing checkout completion: subscription not found",
-            event_id=event_id,
-            checkout_id=checkout_id,
-            subscription_id=subscription_id,
-            error=str(e),
-            exc_info=True,
-        )
+
     except Exception as e:
         logger.error(
-            "Unexpected error processing checkout completion",
-            event_id=event_id,
-            checkout_id=checkout_id,
+            "[CheckoutCompleted] Error",
             error=str(e),
+            event_id=event.id,
             exc_info=True,
         )

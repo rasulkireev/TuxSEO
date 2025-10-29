@@ -790,6 +790,24 @@ files = [
 python-ipware = ">=2.0.3"
 
 [[package]]
+name = "django-mjml"
+version = "1.4"
+description = "Use MJML in Django templates"
+optional = false
+python-versions = ">=3.6"
+groups = ["main"]
+files = [
+    {file = "django_mjml-1.4-py3-none-any.whl", hash = "sha256:09dc440fcec64f3656b17646439336e6c15c5987103dfb6fe23eb1f1bf734d11"},
+    {file = "django_mjml-1.4.tar.gz", hash = "sha256:a805b3721de92a4972bb6bd4a3bffa91579420e48297a55f3ffef6d8e926b0b4"},
+]
+
+[package.dependencies]
+django = ">=2.2,<5.3"
+
+[package.extras]
+requests = ["requests (>=2.24)"]
+
+[[package]]
 name = "django-ninja"
 version = "1.4.3"
 description = "Django Ninja - Fast Django REST framework"
@@ -4246,4 +4264,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "4e054c38655c42986a8d09e6c60053e3c62c153540247a3f325f2a1d16c5ddfc"
+content-hash = "0165c3cd246cd9638e28cad407c0c1cddfc37bf21532969c4c3f90803a11a6e3"
