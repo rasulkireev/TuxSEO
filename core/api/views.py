@@ -123,20 +123,10 @@ def validate_url(request: HttpRequest, data: ValidateUrlIn):
 def create_project(request: HttpRequest, data: ProjectScanIn):
     profile = request.auth
 
-    project = Project.objects.filter(profile=profile, url=data.url).first()
-    if project:
-        return {
-            "status": "success",
-            "project_id": project.id,
-            "id": project.id,
-            "has_details": bool(project.name),
-            "has_suggestions": project.blog_post_title_suggestions.exists(),
-        }
-
     if Project.objects.filter(url=data.url).exists():
         return {
             "status": "error",
-            "message": "Project already exists",
+            "message": "A project with this URL already exists",
         }
 
     if not profile.can_create_project:

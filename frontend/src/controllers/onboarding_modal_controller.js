@@ -18,6 +18,8 @@ export default class extends Controller {
     "unreachableIndicator",
     "unreachableMessage",
     "projectLink",
+    "projectError",
+    "projectErrorMessage",
   ];
 
   connect() {
@@ -35,6 +37,7 @@ export default class extends Controller {
     const is_valid = url_pattern.test(url_value);
 
     this.hideAllIndicators();
+    this.hideProjectError();
 
     if (this.validationTimeout) {
       clearTimeout(this.validationTimeout);
@@ -67,6 +70,16 @@ export default class extends Controller {
     this.reachableIndicatorTarget.classList.remove("flex");
     this.unreachableIndicatorTarget.classList.add("hidden");
     this.unreachableIndicatorTarget.classList.remove("flex");
+  }
+
+  showProjectError(message) {
+    this.projectErrorMessageTarget.textContent = message;
+    this.projectErrorTarget.classList.remove("hidden");
+  }
+
+  hideProjectError() {
+    this.projectErrorTarget.classList.add("hidden");
+    this.projectErrorMessageTarget.textContent = "";
   }
 
   async checkUrlReachability(url_value) {
@@ -128,6 +141,7 @@ export default class extends Controller {
     }
 
     this.continueButtonTarget.disabled = true;
+    this.hideProjectError();
 
     console.log("Starting project submission", { url_value });
 
@@ -149,13 +163,17 @@ export default class extends Controller {
 
       console.log("API response received", { status: response.status, ok: response.ok });
 
-      if (!response.ok) {
-        const error_text = await response.text();
-        console.error("API error response", error_text);
-        throw new Error(`Failed to create project: ${response.status}`);
+      const data = await response.json();
+      console.log("API response data", data);
+
+      if (data.status === "error") {
+        console.error("Project creation failed", data.message);
+        this.showProjectError(data.message);
+        this.continueButtonTarget.disabled = false;
+        this.goToStep(1);
+        return;
       }
 
-      const data = await response.json();
       this.createdProjectId = data.project_id;
 
       console.log("Project created successfully", { projectId: this.createdProjectId, data });
@@ -178,7 +196,7 @@ export default class extends Controller {
 
     } catch (error) {
       console.error("Error creating project:", error);
-      alert("There was an error creating your project. Please try again.");
+      this.showProjectError("There was an unexpected error creating your project. Please try again.");
       this.continueButtonTarget.disabled = false;
       this.goToStep(1);
     }
