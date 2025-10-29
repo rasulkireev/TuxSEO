@@ -368,6 +368,7 @@ def generate_and_post_blog_post(project_id: int):
                 project_id=project_id,
                 project_name=project.name,
             )
+            blog_post_to_post.refresh_from_db()
             blog_post_to_post.fix_generated_blog_post()
             async_task(
                 "core.tasks.generate_and_post_blog_post",

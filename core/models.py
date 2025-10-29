@@ -1104,7 +1104,39 @@ class GeneratedBlogPost(BaseModel):
             starts_with_header=self.starts_with_header,
         )
 
+    def _build_fix_context(self):
+        """Build full context for content editor agent to ensure accurate regeneration."""
+        from core.schemas import BlogPostGenerationContext, ProjectPageContext
+        
+        project_pages = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+            )
+            for page in self.project.project_pages.all()
+        ]
+
+        project_keywords = [
+            pk.keyword.keyword_text
+            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
+        ]
+
+        return BlogPostGenerationContext(
+            project_details=self.project.project_details,
+            title_suggestion=self.title.title_suggestion_schema,
+            project_pages=project_pages,
+            content_type=self.content_type,
+            project_keywords=project_keywords,
+        )
+
     def fix_header_start(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+        
+        context = self._build_fix_context()
+        
         result = run_agent_synchronously(
             content_editor_agent,
             """
@@ -1112,10 +1144,7 @@ class GeneratedBlogPost(BaseModel):
 
             Please remove it such that the content starts with regular text, usually an introduction.
             """,  # noqa: E501
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_header_start",
             model_name="GeneratedBlogPost",
         )
@@ -1178,6 +1207,11 @@ class GeneratedBlogPost(BaseModel):
             return False
 
     def fix_content_length(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+        
+        context = self._build_fix_context()
+        
         result = run_agent_synchronously(
             content_editor_agent,
             """
@@ -1185,10 +1219,7 @@ class GeneratedBlogPost(BaseModel):
             I think something went wrong during generation.
             Please regenerate.
           """,
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_content_length",
             model_name="GeneratedBlogPost",
         )
@@ -1198,6 +1229,11 @@ class GeneratedBlogPost(BaseModel):
         self.run_validation()
 
     def fix_valid_ending(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+        
+        context = self._build_fix_context()
+        
         result = run_agent_synchronously(
             content_editor_agent,
             """
@@ -1205,10 +1241,7 @@ class GeneratedBlogPost(BaseModel):
             Most likely generation failed at some point and returned half completed content.
             Please regenerate the blog post.
             """,
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_valid_ending",
             model_name="GeneratedBlogPost",
         )
@@ -1218,16 +1251,18 @@ class GeneratedBlogPost(BaseModel):
         self.run_validation()
 
     def fix_placeholders(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+        
+        context = self._build_fix_context()
+        
         result = run_agent_synchronously(
             content_editor_agent,
             """
             The content contains placeholders.
             Please regenerate the blog post without placeholders.
             """,
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_placeholders",
             model_name="GeneratedBlogPost",
         )
