@@ -36,8 +36,6 @@
   <meta name="twitter:image" content="https://osig.app/g?site=x&style=logo&font=markerfelt&title=TuxSEO&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
   {% endblock meta %}
 
-  <script defer data-domain="tuxseo.com" src="https://plausible-v2.cr.lvtd.dev/js/script.js"></script>
-
   {% if posthog_api_key %}
   <script>
       !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init Ie Ts Ms Ee Es Rs capture Ge calculateEventProperties Os register register_once register_for_session unregister unregister_for_session js getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Ds Fs createPersonProfile Ls Ps opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing Cs debug I As getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
@@ -49,11 +47,13 @@
   </script>
   {% endif %}
 
+  <script defer data-domain="tuxseo.com" src="https://plausible-v2.cr.lvtd.dev/js/script.outbound-links.js"></script>
+
   {% stylesheet_pack 'index' %}
   {% javascript_pack 'index' attrs='defer' %}
 </head>
 
-<body {% if request.user.is_authenticated and project %}data-controller="user-settings" data-user-settings-project-id-value="{{ project.id }}"{% endif %}>
+<body {% if request.user.is_authenticated %}data-controller="user-settings"{% endif %}>
   {% block default_messages %}
     {% include 'components/messages.html' with messages=messages %}
   {% endblock default_messages %}
@@ -79,15 +79,22 @@
             <nav class="hidden lg:block">
               <ul class="flex gap-4 items-center">
                 <li>
-                  <a href="{% url 'blog_posts' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
-                    Blog
+                  <a href="{% url 'home' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
+                    Projects
                   </a>
                 </li>
                 <li>
-                  <a href="{% url 'pricing' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
-                    Pricing
+                  <a href="{% url 'settings' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
+                    Settings
                   </a>
                 </li>
+                {% if user.is_superuser %}
+                <li>
+                  <a href="{% url 'admin_panel' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-red-600 transition-colors hover:bg-red-50">
+                    Admin
+                  </a>
+                </li>
+                {% endif %}
               </ul>
             </nav>
           </div>
@@ -95,36 +102,15 @@
           <!-- Desktop Auth Buttons -->
           <div class="flex gap-2 items-center ml-auto">
             {% if user.is_authenticated %}
-            <!-- Profile dropdown -->
-            <div data-controller="dropdown" class="hidden relative lg:block">
-              <button type="button" data-action="dropdown#toggle click@window->dropdown#hide"
-                class="flex items-center gap-2 rounded-full border-[1.5px] border-gray-300 px-5 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100"
-                id="user-menu-button" aria-expanded="false" aria-haspopup="true">
-                <span class="sr-only">Open user menu</span>
-                <img class="w-5 h-5 rounded-full"
-                  src="{% static 'vendors/images/unknown-man.png' %}" alt="Profile" />
-                <span>Account</span>
+            <form method="post" action="{% url 'account_logout' %}" class="hidden lg:block">
+              {% csrf_token %}
+              <button
+                type="submit"
+                class="rounded-full border-[1.5px] border-gray-300 px-5 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100"
+              >
+                Sign Out
               </button>
-              <div data-dropdown-target="menu"
-                class="hidden absolute right-0 z-10 mt-2 w-48 bg-white rounded-xl border border-gray-200 shadow-lg origin-top-right"
-                role="menu" aria-orientation="vertical" aria-labelledby="user-menu-button" tabindex="-1">
-                <div class="py-1">
-                  <a href="{% url 'settings' %}" class="block px-4 py-2 text-sm text-gray-900 hover:bg-gray-100">
-                    Settings
-                  </a>
-                  <form method="post" action="{% url 'account_logout' %}">
-                    {% csrf_token %}
-                    <button
-                      class="block px-4 py-2 w-full text-sm text-left text-gray-900 hover:bg-gray-100"
-                      role="menuitem"
-                      type="submit"
-                    >
-                      Sign Out
-                    </button>
-                  </form>
-                </div>
-              </div>
-            </div>
+            </form>
             {% else %}
             <div class="hidden gap-2 items-center lg:flex">
               <a href="{% url 'account_login' %}" class="rounded-full border-[1.5px] border-gray-300 px-5 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100">
@@ -152,13 +138,8 @@
               <nav class="flex-1 justify-center items-center">
                 <ul class="flex flex-col px-4">
                   <li class="py-5 text-center border-b border-gray-200">
-                    <a href="{% url 'blog_posts' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
-                      Blog
-                    </a>
-                  </li>
-                  <li class="py-5 text-center border-b border-gray-200">
-                    <a href="{% url 'pricing' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
-                      Pricing
+                    <a href="{% url 'home' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Projects
                     </a>
                   </li>
                   {% if user.is_authenticated %}
@@ -167,6 +148,13 @@
                       Settings
                     </a>
                   </li>
+                  {% if user.is_superuser %}
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'admin_panel' %}" class="text-sm font-semibold text-red-600 hover:text-red-700">
+                      Admin Panel
+                    </a>
+                  </li>
+                  {% endif %}
                   <li class="py-5 text-center">
                     <form method="post" action="{% url 'account_logout' %}">
                       {% csrf_token %}
@@ -176,9 +164,14 @@
                     </form>
                   </li>
                   {% else %}
-                  <li class="py-5 text-center">
-                    <a href="{% url 'account_login' %}" class="inline-block rounded-full border-[1.5px] border-gray-300 px-6 py-3 text-sm font-semibold text-gray-900 hover:bg-gray-100">
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'account_login' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
                       Sign In
+                    </a>
+                  </li>
+                  <li class="py-5 text-center">
+                    <a href="{% url 'account_signup' %}" class="text-sm font-semibold text-red-600 hover:text-red-700">
+                      Start for Free
                     </a>
                   </li>
                   {% endif %}
@@ -202,16 +195,6 @@
           <p class="text-xs leading-5 text-center text-gray-500">
             &copy; 2025 <a href="https://lvtd.dev?ref={{ request.get_host }}">LVTD, LLC</a>. All rights reserved.
           </p>
-        </div>
-        <div class="mt-8 md:mt-0">
-          <div class="flex justify-center space-x-6 md:justify-end">
-            <a href="{% url 'privacy_policy' %}" class="text-xs text-gray-500 hover:text-gray-700">
-              Privacy Policy
-            </a>
-            <a href="{% url 'terms_of_service' %}" class="text-xs text-gray-500 hover:text-gray-700">
-              Terms of Service
-            </a>
-          </div>
         </div>
       </div>
     </footer>

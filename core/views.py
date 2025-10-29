@@ -7,8 +7,11 @@ from allauth.account.utils import send_email_confirmation
 from allauth.account.views import SignupView
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
+
+User = get_user_model()
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, Prefetch, Q
 from django.shortcuts import redirect
@@ -41,7 +44,11 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 logger = get_tuxseo_logger(__name__)
 
 
-class HomeView(TemplateView):
+class LandingView(TemplateView):
+    template_name = "pages/landing.html"
+
+
+class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "pages/home.html"
 
     def get_context_data(self, **kwargs):
@@ -61,34 +68,87 @@ class HomeView(TemplateView):
 
         context["form"] = ProjectScanForm()
 
-        # Add projects to context for authenticated users
-        if self.request.user.is_authenticated:
-            user = self.request.user
-            profile = user.profile
+        user = self.request.user
+        profile = user.profile
 
-            projects = (
-                Project.objects.filter(profile=profile)
-                .annotate(
-                    posted_posts_count=Count(
-                        "generated_blog_posts", filter=Q(generated_blog_posts__posted=True)
-                    )
+        projects = (
+            Project.objects.filter(profile=profile)
+            .annotate(
+                posted_posts_count=Count(
+                    "generated_blog_posts", filter=Q(generated_blog_posts__posted=True)
                 )
-                .order_by("-created_at")
+            )
+            .order_by("-created_at")
+        )
+
+        projects_with_stats = []
+        for project in projects:
+            project_stats = {
+                "project": project,
+                "posted_posts_count": project.posted_posts_count,
+            }
+            projects_with_stats.append(project_stats)
+
+        context["projects"] = projects_with_stats
+
+        email_address = EmailAddress.objects.get_for_user(user, user.email)
+        context["email_verified"] = email_address.verified
+
+        return context
+
+
+class AdminPanelView(LoginRequiredMixin, TemplateView):
+    template_name = "pages/admin_panel.html"
+
+    def dispatch(self, request, *args, **kwargs):
+        if not request.user.is_superuser:
+            messages.error(request, "You don't have permission to access the admin panel.")
+            return redirect(reverse("home"))
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+
+        total_users = User.objects.count()
+        verified_users = (
+            EmailAddress.objects.filter(verified=True).values("user").distinct().count()
+        )
+
+        total_projects = Project.objects.count()
+        total_blog_posts = GeneratedBlogPost.objects.count()
+        posted_blog_posts = GeneratedBlogPost.objects.filter(posted=True).count()
+
+        paid_subscribers = (
+            Profile.objects.filter(product__isnull=False).exclude(product__name="Free").count()
+        )
+
+        recent_users_data = User.objects.select_related("profile").order_by("-date_joined")[:5]
+        recent_users = []
+        for user in recent_users_data:
+            email_address = EmailAddress.objects.filter(user=user, email=user.email).first()
+            recent_users.append(
+                {
+                    "username": user.username,
+                    "email": user.email,
+                    "date_joined": user.date_joined,
+                    "is_verified": email_address.verified if email_address else False,
+                }
             )
 
-            # Annotate projects with counts
-            projects_with_stats = []
-            for project in projects:
-                project_stats = {
-                    "project": project,
-                    "posted_posts_count": project.posted_posts_count,
-                }
-                projects_with_stats.append(project_stats)
+        recent_projects = Project.objects.select_related("profile__user").order_by("-created_at")[
+            :5
+        ]
 
-            context["projects"] = projects_with_stats
-
-            email_address = EmailAddress.objects.get_for_user(user, user.email)
-            context["email_verified"] = email_address.verified
+        context["stats"] = {
+            "total_users": total_users,
+            "verified_users": verified_users,
+            "total_projects": total_projects,
+            "total_blog_posts": total_blog_posts,
+            "posted_blog_posts": posted_blog_posts,
+            "paid_subscribers": paid_subscribers,
+            "recent_users": recent_users,
+            "recent_projects": recent_projects,
+        }
 
         return context
 
@@ -200,6 +260,15 @@ def create_checkout_session(request, product_name):
     user = request.user
     profile = user.profile
 
+    # Superusers already have subscription access
+    if user.is_superuser:
+        logger.warning(
+            "[CreateCheckout] Superuser attempted to create checkout session",
+            user_id=user.id,
+        )
+        messages.info(request, "Superusers already have full access.")
+        return redirect(reverse("home"))
+
     try:
         price = djstripe_models.Price.objects.select_related("product").get(
             product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
@@ -308,6 +377,15 @@ def upgrade_subscription(request, product_name):
     """Upgrade or downgrade an existing active subscription."""
     user = request.user
     profile = user.profile
+
+    # Superusers already have full access
+    if user.is_superuser:
+        logger.warning(
+            "[UpgradeSubscription] Superuser attempted to upgrade subscription",
+            user_id=user.id,
+        )
+        messages.info(request, "Superusers already have full access.")
+        return redirect(reverse("home"))
 
     if request.method != "POST":
         messages.error(request, "Invalid request method.")

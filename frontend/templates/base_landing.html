@@ -1,0 +1,209 @@
+{% load webpack_loader static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+  <!-- Other meta stuff -->
+  <link rel="apple-touch-icon" href="{% static 'vendors/images/logo.png' %}" />
+  <link rel="apple-touch-icon" href="{% static 'vendors/images/logo.png' %}" />
+  <link rel="icon" type="image/png" sizes="16x16 32x32 500x500" href="{% static 'vendors/images/logo.png' %}" />
+
+  {% block meta %}
+  <title>TuxSEO</title>
+  <meta name="description" content="Best SEO Blog Writer entity in the universe!" />
+  <meta name="keywords" content="django" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://{{ request.get_host }}/" />
+
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="TuxSEO" />
+  <meta property="og:url" content="https://{{ request.get_host }}/" />
+  <meta property="og:description" content="Best SEO Blog Writer entity in the universe!" />
+  <meta property="og:image" content="https://osig.app/g?site=meta&style=logo&font=markerfelt&title=TuxSEO&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
+  <meta property="og:locale" content="en_US" />
+
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:creator" content="@rasulkireev" />
+  <meta name="twitter:site" content="@rasulkireev" />
+  <meta name="twitter:title" content="TuxSEO" />
+  <meta name="twitter:description" content="Best SEO Blog Writer entity in the universe!" />
+  <meta name="twitter:image" content="https://osig.app/g?site=x&style=logo&font=markerfelt&title=TuxSEO&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %}" />
+  {% endblock meta %}
+
+  {% if posthog_api_key %}
+  <script>
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init Ie Ts Ms Ee Es Rs capture Ge calculateEventProperties Os register register_once register_for_session unregister unregister_for_session js getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Ds Fs createPersonProfile Ls Ps opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing Cs debug I As getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
+      posthog.init('{{ posthog_api_key }}', {
+          api_host: 'https://us.i.posthog.com',
+          defaults: '2025-05-24',
+          person_profiles: 'always',
+      })
+  </script>
+  {% endif %}
+
+  <script defer data-domain="tuxseo.com" src="https://plausible-v2.cr.lvtd.dev/js/script.outbound-links.js"></script>
+
+  {% stylesheet_pack 'index' %}
+  {% javascript_pack 'index' attrs='defer' %}
+</head>
+
+<body>
+  {% block default_messages %}
+    {% include 'components/messages.html' with messages=messages %}
+  {% endblock default_messages %}
+
+  <div class="bg-white">
+    <header class="sticky left-0 top-3 z-10">
+      <div class="mx-auto w-full max-w-[1376px] px-4">
+        <div class="flex gap-2 items-center px-4 py-3.5 bg-white rounded-xl border border-gray-200 sm:gap-4 md:px-6 lg:rounded-full">
+
+          <!-- Logo and Navigation -->
+          <div class="flex gap-6 items-center">
+            <a href="{% url 'landing' %}" class="flex gap-2 items-center">
+              <img class="w-auto h-8" src="{% static 'vendors/images/logo.png' %}" alt="TuxSEO Logo" />
+              <span class="text-base font-semibold text-gray-900">TuxSEO</span>
+            </a>
+
+            <!-- Desktop Navigation -->
+            <nav class="hidden lg:block">
+              <ul class="flex gap-4 items-center">
+                <li>
+                  <a href="{% url 'blog_posts' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
+                    Blog
+                  </a>
+                </li>
+                <li>
+                  <a href="{% url 'pricing' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
+                    Pricing
+                  </a>
+                </li>
+              </ul>
+            </nav>
+          </div>
+
+          <!-- Desktop Auth Buttons -->
+          <div class="flex gap-2 items-center ml-auto">
+            {% if user.is_authenticated %}
+            <div class="hidden gap-2 items-center lg:flex">
+              <a href="{% url 'home' %}" class="px-5 py-3 text-sm font-semibold text-white bg-gray-900 rounded-full transition-colors hover:bg-gray-800">
+                Dashboard
+              </a>
+            </div>
+            {% else %}
+            <div class="hidden gap-2 items-center lg:flex">
+              <a href="{% url 'account_login' %}" class="rounded-full border-[1.5px] border-gray-300 px-5 py-3 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100">
+                Sign In
+              </a>
+              <a href="{% url 'account_signup' %}" class="px-5 py-3 text-sm font-semibold text-white bg-red-600 rounded-full transition-colors hover:bg-red-700">
+                Start for Free
+              </a>
+            </div>
+            {% endif %}
+          </div>
+
+          <!-- Mobile Menu Button -->
+          <div class="lg:hidden" data-controller="dropdown">
+            <button class="flex relative justify-center items-center w-10 h-10 rounded-full border border-gray-200"
+                    aria-label="Toggle mobile menu"
+                    data-action="dropdown#toggle click@window->dropdown#hide">
+              <span class="absolute left-1/2 top-[13px] flex h-[2px] w-4 -translate-x-1/2 rounded-full bg-black transition-transform"></span>
+              <span class="absolute left-1/2 top-1/2 flex h-[2px] w-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-black transition-transform"></span>
+              <span class="absolute bottom-[13px] left-1/2 flex h-[2px] w-4 -translate-x-1/2 rounded-full bg-black transition-transform"></span>
+            </button>
+
+            <!-- Mobile Menu Dropdown -->
+            <div data-dropdown-target="menu" class="hidden absolute right-4 left-4 top-full z-10 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg">
+              <nav class="flex-1 justify-center items-center">
+                <ul class="flex flex-col px-4">
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'blog_posts' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Blog
+                    </a>
+                  </li>
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'pricing' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Pricing
+                    </a>
+                  </li>
+                  {% if user.is_authenticated %}
+                  <li class="py-5 text-center">
+                    <a href="{% url 'home' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Dashboard
+                    </a>
+                  </li>
+                  {% else %}
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'account_login' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Sign In
+                    </a>
+                  </li>
+                  <li class="py-5 text-center">
+                    <a href="{% url 'account_signup' %}" class="text-sm font-semibold text-red-600 hover:text-red-700">
+                      Start for Free
+                    </a>
+                  </li>
+                  {% endif %}
+                </ul>
+              </nav>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </header>
+
+    <div class="px-2 sm:px-0">
+      {% block content %}
+      {% endblock content %}
+    </div>
+
+    <footer class="bg-white">
+      <div class="px-6 py-12 mx-auto max-w-7xl md:flex md:items-center md:justify-between lg:px-8">
+        <div class="mt-8 md:mt-0">
+          <p class="text-xs leading-5 text-center text-gray-500">
+            &copy; 2025 <a href="https://lvtd.dev?ref={{ request.get_host }}">LVTD, LLC</a>. All rights reserved.
+          </p>
+        </div>
+        <div class="mt-8 md:mt-0">
+          <div class="flex justify-center space-x-6 md:justify-end">
+            <a href="{% url 'privacy_policy' %}" class="text-xs text-gray-500 hover:text-gray-700">
+              Privacy Policy
+            </a>
+            <a href="{% url 'terms_of_service' %}" class="text-xs text-gray-500 hover:text-gray-700">
+              Terms of Service
+            </a>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+  </div>
+
+  {% block schema %}
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "TuxSEO",
+      "description": "Best SEO Blog Writer entity in the universe!",
+      "thumbnailUrl": "https://osig.app/g?site=x&style=logo&font=markerfelt&title=TuxSEO&subtitle=Best SEO Blog Writer entity in the universe!&image_url=https://{{ request.get_host }}{% static 'vendors/images/logo.png' %},
+      "url": "https://{{ request.get_host }}/",
+      "author": {
+        "@type": "Person",
+        "givenName": "Rasul",
+        "familyName": "Kireev",
+        "url": "https://rasulkireev.com/"
+      }
+    }
+    </script>
+  {% endblock schema %}
+
+</body>
+
+</html>

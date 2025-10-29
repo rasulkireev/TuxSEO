@@ -9,8 +9,8 @@ logger = get_tuxseo_logger(__name__)
 def pro_subscription_status(request):
     """
     Adds a 'has_pro_subscription' variable to the context.
-    This variable is True if the user has an active pro subscription, False otherwise.
-    """
+    This variable is True if the user has an active pro subscription or is a superuser, False otherwise.
+    """  # noqa: E501
     if request.user.is_authenticated and hasattr(request.user, "profile"):
         return {"has_pro_subscription": request.user.profile.has_product_or_subscription}
     return {"has_pro_subscription": False}

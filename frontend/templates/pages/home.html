@@ -1,13 +1,110 @@
-{% extends "base.html" %}
+{% extends "base_app.html" %}
+{% load widget_tweaks %}
 
 {% block content %}
 <div class="isolate relative px-6 mt-10 lg:px-8">
   <div class="mx-auto text-center">
-    {% if user.is_authenticated %}
-      {% include 'components/dashboard_home.html' with projects=projects %}
-    {% else %}
-      {% include 'components/landing_page.html' %}
-    {% endif %}
+    <div data-controller="scan-progress">
+      <div class="px-6 mx-auto mt-12 max-w-7xl lg:px-8">
+        <div class="mx-auto max-w-2xl">
+          <div class="flex justify-between items-center">
+            <h2 class="text-2xl font-bold tracking-tight text-gray-900">Your Projects</h2>
+            {% if user.profile.reached_project_creation_limit %}
+              <a
+                href="{% url 'settings' %}"
+                class="px-6 py-3 text-sm font-medium text-gray-500 bg-gray-100 rounded-md border border-gray-200 shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-200 hover:text-gray-600"
+                data-controller="tooltip"
+                data-tooltip-message-value="You've reached the project limit ({{ user.profile.project_limit }} project{% if user.profile.project_limit != 1 %}s{% endif %} on {{ user.profile.product_name }} plan).{% if user.profile.is_on_free_plan %} Upgrade to Pro to create more projects.{% endif %}"
+                data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
+              >
+                Add project
+              </a>
+            {% else %}
+              <button
+                data-action="click->scan-progress#toggleForm"
+                data-scan-progress-target="addButton"
+                class="px-6 py-3 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+              >
+                Add project
+              </button>
+            {% endif %}
+          </div>
+
+          <form data-action="submit->scan-progress#handleSubmit" data-scan-progress-target="form" class="hidden mt-6 animate-slide-up">
+            {% csrf_token %}
+            <div class="mb-4 text-center">
+              <p class="text-sm text-gray-600">
+                Enter your project's homepage URL. We'll analyze it to generate relevant blog post ideas.
+              </p>
+            </div>
+            <div class="flex gap-x-4">
+              {% render_field form.url class="flex-auto px-3.5 py-2.5 min-w-0 text-gray-900 rounded-md border border-gray-300 shadow-sm transition-all duration-200 ease-in-out placeholder:text-gray-400 focus:border-gray-500 focus:ring-1 focus:ring-gray-500 hover:border-gray-400 sm:text-sm sm:leading-6" placeholder="Enter your website URL" %}
+              <button type="submit" class="flex-none px-4 py-2.5 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                <span>Scan</span>
+              </button>
+            </div>
+            <button type="button" data-action="click->scan-progress#toggleForm" class="mt-2 text-xs text-gray-500 hover:text-gray-700">
+              Cancel
+            </button>
+
+            <!-- Progress Indicators -->
+            <div data-scan-progress-target="progress" class="hidden mt-8">
+              <div class="space-y-6">
+                <!-- Project Details -->
+                <div class="flex gap-x-4 items-center p-4 bg-white rounded-md border border-gray-200 shadow-sm transition-all duration-300">
+                  <div data-scan-progress-target="detailsSpinner" class="w-5 h-5 rounded-full border-2 border-gray-300 animate-spin border-t-gray-600"></div>
+                  <div data-scan-progress-target="detailsCheck" class="hidden text-green-500">
+                    <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                  <div data-scan-progress-target="detailsCross" class="hidden text-red-500">
+                    <svg class="w-5 h-5 size-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                    </svg>
+                  </div>
+                  <span class="font-medium text-gray-700">Analyzing website content...</span>
+                </div>
+                <!-- Blog Suggestions / Background Tasks -->
+                <div data-scan-progress-target="backgroundTasks" class="flex hidden items-start p-6 mt-4 w-full bg-white rounded-lg border border-gray-200 shadow-lg opacity-0 transition-transform duration-500 ease-out translate-x-full pointer-events-none">
+                  <div class="flex-shrink-0 mr-4">
+                    <span class="inline-flex justify-center items-center w-10 h-10 text-sm font-semibold text-white bg-gray-700 rounded-full shadow-sm">AI</span>
+                  </div>
+                  <div class="w-full text-left">
+                    <h3 class="mb-1 text-lg font-bold text-gray-900">We're working in the background!</h3>
+                    <p class="mb-2 text-sm text-gray-700">You'll see updates in your project shortly. Here's what we're doing:</p>
+                    <ul class="pl-4 space-y-1 text-sm list-disc list-inside text-gray-700">
+                      <li><span class="font-medium">Generating blog post suggestions</span></li>
+                      <li><span class="font-medium">Coming up with keywords that will work best for your project</span></li>
+                      <li><span class="font-medium">Analyzing competitors</span></li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Results Button -->
+            <a href="#" data-scan-progress-target="resultsButton" class="inline-flex hidden justify-center px-6 py-3 mt-8 w-full text-sm font-medium text-white bg-gray-800 rounded-md border border-transparent shadow-sm transition-all duration-200 ease-in-out hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
+              Show Results
+            </a>
+          </form>
+
+          <div class="mt-8 space-y-8" data-scan-progress-target="projectsList">
+            {% if projects %}
+              {% for project_data in projects %}
+                {% with project=project_data.project %}
+                  {% include 'components/project_information_card.html' %}
+                {% endwith %}
+              {% endfor %}
+            {% else %}
+              <div data-empty-state class="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+                <p class="text-sm text-gray-500">No projects yet. Add your first project above!</p>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 

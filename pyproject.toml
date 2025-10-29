@@ -56,6 +56,7 @@ select = [
     "UP",   # pyupgrade
     "C90",  # mccabe complexity
 ]
+ignore = ["E402"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/migrations/*.py" = ["E501", "F401", "F403", "F405"]
