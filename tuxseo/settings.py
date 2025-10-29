@@ -122,6 +122,7 @@ TEMPLATES = [
                 "core.context_processors.pro_subscription_status",
                 "core.context_processors.posthog_api_key",
                 "core.context_processors.available_social_providers",
+                "core.context_processors.turnstile_site_key",
             ],
         },
     },
@@ -528,3 +529,5 @@ MJML_HTTPSERVERS = [
         "URL": f"{MJML_URL}/v1/render",
     }
 ]
+
+CLOUDFLARE_TURNSTILE_SITEKEY = env("CLOUDFLARE_TURNSTILE_SITEKEY", default="")

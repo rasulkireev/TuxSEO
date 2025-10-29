@@ -20,8 +20,11 @@
             id="signup_form"
             method="post"
             action="{% url 'account_signup' %}"
+            {% if turnstile_site_key %}
             data-controller="turnstile"
-            data-action="input->turnstile#renderWidget">
+            data-action="input->turnstile#renderWidget"
+            data-turnstile-site-key-value="{{ turnstile_site_key }}"
+            {% endif %}>
         {% csrf_token %}
 
         {{ form.non_field_errors | safe }}
@@ -53,7 +56,9 @@
         <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}" />
         {% endif %}
 
+        {% if turnstile_site_key %}
         <div data-turnstile-target="container" class="w-full"></div>
+        {% endif %}
 
         <div>
             <button type="submit"

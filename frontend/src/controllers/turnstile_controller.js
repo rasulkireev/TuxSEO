@@ -2,6 +2,9 @@ import { Controller } from "@hotwired/stimulus";
 
 export default class extends Controller {
   static targets = ["container"];
+  static values = {
+    siteKey: String
+  };
 
   connect() {
     this.hasRendered = false;
@@ -65,12 +68,14 @@ export default class extends Controller {
       return;
     }
 
-    const isDevelopment = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-    const sitekey = isDevelopment ? "1x00000000000000000000AA" : "0x4AAAAAAB9EtVqAXC4_r7wX";
+    if (!this.siteKeyValue) {
+      console.error("Turnstile site key not configured");
+      return;
+    }
 
     try {
       window.turnstile.render(this.containerTarget, {
-        sitekey: sitekey,
+        sitekey: this.siteKeyValue,
         size: "flexible",
       });
       this.hasRendered = true;
