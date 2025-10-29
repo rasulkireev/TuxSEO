@@ -32,6 +32,8 @@ from core.api.schemas import (
     ToggleProjectKeywordUseIn,
     ToggleProjectKeywordUseOut,
     UpdateArchiveStatusIn,
+    UpdateSitemapUrlIn,
+    UpdateSitemapUrlOut,
     UpdateTitleScoreIn,
     UserSettingsOut,
     ValidateUrlIn,
@@ -406,6 +408,45 @@ def toggle_auto_submission(request: HttpRequest, project_id: int):
     return {"status": "success", "enabled": project.enable_automatic_post_submission}
 
 
+@api.post("/projects/update-sitemap-url", response=UpdateSitemapUrlOut, auth=[session_auth])
+def update_sitemap_url(request: HttpRequest, data: UpdateSitemapUrlIn):
+    """
+    Update the sitemap URL for a project. When a sitemap URL is added or updated,
+    it triggers automatic parsing and analysis of the sitemap pages.
+    """
+    profile = request.auth
+    project = get_object_or_404(Project, id=data.project_id, profile=profile)
+
+    sitemap_url = data.sitemap_url.strip()
+
+    if not sitemap_url:
+        return {
+            "status": "error",
+            "message": "Sitemap URL cannot be empty",
+        }
+
+    if not sitemap_url.startswith(("http://", "https://")):
+        return {
+            "status": "error",
+            "message": "Sitemap URL must start with http:// or https://",
+        }
+
+    logger.info(
+        "[Update Sitemap URL] Updating sitemap URL for project",
+        project_id=project.id,
+        profile_id=profile.id,
+        sitemap_url=sitemap_url,
+    )
+
+    project.sitemap_url = sitemap_url
+    project.save(update_fields=["sitemap_url"])
+
+    return {
+        "status": "success",
+        "message": "Sitemap URL updated successfully. Pages will be analyzed in batches of 10.",
+    }
+
+
 @api.post("/update-title-score/{suggestion_id}", response={200: dict}, auth=[session_auth])
 def update_title_score(request: HttpRequest, suggestion_id: int, data: UpdateTitleScoreIn):
     profile = request.auth
@@ -554,6 +595,7 @@ def user_settings(request: HttpRequest, project_id: int):
         project_data = {
             "name": project.name,
             "url": project.url,
+            "sitemap_url": project.sitemap_url,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
         data = {"profile": profile_data, "project": project_data}

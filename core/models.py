@@ -301,6 +301,9 @@ class Project(BaseModel):
     enable_automatic_post_submission = models.BooleanField(default=False)
     enable_automatic_post_generation = models.BooleanField(default=True)
 
+    # Sitemap
+    sitemap_url = models.URLField(max_length=500, blank=True, default="")
+
     # Content from Jina Reader
     date_scraped = models.DateTimeField(null=True, blank=True)
     title = models.CharField(max_length=500, blank=True, default="")
@@ -830,8 +833,8 @@ class BlogPostTitleSuggestion(BaseModel):
             pages = ctx.deps.project_pages
             if pages:
                 instruction = """
-                  Below is the list of page this project has. Can you insert them into
-                  the content you are about to generate where it makes sense.\n
+                  Below is the list of pages this project has. Can you insert links to them
+                  in the content you are about to generate where it makes sense.\n
                 """
                 for page in pages:
                     instruction += f"""
@@ -917,6 +920,7 @@ class BlogPostTitleSuggestion(BaseModel):
                   ...
              """
 
+        # Combine project pages and sitemap pages for context
         project_pages = [
             ProjectPageContext(
                 url=page.url,
@@ -926,6 +930,19 @@ class BlogPostTitleSuggestion(BaseModel):
             )
             for page in self.project.project_pages.all()
         ]
+
+        # Add analyzed sitemap pages
+        sitemap_pages = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+            )
+            for page in self.project.sitemap_pages.filter(date_analyzed__isnull=False)
+        ]
+
+        project_pages.extend(sitemap_pages)
 
         project_keywords = [
             pk.keyword.keyword_text
@@ -1789,3 +1806,82 @@ class Feedback(BaseModel):
             recipient_list = ["kireevr1996@gmail.com"]
 
             send_mail(subject, message, from_email, recipient_list, fail_silently=True)
+
+
+class SitemapPage(BaseModel):
+    project = models.ForeignKey(
+        Project, on_delete=models.CASCADE, related_name="sitemap_pages"
+    )
+    url = models.URLField(max_length=500)
+
+    # Content from Jina Reader
+    date_scraped = models.DateTimeField(null=True, blank=True)
+    title = models.CharField(max_length=500, blank=True, default="")
+    description = models.TextField(blank=True, default="")
+    markdown_content = models.TextField(blank=True, default="")
+
+    # AI Content
+    date_analyzed = models.DateTimeField(null=True, blank=True)
+    summary = models.TextField(blank=True, default="")
+
+    class Meta:
+        unique_together = ("project", "url")
+
+    def __str__(self):
+        return f"{self.project.name}: {self.url}"
+
+    def get_page_content(self):
+        """
+        Fetch page content using Jina Reader API and update the sitemap page.
+        Returns True if successful, False otherwise.
+        """
+        title, description, markdown_content = get_markdown_content(self.url)
+
+        if not markdown_content:
+            logger.error(
+                "[Get Page Content] Failed to get page content for sitemap page",
+                url=self.url,
+                project_id=self.project_id,
+            )
+            return False
+
+        self.date_scraped = timezone.now()
+        self.title = title
+        self.description = description
+        self.markdown_content = markdown_content
+
+        self.save(
+            update_fields=[
+                "date_scraped",
+                "title",
+                "description",
+                "markdown_content",
+            ]
+        )
+
+        return True
+
+    def analyze_content(self):
+        """
+        Analyze the page content using AI and update with summary.
+        Should be called after get_page_content().
+        """
+        from core.agents import summarize_page_agent
+
+        result = run_agent_synchronously(
+            summarize_page_agent,
+            "Summarize this web page content in 2-3 sentences.",
+            deps=WebPageContent(
+                title=self.title,
+                description=self.description,
+                markdown_content=self.markdown_content,
+            ),
+            function_name="analyze_content",
+            model_name="SitemapPage",
+        )
+
+        self.summary = result.data
+        self.date_analyzed = timezone.now()
+        self.save(update_fields=["summary", "date_analyzed"])
+
+        return True

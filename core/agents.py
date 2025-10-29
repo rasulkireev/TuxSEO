@@ -53,3 +53,29 @@ def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
         f"Description: {ctx.deps.description}"
         f"Content: {ctx.deps.markdown_content}"
     )
+
+
+########################################################
+
+summarize_page_agent = Agent(
+    "google-gla:gemini-2.5-flash",
+    output_type=str,
+    deps_type=WebPageContent,
+    system_prompt=(
+        "You are an expert content summarizer. Based on the web page content provided, "
+        "create a concise 2-3 sentence summary that captures the main purpose and key "
+        "information of the page. Focus on what the page is about and its main value proposition."
+    ),
+    retries=2,
+    model_settings={"temperature": 0.5},
+)
+
+
+@summarize_page_agent.system_prompt
+def add_page_content(ctx: RunContext[WebPageContent]) -> str:
+    return (
+        "Web page content to summarize:"
+        f"Title: {ctx.deps.title}"
+        f"Description: {ctx.deps.description}"
+        f"Content: {ctx.deps.markdown_content}"
+    )
