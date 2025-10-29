@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends 'base_landing.html' %}
 {% load widget_tweaks %}
 
 {% block content %}
@@ -11,7 +11,7 @@
                 <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}"/>
             {% endif %}
 
-            <button class="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-red-600 border border-transparent border-solid rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            <button class="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-red-600 rounded-md border border-transparent border-solid shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                     type="submit">
                 Sign Out
             </button>

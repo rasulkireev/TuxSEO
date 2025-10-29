@@ -14,16 +14,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.0.7] - 2025-10-28
+## [0.0.7] - 2025-10-29
 ## Changed
 - Fixed and improved all limitations based on plans.
 - styling and info about pricing on the user-settings page
 - more accurate logic for how many ideas are generated when clicked "Generate more"
+- Don't let people create project from url that has been added previously
+- superusers are considered to have a subscription
+- landing page and home page are different.
 
 ## Added
 - Cloudflare turnstile and remove blocking project creation for uncofirmed emails.
 - Onboarding Flow
 - Add MJML for custom emails.
+- admin panel page
 
 
 ## [0.0.7] - 2025-10-14

@@ -112,7 +112,7 @@ class Profile(BaseModel):
 
     @property
     def has_product_or_subscription(self):
-        return self.product is not None or self.subscription is not None
+        return self.user.is_superuser or self.product is not None or self.subscription is not None
 
     @property
     def number_of_active_projects(self):
@@ -154,6 +154,8 @@ class Profile(BaseModel):
 
     @property
     def product_name(self):
+        if self.user.is_superuser:
+            return "Pro"
         if self.product and hasattr(self.product, "name"):
             return self.product.name
         return "Free"
@@ -164,6 +166,8 @@ class Profile(BaseModel):
 
     @property
     def is_on_pro_plan(self):
+        if self.user.is_superuser:
+            return True
         product_name_lower = self.product_name.lower()
         return "pro" in product_name_lower
 
