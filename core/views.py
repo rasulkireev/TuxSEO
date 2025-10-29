@@ -221,16 +221,11 @@ def create_checkout_session(request, product_name):
         profile.save(update_fields=["customer"])
 
     # Check if user already has an active subscription
-    active_subscription = djstripe_models.Subscription.objects.filter(
-        customer=customer,
-        status__in=["active", "trialing"],
-    ).first()
-
-    if active_subscription:
+    if profile.subscription:
         logger.warning(
             "[CreateCheckout] User already has active subscription",
             user_id=user.id,
-            subscription_id=active_subscription.id,
+            subscription_id=profile.subscription.id,
         )
         messages.info(
             request,

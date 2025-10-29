@@ -21,6 +21,7 @@ export default class extends Controller {
   ];
 
   connect() {
+    console.log("Onboarding modal controller connected");
     this.currentStep = 1;
     this.createdProjectId = null;
     this.validationTimeout = null;
@@ -69,6 +70,7 @@ export default class extends Controller {
   }
 
   async checkUrlReachability(url_value) {
+    console.log("Checking URL reachability for", url_value);
     try {
       const csrf_token = document.querySelector("[name=csrfmiddlewaretoken]").value;
 
@@ -86,15 +88,18 @@ export default class extends Controller {
       }
 
       const data = await response.json();
+      console.log("URL validation response", data);
 
       this.hideAllIndicators();
 
       if (data.reachable) {
+        console.log("URL is reachable, enabling continue button");
         this.reachableIndicatorTarget.classList.remove("hidden");
         this.reachableIndicatorTarget.classList.add("flex");
         this.isUrlReachable = true;
         this.continueButtonTarget.disabled = false;
       } else {
+        console.log("URL is not reachable");
         this.unreachableIndicatorTarget.classList.remove("hidden");
         this.unreachableIndicatorTarget.classList.add("flex");
         this.unreachableMessageTarget.textContent = data.message || "URL is not reachable";
@@ -112,17 +117,26 @@ export default class extends Controller {
     }
   }
 
-  async submitProject() {
+  async submitProject(event) {
+    console.log("submitProject called", event);
+
     const url_value = this.urlInputTarget.value.trim();
 
     if (!url_value || !this.isUrlReachable) {
+      console.log("Submit blocked: URL validation failed", { url_value, isUrlReachable: this.isUrlReachable });
       return;
     }
+
+    this.continueButtonTarget.disabled = true;
+
+    console.log("Starting project submission", { url_value });
 
     this.goToStep(2);
 
     try {
       const csrf_token = document.querySelector("[name=csrfmiddlewaretoken]").value;
+
+      console.log("Making API request to create project");
 
       const response = await fetch("/api/projects/", {
         method: "POST",
@@ -133,34 +147,53 @@ export default class extends Controller {
         body: JSON.stringify({ url: url_value, source: "onboarding_modal" }),
       });
 
+      console.log("API response received", { status: response.status, ok: response.ok });
+
       if (!response.ok) {
-        throw new Error("Failed to create project");
+        const error_text = await response.text();
+        console.error("API error response", error_text);
+        throw new Error(`Failed to create project: ${response.status}`);
       }
 
       const data = await response.json();
-      this.createdProjectId = data.id;
+      this.createdProjectId = data.project_id;
+
+      console.log("Project created successfully", { projectId: this.createdProjectId, data });
+
+      if (this.createdProjectId && this.hasProjectLinkTarget) {
+        const project_url = `/project/${this.createdProjectId}/`;
+        console.log("Setting project link href to", project_url);
+        this.projectLinkTarget.href = project_url;
+      } else {
+        console.warn("Cannot set project link", {
+          hasProjectId: !!this.createdProjectId,
+          hasProjectLinkTarget: this.hasProjectLinkTarget
+        });
+      }
 
       setTimeout(() => {
+        console.log("Moving to step 3");
         this.goToStep(3);
-
-        if (this.createdProjectId && this.hasProjectLinkTarget) {
-          this.projectLinkTarget.href = `/project/${this.createdProjectId}/`;
-        }
       }, 1500);
 
     } catch (error) {
       console.error("Error creating project:", error);
       alert("There was an error creating your project. Please try again.");
+      this.continueButtonTarget.disabled = false;
       this.goToStep(1);
     }
   }
 
   goToStep(step_number) {
+    console.log("Transitioning to step", step_number);
     this.currentStep = step_number;
 
     this.step1Target.classList.add("hidden");
+    this.step1Target.classList.remove("flex");
     this.step2Target.classList.add("hidden");
+    this.step2Target.classList.remove("flex");
     this.step3Target.classList.add("hidden");
+    this.step3Target.classList.remove("flex");
 
     this.step1IndicatorTarget.classList.remove("bg-gray-800", "border-gray-800", "w-6");
     this.step1IndicatorTarget.classList.add("bg-gray-300", "border-gray-300", "w-4");

@@ -26,7 +26,6 @@ from core.choices import (
 )
 from core.model_utils import (
     generate_random_key,
-    get_html_content,
     get_markdown_content,
     run_agent_synchronously,
 )
@@ -414,8 +413,6 @@ class Project(BaseModel):
         """
         from core.agents import analyze_project_agent
 
-        html_content = get_html_content(self.url)
-
         result = run_agent_synchronously(
             analyze_project_agent,
             "Analyze this web page content and extract the key information.",
@@ -423,7 +420,6 @@ class Project(BaseModel):
                 title=self.title,
                 description=self.description,
                 markdown_content=self.markdown_content,
-                html_content=html_content,
             ),
             function_name="analyze_content",
             model_name="Project",
@@ -1335,7 +1331,6 @@ class ProjectPage(BaseModel):
                 f"Content: {ctx.deps.markdown_content}"
             )
 
-        html_content = get_html_content(self.url)
         result = run_agent_synchronously(
             agent,
             "Please analyze this web page.",
@@ -1343,7 +1338,6 @@ class ProjectPage(BaseModel):
                 title=self.title,
                 description=self.description,
                 markdown_content=self.markdown_content,
-                html_content=html_content,
             ),
             function_name="analyze_content",
             model_name="ProjectPage",

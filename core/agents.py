@@ -52,5 +52,4 @@ def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
         f"Title: {ctx.deps.title}"
         f"Description: {ctx.deps.description}"
         f"Content: {ctx.deps.markdown_content}"
-        f"HTML Content: {ctx.deps.html_content}"
     )

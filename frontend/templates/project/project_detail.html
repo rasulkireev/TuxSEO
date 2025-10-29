@@ -64,7 +64,7 @@
                   <div class="flex flex-col gap-3 justify-center items-center sm:flex-row">
                     {% if user.profile.reached_title_generation_limit %}
                       <a
-                        href="{% url 'settings ' %}"
+                        href="{% url 'settings' %}"
                         class="inline-flex items-center px-6 py-3 text-base font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
                         data-controller="tooltip"
                         data-tooltip-message-value="You've reached the suggestion limit ({{ user.profile.number_of_title_suggestions_this_month }}/{{ user.profile.title_suggestion_limit }} suggestions this month on {{ user.profile.product_name }} plan).\nUpgrade to Pro in settings for unlimited suggestions."
