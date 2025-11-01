@@ -338,20 +338,6 @@ Q_CLUSTER = {
     "max_attempts": 2,
     "redis": REDIS_URL,
     "error_reporter": {},
-    "schedule": [
-        {
-            "func": "core.tasks.analyze_project_sitemap_pages_daily",
-            "schedule_type": "I",
-            "minutes": 1440,  # Run every 24 hours (daily)
-            "name": "Analyze Project Sitemap Pages Daily",
-        },
-        {
-            "func": "core.tasks.schedule_blog_post_posting",
-            "schedule_type": "I",
-            "minutes": 60,  # Run every hour
-            "name": "Schedule Blog Post Posting",
-        },
-    ],
 }
 
 
