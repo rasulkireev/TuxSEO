@@ -1320,6 +1320,11 @@ class ProjectPage(BaseModel):
     class Meta:
         unique_together = ("project", "url")
 
+    def save(self, *args, **kwargs):
+        """Override save to validate URL before saving."""
+        self.clean()
+        super().save(*args, **kwargs)
+
     def clean(self):
         """Validate that the URL is valid before saving."""
         from django.core.exceptions import ValidationError
@@ -1341,11 +1346,6 @@ class ProjectPage(BaseModel):
             for phrase in ["i need", "please provide", "error", "invalid", "missing"]
         ):
             raise ValidationError(f"Invalid URL content detected: {self.url}")
-
-    def save(self, *args, **kwargs):
-        """Override save to validate URL before saving."""
-        self.clean()
-        super().save(*args, **kwargs)
 
     @property
     def web_page_content(self):
