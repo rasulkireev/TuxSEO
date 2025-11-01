@@ -126,9 +126,9 @@ def get_markdown_content(url):
 
     except requests.exceptions.RequestException as e:
         logger.error(
-            "Error fetching content from Jina Reader",
+            "[Get Markdown Content] Error fetching content from Jina Reader",
             error=str(e),
             exc_info=True,
             url=url,
         )
-        raise e
+        return ("", "", "")

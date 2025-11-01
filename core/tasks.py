@@ -9,7 +9,7 @@ from django.conf import settings
 from django.utils import timezone
 from django_q.tasks import async_task
 
-from core.choices import ContentType
+from core.choices import ContentType, ProjectPageSource
 from core.models import (
     BlogPostTitleSuggestion,
     Competitor,
@@ -47,22 +47,131 @@ def add_email_to_buttondown(email, tag):
 
 
 def analyze_project_page(project_id: int, link: str):
-    project = Project.objects.get(id=project_id)
-    project_page, created = ProjectPage.objects.get_or_create(project=project, url=link)
+    from django.core.exceptions import ValidationError
 
-    if created:
-        project_page.get_page_content()
-        project_page.analyze_content()
+    try:
+        project = Project.objects.get(id=project_id)
+    except Project.DoesNotExist:
+        logger.error(
+            "[Analyze Project Page] Project not found",
+            project_id=project_id,
+        )
+        return f"Project {project_id} not found"
 
-    return f"Analyzed {link} for {project.name}"
+    try:
+        project_page, created = ProjectPage.objects.get_or_create(
+            project=project, url=link, defaults={"source": ProjectPageSource.AI}
+        )
+
+        if created:
+            logger.info(
+                "[Analyze Project Page] Created new project page",
+                project_id=project_id,
+                project_name=project.name,
+                page_url=link,
+            )
+
+            content_fetched = project_page.get_page_content()
+            if not content_fetched:
+                logger.warning(
+                    "[Analyze Project Page] Failed to fetch page content, deleting page",
+                    project_id=project_id,
+                    project_name=project.name,
+                    page_url=link,
+                )
+                project_page.delete()
+                return f"Failed to fetch content for {link}, page deleted"
+
+            project_page.analyze_content()
+            logger.info(
+                "[Analyze Project Page] Successfully analyzed page",
+                project_id=project_id,
+                project_name=project.name,
+                page_url=link,
+            )
+        else:
+            logger.info(
+                "[Analyze Project Page] Page already exists, skipping",
+                project_id=project_id,
+                project_name=project.name,
+                page_url=link,
+            )
+
+        return f"Analyzed {link} for {project.name}"
+
+    except ValidationError as e:
+        logger.error(
+            "[Analyze Project Page] Invalid URL validation error",
+            project_id=project_id,
+            page_url=link,
+            error=str(e),
+        )
+        # Try to find and delete the invalid page if it was created
+        try:
+            invalid_page = ProjectPage.objects.filter(project=project, url=link).first()
+            if invalid_page:
+                invalid_page.delete()
+                logger.info(
+                    "[Analyze Project Page] Deleted invalid page",
+                    project_id=project_id,
+                    page_url=link,
+                )
+        except Exception as delete_error:
+            logger.error(
+                "[Analyze Project Page] Failed to delete invalid page",
+                project_id=project_id,
+                page_url=link,
+                error=str(delete_error),
+                exc_info=True,
+            )
+        return f"Invalid URL validation error for {link}: {str(e)}"
+
+    except Exception as e:
+        logger.error(
+            "[Analyze Project Page] Error analyzing page",
+            project_id=project_id,
+            page_url=link,
+            error=str(e),
+            exc_info=True,
+        )
+        return f"Error analyzing {link}: {str(e)}"
 
 
 def schedule_project_page_analysis(project_id):
     project = Project.objects.get(id=project_id)
-    project_links = project.get_a_list_of_links()
+
+    try:
+        project_links = project.get_a_list_of_links()
+    except Exception as e:
+        logger.error(
+            "[Schedule Project Page Analysis] Failed to extract links",
+            project_id=project_id,
+            project_name=project.name,
+            error=str(e),
+            exc_info=True,
+        )
+        return f"Failed to extract links for {project.name}"
+
+    if not project_links:
+        logger.info(
+            "[Schedule Project Page Analysis] No links found",
+            project_id=project_id,
+            project_name=project.name,
+        )
+        return f"No links found for {project.name}"
 
     count = 0
     for link in project_links:
+        # Validate that the link is a proper URL
+        if not link or not isinstance(link, str) or not link.startswith(("http://", "https://")):
+            logger.warning(
+                "[Schedule Project Page Analysis] Skipping invalid link",
+                project_id=project_id,
+                project_name=project.name,
+                link=link,
+            )
+            continue
+
         async_task(
             analyze_project_page,
             project_id,
@@ -70,6 +179,12 @@ def schedule_project_page_analysis(project_id):
         )
         count += 1
 
+    logger.info(
+        "[Schedule Project Page Analysis] Scheduled page analysis",
+        project_id=project_id,
+        project_name=project.name,
+        links_scheduled=count,
+    )
     return f"Scheduled analysis for {count} links"
 
 
@@ -85,13 +200,38 @@ def schedule_project_competitor_analysis(project_id):
 
 
 def analyze_project_competitor(competitor_id):
-    competitor = Competitor.objects.get(id=competitor_id)
-    got_content = competitor.get_page_content()
+    try:
+        competitor = Competitor.objects.get(id=competitor_id)
+    except Competitor.DoesNotExist:
+        logger.error(
+            "[Analyze Project Competitor] Competitor not found",
+            competitor_id=competitor_id,
+        )
+        return f"Competitor {competitor_id} not found"
 
-    if got_content:
-        competitor.analyze_competitor()
+    try:
+        got_content = competitor.get_page_content()
 
-    return f"Analyzed Competitor for {competitor.name}"
+        if got_content:
+            competitor.analyze_competitor()
+            return f"Analyzed Competitor for {competitor.name}"
+        else:
+            logger.warning(
+                "[Analyze Project Competitor] Failed to get page content",
+                competitor_id=competitor_id,
+                competitor_name=competitor.name,
+            )
+            return f"Failed to get content for competitor {competitor.name}"
+
+    except Exception as e:
+        logger.error(
+            "[Analyze Project Competitor] Error analyzing competitor",
+            competitor_id=competitor_id,
+            competitor_name=competitor.name,
+            error=str(e),
+            exc_info=True,
+        )
+        return f"Error analyzing competitor {competitor.name}: {str(e)}"
 
 
 def process_project_keywords(project_id: int):
@@ -683,3 +823,266 @@ def get_and_save_pasf_keywords(
     API credits used: {stats["credits_used"]}
     PASF keywords found: {stats["pasf_found"]}
     PASF keywords saved: {stats["pasf_saved"]}"""
+
+
+def parse_sitemap_and_save_urls(project_id: int):
+    """
+    Parse the project's sitemap and save all URLs as ProjectPage records with SITEMAP source.
+    This task is called immediately when a user adds a sitemap URL.
+    """
+    try:
+        project = Project.objects.get(id=project_id)
+    except Project.DoesNotExist:
+        logger.error(f"[Parse Sitemap] Project {project_id} not found.")
+        return f"Project {project_id} not found."
+
+    if not project.sitemap_url:
+        logger.warning(
+            "[Parse Sitemap] No sitemap URL found for project",
+            project_id=project_id,
+            project_name=project.name,
+        )
+        return f"No sitemap URL found for project {project.name}."
+
+    logger.info(
+        "[Parse Sitemap] Starting sitemap parsing",
+        project_id=project_id,
+        project_name=project.name,
+        sitemap_url=project.sitemap_url,
+    )
+
+    try:
+        response = requests.get(project.sitemap_url, timeout=30)
+        response.raise_for_status()
+
+        # Parse XML content
+        import xml.etree.ElementTree as ET
+
+        root = ET.fromstring(response.content)
+
+        # Handle both sitemap formats: standard sitemap and sitemap index
+        namespace = {"ns": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+
+        urls_found = []
+
+        # Check if this is a sitemap index
+        sitemap_locs = root.findall(".//ns:sitemap/ns:loc", namespace)
+        if sitemap_locs:
+            # This is a sitemap index, fetch each sitemap
+            for sitemap_loc in sitemap_locs:
+                sitemap_url = sitemap_loc.text
+                try:
+                    sitemap_response = requests.get(sitemap_url, timeout=30)
+                    sitemap_response.raise_for_status()
+                    sitemap_root = ET.fromstring(sitemap_response.content)
+                    url_locs = sitemap_root.findall(".//ns:url/ns:loc", namespace)
+                    urls_found.extend([loc.text for loc in url_locs if loc.text])
+                except Exception as e:
+                    logger.warning(
+                        "[Parse Sitemap] Failed to fetch nested sitemap",
+                        sitemap_url=sitemap_url,
+                        error=str(e),
+                    )
+        else:
+            # This is a regular sitemap
+            url_locs = root.findall(".//ns:url/ns:loc", namespace)
+            urls_found.extend([loc.text for loc in url_locs if loc.text])
+
+        # Save URLs to database
+        created_count = 0
+        existing_count = 0
+
+        for url in urls_found:
+            project_page, created = ProjectPage.objects.get_or_create(
+                project=project, url=url, defaults={"source": ProjectPageSource.SITEMAP}
+            )
+            if created:
+                created_count += 1
+            else:
+                existing_count += 1
+
+        logger.info(
+            "[Parse Sitemap] Completed sitemap parsing",
+            project_id=project_id,
+            project_name=project.name,
+            total_urls=len(urls_found),
+            created_count=created_count,
+            existing_count=existing_count,
+        )
+
+        # Schedule analysis of first 10 unanalyzed pages
+        async_task(
+            "core.tasks.analyze_sitemap_pages",
+            project_id,
+            group="Analyze Sitemap Pages",
+        )
+
+        return f"""Sitemap parsing completed for {project.name}:
+        Total URLs found: {len(urls_found)}
+        New pages: {created_count}
+        Existing pages: {existing_count}"""
+
+    except requests.RequestException as e:
+        logger.error(
+            "[Parse Sitemap] Request error",
+            project_id=project_id,
+            project_name=project.name,
+            sitemap_url=project.sitemap_url,
+            error=str(e),
+            exc_info=True,
+        )
+        return f"Failed to fetch sitemap for {project.name}: {str(e)}"
+    except Exception as e:
+        logger.error(
+            "[Parse Sitemap] Unexpected error",
+            project_id=project_id,
+            project_name=project.name,
+            error=str(e),
+            exc_info=True,
+        )
+        return f"Error parsing sitemap for {project.name}: {str(e)}"
+
+
+def analyze_sitemap_pages(project_id: int, limit: int = 10):
+    """
+    Analyze up to 'limit' unanalyzed project pages from sitemap for a project.
+    This fetches page content and generates summaries.
+    """
+    try:
+        project = Project.objects.get(id=project_id)
+    except Project.DoesNotExist:
+        logger.error(f"[Analyze Sitemap Pages] Project {project_id} not found.")
+        return f"Project {project_id} not found."
+
+    # Get unanalyzed pages from sitemap source (pages without date_analyzed)
+    unanalyzed_pages = ProjectPage.objects.filter(
+        project=project,
+        source=ProjectPageSource.SITEMAP,
+        date_analyzed__isnull=True,
+    ).order_by("created_at")[:limit]
+
+    if not unanalyzed_pages.exists():
+        logger.info(
+            "[Analyze Sitemap Pages] No unanalyzed pages found",
+            project_id=project_id,
+            project_name=project.name,
+        )
+        return f"No unanalyzed sitemap pages found for {project.name}."
+
+    stats = {
+        "total": unanalyzed_pages.count(),
+        "analyzed": 0,
+        "failed": 0,
+    }
+
+    logger.info(
+        "[Analyze Sitemap Pages] Starting analysis",
+        project_id=project_id,
+        project_name=project.name,
+        pages_to_analyze=stats["total"],
+    )
+
+    for project_page in unanalyzed_pages:
+        try:
+            # Fetch page content
+            content_fetched = project_page.get_page_content()
+
+            if content_fetched:
+                # Analyze and summarize
+                project_page.analyze_content()
+                stats["analyzed"] += 1
+                logger.info(
+                    "[Analyze Sitemap Pages] Page analyzed successfully",
+                    project_id=project_id,
+                    project_page_id=project_page.id,
+                    url=project_page.url,
+                )
+            else:
+                stats["failed"] += 1
+                logger.warning(
+                    "[Analyze Sitemap Pages] Failed to fetch content, deleting page",
+                    project_id=project_id,
+                    project_page_id=project_page.id,
+                    url=project_page.url,
+                )
+                # Delete the page if we can't fetch content
+                project_page.delete()
+
+        except Exception as e:
+            stats["failed"] += 1
+            logger.error(
+                "[Analyze Sitemap Pages] Error analyzing page, deleting",
+                project_id=project_id,
+                project_page_id=project_page.id,
+                url=project_page.url,
+                error=str(e),
+                exc_info=True,
+            )
+            # Delete pages that cause errors during analysis
+            try:
+                project_page.delete()
+            except Exception as delete_error:
+                logger.error(
+                    "[Analyze Sitemap Pages] Failed to delete page after analysis error",
+                    project_id=project_id,
+                    project_page_id=project_page.id,
+                    url=project_page.url,
+                    error=str(delete_error),
+                    exc_info=True,
+                )
+
+    logger.info(
+        "[Analyze Sitemap Pages] Completed analysis",
+        project_id=project_id,
+        project_name=project.name,
+        total=stats["total"],
+        analyzed=stats["analyzed"],
+        failed=stats["failed"],
+    )
+
+    return f"""Sitemap page analysis for {project.name}:
+    Pages analyzed: {stats["analyzed"]}/{stats["total"]}
+    Failed: {stats["failed"]}"""
+
+
+def analyze_project_sitemap_pages_daily():
+    """
+    Daily scheduled task that checks all projects with sitemap URLs
+    and schedules analysis for any unanalyzed pages (10 at a time per project).
+    """
+    projects_with_sitemaps = Project.objects.exclude(sitemap_url="")
+
+    scheduled_count = 0
+
+    for project in projects_with_sitemaps:
+        # Check if there are unanalyzed pages from sitemap
+        unanalyzed_count = ProjectPage.objects.filter(
+            project=project,
+            source=ProjectPageSource.SITEMAP,
+            date_analyzed__isnull=True,
+        ).count()
+
+        if unanalyzed_count > 0:
+            logger.info(
+                "[Daily Sitemap Analysis] Scheduling analysis",
+                project_id=project.id,
+                project_name=project.name,
+                unanalyzed_count=unanalyzed_count,
+            )
+
+            async_task(
+                "core.tasks.analyze_sitemap_pages",
+                project.id,
+                group="Daily Sitemap Analysis",
+            )
+            scheduled_count += 1
+
+    logger.info(
+        "[Daily Sitemap Analysis] Completed scheduling",
+        total_projects_with_sitemaps=projects_with_sitemaps.count(),
+        scheduled_projects=scheduled_count,
+    )
+
+    return f"""Daily sitemap analysis check completed:
+    Projects with sitemaps: {projects_with_sitemaps.count()}
+    Projects scheduled for analysis: {scheduled_count}"""

@@ -14,6 +14,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [0.0.7] - 2025-11-01
+### Changed
+- update to user-settings page
+- Enhanced blog post generation to intelligently use project pages based on `always_use` flag
+
+### Added
+- sitemaps support
+- project pages in the ui for projects
+- add the ability to select which project pages will always be used in project generations.
+- blog posts use project pages more intelligently with two-tier system:
+  - Required pages (always_use=True) must be linked in generated content
+  - Optional pages are suggested for AI to use intelligently based on relevance
+
+
 ## [0.0.7] - 2025-10-29
 ## Changed
 - Fixed and improved all limitations based on plans.

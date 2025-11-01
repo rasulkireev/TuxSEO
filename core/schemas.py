@@ -171,6 +171,10 @@ class ProjectPageContext(BaseModel):
     title: str = Field(description="Title of the project page")
     description: str = Field(description="Description of the project page")
     summary: str = Field(description="Summary of the project page")
+    always_use: bool = Field(
+        default=False,
+        description="When enabled, this page link must always be included in generated blog posts",
+    )
 
 
 class BlogPostGenerationContext(BaseModel):
