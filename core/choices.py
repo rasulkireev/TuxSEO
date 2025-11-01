@@ -101,3 +101,8 @@ class KeywordDataSource(models.TextChoices):
 class BlogPostStatus(models.TextChoices):
     DRAFT = "DRAFT"
     PUBLISHED = "PUBLISHED"
+
+
+class ProjectPageSource(models.TextChoices):
+    AI = "AI", "AI"
+    SITEMAP = "SITEMAP", "Sitemap"

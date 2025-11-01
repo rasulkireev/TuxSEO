@@ -1,0 +1,313 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block meta %}
+  <title>TuxSEO - Pages for {{ project.name }}</title>
+  <meta name="description"
+        content="Pages for {{ project.name }}." />
+{% endblock meta %}
+
+{% block content %}
+<div class="py-16 bg-gray-50 sm:py-20">
+  <div class="px-6 mx-auto max-w-6xl lg:px-8">
+
+    <!-- Back to Project Button -->
+    <div class="mb-6">
+      <a
+        href="{% url 'project_detail' project.id %}"
+        class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+      >
+        <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        Back to Project
+      </a>
+    </div>
+
+    <!-- Project Header -->
+    <div class="text-center">
+      <h1 class="text-3xl font-bold text-gray-900 sm:text-4xl">
+        Pages for {{ project.name }}
+      </h1>
+
+      <p class="mt-4 text-lg text-gray-600">
+        Manage and track pages for your project
+      </p>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 gap-4 mt-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div class="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div class="text-sm font-medium text-gray-500">Total Pages</div>
+        <div class="mt-2 text-3xl font-bold text-gray-900">{{ total_pages_count }}</div>
+      </div>
+      <div class="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div class="text-sm font-medium text-gray-500">Analyzed</div>
+        <div class="mt-2 text-3xl font-bold text-green-600">{{ analyzed_pages_count }}</div>
+      </div>
+      <div class="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div class="text-sm font-medium text-gray-500">AI Discovered</div>
+        <div class="mt-2 text-3xl font-bold text-blue-600">{{ ai_pages_count }}</div>
+      </div>
+      <div class="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <div class="text-sm font-medium text-gray-500">From Sitemap</div>
+        <div class="mt-2 text-3xl font-bold text-purple-600">{{ sitemap_pages_count }}</div>
+      </div>
+    </div>
+
+    <!-- Info Banner -->
+    <div class="p-4 mt-8 bg-blue-50 rounded-lg border border-blue-200">
+      <div class="flex">
+        <svg class="flex-shrink-0 w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+        </svg>
+        <div class="ml-3">
+          <h3 class="text-sm font-medium text-blue-800">About Link Usage in Blog Posts</h3>
+          <p class="mt-1 text-sm text-blue-700">
+            We will always try to insert your page links intelligently into generated blog posts.
+            However, if you want a specific link to <strong>always be included</strong> in every generated post,
+            use the "Always Use" toggle next to that page URL.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sitemap Submission Section -->
+    <div class="mt-8" data-controller="sitemap">
+      <div class="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <h2 class="mb-4 text-lg font-semibold text-gray-900">Sitemap URL</h2>
+
+        {% if project.sitemap_url %}
+          <div class="flex justify-between items-center p-4 bg-gray-50 rounded-md border border-gray-200">
+            <div class="flex flex-1 items-center mr-4 min-w-0">
+              <svg class="flex-shrink-0 mr-3 w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span class="text-sm text-gray-700 truncate">{{ project.sitemap_url }}</span>
+            </div>
+            <button
+              type="button"
+              class="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              data-action="click->sitemap#showForm"
+            >
+              Update
+            </button>
+          </div>
+        {% else %}
+          <div class="p-4 mb-4 text-sm text-blue-700 bg-blue-50 rounded-md border border-blue-200">
+            <p class="font-medium">No sitemap URL configured</p>
+            <p class="mt-1">Add your sitemap URL to automatically discover and analyze pages from your website.</p>
+          </div>
+        {% endif %}
+
+        <!-- Sitemap Form (Hidden by default if sitemap exists) -->
+        <div class="{{ project.sitemap_url|yesno:'hidden,' }}" data-sitemap-target="form">
+          <form
+            data-action="submit->sitemap#submit"
+            data-sitemap-target="formElement"
+            class="mt-4"
+          >
+            {% csrf_token %}
+            <input type="hidden" name="project_id" value="{{ project.id }}">
+
+            <div class="mb-4">
+              <label for="sitemap-url" class="block mb-2 text-sm font-medium text-gray-700">
+                Sitemap URL
+              </label>
+              <input
+                id="sitemap-url"
+                name="sitemap_url"
+                type="url"
+                required
+                placeholder="https://example.com/sitemap.xml"
+                value="{{ project.sitemap_url }}"
+                class="block px-3 py-2 w-full text-gray-900 bg-white rounded-md border border-gray-300 focus:ring-gray-500 focus:border-gray-500"
+                data-sitemap-target="input"
+              />
+              <p class="mt-1 text-xs text-gray-500">
+                Enter the URL of your sitemap.xml file
+              </p>
+            </div>
+
+            <div class="flex gap-3 justify-end">
+              {% if project.sitemap_url %}
+                <button
+                  type="button"
+                  class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  data-action="click->sitemap#hideForm"
+                >
+                  Cancel
+                </button>
+              {% endif %}
+              <button
+                type="submit"
+                class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                data-sitemap-target="submitButton"
+              >
+                <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                </svg>
+                Submit Sitemap
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pages Table -->
+    <div class="mt-8">
+      {% csrf_token %}
+      {% if pages %}
+        <!-- Scroll indicator -->
+        <div class="flex flex-wrap gap-2 justify-between items-center px-4 py-2 mb-2 text-sm text-gray-600 bg-gray-50 rounded-t-lg border border-b-0 border-gray-200">
+          <div class="flex items-center">
+            <svg class="mr-2 w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+            </svg>
+            <span class="font-medium">Scroll horizontally to see all columns</span>
+          </div>
+          <div class="flex flex-wrap gap-2 items-center text-xs text-gray-500">
+            <span>{{ total_pages_count }} page{{ total_pages_count|pluralize }}</span>
+            <span class="hidden md:inline">•</span>
+            <span class="inline-flex items-center px-2 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-300">
+              <svg class="mr-1 w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              {{ project_base_url }}
+            </span>
+          </div>
+        </div>
+
+        <div class="overflow-hidden relative bg-white rounded-b-lg border border-gray-200 shadow-sm">
+          <!-- Gradient overlay on right edge to indicate scrollability -->
+          <div class="hidden absolute top-0 right-0 bottom-0 z-10 w-8 bg-gradient-to-l from-white to-transparent pointer-events-none lg:block"></div>
+
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Page Path
+                  </th>
+                  <th scope="col" class="px-4 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Title
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Source
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Type
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Status
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Date Added
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Date Analyzed
+                  </th>
+                  <th scope="col" class="px-6 py-3 text-xs font-medium tracking-wider text-left text-gray-500 uppercase whitespace-nowrap">
+                    Blog Posts
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="bg-white divide-y divide-gray-200">
+                {% for page in pages %}
+                  <tr class="transition-colors hover:bg-gray-50">
+                    <td class="px-6 py-4">
+                      <div class="flex items-start">
+                        <a href="{{ page.url }}" target="_blank" rel="noopener noreferrer"
+                           class="flex items-center text-sm font-medium text-gray-900 hover:text-gray-600"
+                           title="{{ page.url }}">
+                          <span class="max-w-sm truncate">{{ page.url_path }}</span>
+                          <svg class="flex-shrink-0 ml-1 w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                          </svg>
+                        </a>
+                      </div>
+                    </td>
+                    <td class="px-4 py-4">
+                      <div class="max-w-xs text-sm text-gray-900 truncate" style="max-width: 200px;">
+                        {{ page.title|default:"—" }}
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <span class="inline-flex px-2 text-xs font-semibold leading-5 rounded-full
+                        {% if page.source == 'AI' %}bg-blue-100 text-blue-800{% else %}bg-purple-100 text-purple-800{% endif %}">
+                        {{ page.get_source_display }}
+                      </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-900">
+                        {{ page.get_type_display|default:"—" }}
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      {% if page.date_analyzed %}
+                        <span class="inline-flex px-2 text-xs font-semibold leading-5 text-green-800 bg-green-100 rounded-full">
+                          Analyzed
+                        </span>
+                      {% else %}
+                        <span class="inline-flex px-2 text-xs font-semibold leading-5 text-gray-800 bg-gray-100 rounded-full">
+                          Pending
+                        </span>
+                      {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-500">
+                        {{ page.created_at|date:"M d, Y" }}
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div class="text-sm text-gray-500">
+                        {% if page.date_analyzed %}
+                          {{ page.date_analyzed|date:"M d, Y" }}
+                        {% else %}
+                          <span class="text-gray-400">—</span>
+                        {% endif %}
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                      <div
+                        data-controller="project-page"
+                        data-project-page-page-id-value="{{ page.id }}"
+                        data-project-page-always-use-value="{{ page.always_use|yesno:'true,false' }}"
+                      >
+                        <button
+                          type="button"
+                          class="inline-flex items-center px-3 py-2 text-xs font-medium rounded-md border focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                          data-project-page-target="toggleButton"
+                          data-action="click->project-page#toggleAlwaysUse"
+                        >
+                          <!-- Button content will be set by the controller -->
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {% else %}
+        <div class="p-8 text-center bg-white rounded-lg border border-gray-200 shadow-sm">
+          <svg class="mx-auto w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <h3 class="mt-2 text-sm font-medium text-gray-900">No pages found</h3>
+          <p class="mt-1 text-sm text-gray-500">
+            {% if not project.sitemap_url %}
+              Get started by adding your sitemap URL above to discover pages from your website.
+            {% else %}
+              Your sitemap will be processed shortly. Pages will appear here once they are discovered.
+            {% endif %}
+          </p>
+        </div>
+      {% endif %}
+    </div>
+
+  </div>
+</div>
+{% endblock content %}

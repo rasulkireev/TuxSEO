@@ -20,6 +20,7 @@ from core.choices import (
     KeywordDataSource,
     Language,
     ProfileStates,
+    ProjectPageSource,
     ProjectPageType,
     ProjectStyle,
     ProjectType,
@@ -41,7 +42,6 @@ from core.schemas import (
     GeneratedBlogPostSchema,
     ProjectDetails,
     ProjectPageContext,
-    ProjectPageDetails,
     TitleSuggestion,
     TitleSuggestionContext,
     TitleSuggestions,
@@ -300,6 +300,9 @@ class Project(BaseModel):
     # Agent Settings
     enable_automatic_post_submission = models.BooleanField(default=False)
     enable_automatic_post_generation = models.BooleanField(default=True)
+
+    # Sitemap
+    sitemap_url = models.URLField(max_length=500, blank=True, default="")
 
     # Content from Jina Reader
     date_scraped = models.DateTimeField(null=True, blank=True)
@@ -607,20 +610,23 @@ class Project(BaseModel):
         agent = Agent(
             "google-gla:gemini-2.5-flash",
             output_type=list[str],
+            deps_type=str,
             system_prompt="""
                 You are an expert link extractor.
-                Extract all the links from the text provided.
+                Extract all the URLs from the markdown-formatted text provided.
+                Return only valid, complete URLs (starting with http:// or https://).
+                If the text contains no valid URLs, return an empty list.
             """,
             retries=2,
         )
 
         @agent.system_prompt
-        def add_links(ctx: RunContext[list[str]]) -> str:
-            return f"Links: {ctx.deps}"
+        def add_links_text(ctx: RunContext[str]) -> str:
+            return f"Markdown text containing links:\n{ctx.deps}"
 
         result = run_agent_synchronously(
             agent,
-            "Please extract all the links from the text provided.",
+            "Please extract all the URLs from this markdown text and return them as a list.",
             deps=self.links,
             function_name="get_a_list_of_links",
             model_name="Project",
@@ -829,19 +835,44 @@ class BlogPostTitleSuggestion(BaseModel):
         def add_project_pages(ctx: RunContext[BlogPostGenerationContext]) -> str:
             pages = ctx.deps.project_pages
             if pages:
-                instruction = """
-                  Below is the list of page this project has. Can you insert them into
-                  the content you are about to generate where it makes sense.\n
-                """
-                for page in pages:
-                    instruction += f"""
-                      --------
-                      - Title: {page.title}
-                      - URL: {page.url}
-                      - Description: {page.description}
-                      - Summary: {page.summary}
-                      --------
-                    """
+                always_use_pages = [page for page in pages if page.always_use]
+                optional_pages = [page for page in pages if not page.always_use]
+
+                instruction = ""
+
+                if always_use_pages:
+                    instruction += """
+                      REQUIRED PAGES TO LINK:
+                      The following pages MUST be linked in the content you generate. These are essential pages that should be referenced in the blog post where contextually relevant:
+
+                    """  # noqa: E501
+                    for page in always_use_pages:
+                        instruction += f"""
+                          --------
+                          - Title: {page.title}
+                          - URL: {page.url}
+                          - Description: {page.description}
+                          - Summary: {page.summary}
+                          --------
+                        """
+
+                if optional_pages:
+                    instruction += """
+
+                      OPTIONAL PAGES (Use Intelligently):
+                      The following pages are available for linking if they are contextually relevant to the content. Use your judgment to determine which pages would provide value to readers and enhance the blog post. Only include links where they naturally fit and add value:
+
+                    """  # noqa: E501
+                    for page in optional_pages:
+                        instruction += f"""
+                          --------
+                          - Title: {page.title}
+                          - URL: {page.url}
+                          - Description: {page.description}
+                          - Summary: {page.summary}
+                          --------
+                        """
+
                 return instruction
             else:
                 return ""
@@ -917,14 +948,16 @@ class BlogPostTitleSuggestion(BaseModel):
                   ...
              """
 
+        # Get all analyzed project pages (from AI and sitemap sources)
         project_pages = [
             ProjectPageContext(
                 url=page.url,
                 title=page.title,
                 description=page.description,
                 summary=page.summary,
+                always_use=page.always_use,
             )
-            for page in self.project.project_pages.all()
+            for page in self.project.project_pages.filter(date_analyzed__isnull=False)
         ]
 
         project_keywords = [
@@ -1256,6 +1289,12 @@ class ProjectPage(BaseModel):
     )
 
     url = models.URLField(max_length=200)
+    source = models.CharField(
+        max_length=20,
+        choices=ProjectPageSource.choices,
+        default=ProjectPageSource.AI,
+        help_text="Source of the page: AI-discovered or from Sitemap",
+    )
 
     # Content from Jina Reader
     date_scraped = models.DateTimeField(null=True, blank=True)
@@ -1269,11 +1308,44 @@ class ProjectPage(BaseModel):
     type_ai_guess = models.CharField(max_length=255)
     summary = models.TextField(blank=True)
 
+    # Link usage in blog posts
+    always_use = models.BooleanField(
+        default=False,
+        help_text="When enabled, this page link will always be included in generated blog posts",
+    )
+
     def __str__(self):
         return f"{self.project.name}: {self.title}"
 
     class Meta:
-        unique_together = ("project", "url", "type")
+        unique_together = ("project", "url")
+
+    def save(self, *args, **kwargs):
+        """Override save to validate URL before saving."""
+        self.clean()
+        super().save(*args, **kwargs)
+
+    def clean(self):
+        """Validate that the URL is valid before saving."""
+        from django.core.exceptions import ValidationError
+
+        if not self.url:
+            raise ValidationError("URL cannot be empty")
+
+        if not isinstance(self.url, str):
+            raise ValidationError("URL must be a string")
+
+        if not self.url.startswith(("http://", "https://")):
+            raise ValidationError(
+                f"Invalid URL: {self.url}. URL must start with http:// or https://"
+            )
+
+        # Check if URL looks like an error message or invalid content
+        if any(
+            phrase in self.url.lower()
+            for phrase in ["i need", "please provide", "error", "invalid", "missing"]
+        ):
+            raise ValidationError(f"Invalid URL content detected: {self.url}")
 
     @property
     def web_page_content(self):
@@ -1314,35 +1386,18 @@ class ProjectPage(BaseModel):
         Analyze the page content using Claude via PydanticAI and update project details.
         Should be called after get_page_content().
         """
-        agent = Agent(
-            "google-gla:gemini-2.5-flash",
-            output_type=ProjectPageDetails,
-            deps_type=WebPageContent,
-            system_prompt=(
-                "You are an expert content analyzer. Based on the web page content provided, "
-                "extract and infer the requested information. Make reasonable inferences based "
-                "on available content, context, and industry knowledge."
-            ),
-            retries=2,
+        from core.agents import summarize_page_agent
+
+        webpage_content = WebPageContent(
+            title=self.title,
+            description=self.description,
+            markdown_content=self.markdown_content,
         )
 
-        @agent.system_prompt
-        def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
-            return (
-                "Web page content:"
-                f"Title: {ctx.deps.title}"
-                f"Description: {ctx.deps.description}"
-                f"Content: {ctx.deps.markdown_content}"
-            )
-
-        result = run_agent_synchronously(
-            agent,
+        analysis_result = run_agent_synchronously(
+            summarize_page_agent,
             "Please analyze this web page.",
-            deps=WebPageContent(
-                title=self.title,
-                description=self.description,
-                markdown_content=self.markdown_content,
-            ),
+            deps=webpage_content,
             function_name="analyze_content",
             model_name="ProjectPage",
         )
@@ -1350,10 +1405,10 @@ class ProjectPage(BaseModel):
         self.date_analyzed = timezone.now()
 
         if self.type == "":
-            self.type = result.data.type
+            self.type = analysis_result.data.type
 
-        self.type_ai_guess = result.data.type_ai_guess
-        self.summary = result.data.summary
+        self.type_ai_guess = analysis_result.data.type_ai_guess
+        self.summary = analysis_result.data.summary
         self.save(
             update_fields=[
                 "date_analyzed",

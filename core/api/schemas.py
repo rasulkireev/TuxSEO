@@ -12,6 +12,7 @@ class ProfileSettingsOut(Schema):
 class ProjectSettingsOut(Schema):
     name: str
     url: str
+    sitemap_url: str
     has_auto_submission_setting: bool
 
 
@@ -227,3 +228,27 @@ class GetKeywordDetailsOut(Schema):
     status: str
     message: str | None = None
     keyword: KeywordMetricsOut | None = None
+
+
+class UpdateSitemapUrlIn(Schema):
+    project_id: int
+    sitemap_url: str
+
+
+class SubmitSitemapIn(Schema):
+    sitemap_url: str
+
+
+class UpdateSitemapUrlOut(Schema):
+    status: str
+    message: str
+
+
+class ToggleProjectPageAlwaysUseIn(Schema):
+    page_id: int
+
+
+class ToggleProjectPageAlwaysUseOut(Schema):
+    status: str
+    always_use: bool
+    message: str | None = None

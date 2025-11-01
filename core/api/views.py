@@ -3,6 +3,7 @@ from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
+from django_q.tasks import async_task
 from ninja import NinjaAPI
 
 from core.api.auth import session_auth, superuser_api_auth
@@ -28,10 +29,15 @@ from core.api.schemas import (
     ProjectScanIn,
     ProjectScanOut,
     SubmitFeedbackIn,
+    SubmitSitemapIn,
     ToggleAutoSubmissionOut,
     ToggleProjectKeywordUseIn,
     ToggleProjectKeywordUseOut,
+    ToggleProjectPageAlwaysUseIn,
+    ToggleProjectPageAlwaysUseOut,
     UpdateArchiveStatusIn,
+    UpdateSitemapUrlIn,
+    UpdateSitemapUrlOut,
     UpdateTitleScoreIn,
     UserSettingsOut,
     ValidateUrlIn,
@@ -406,6 +412,92 @@ def toggle_auto_submission(request: HttpRequest, project_id: int):
     return {"status": "success", "enabled": project.enable_automatic_post_submission}
 
 
+@api.post("/projects/update-sitemap-url", response=UpdateSitemapUrlOut, auth=[session_auth])
+def update_sitemap_url(request: HttpRequest, data: UpdateSitemapUrlIn):
+    """
+    Update the sitemap URL for a project. When a sitemap URL is added or updated,
+    it triggers automatic parsing and analysis of the sitemap pages.
+    """
+    profile = request.auth
+    project = get_object_or_404(Project, id=data.project_id, profile=profile)
+
+    sitemap_url = data.sitemap_url.strip()
+
+    if not sitemap_url:
+        return {
+            "status": "error",
+            "message": "Sitemap URL cannot be empty",
+        }
+
+    if not sitemap_url.startswith(("http://", "https://")):
+        return {
+            "status": "error",
+            "message": "Sitemap URL must start with http:// or https://",
+        }
+
+    logger.info(
+        "[Update Sitemap URL] Updating sitemap URL for project",
+        project_id=project.id,
+        profile_id=profile.id,
+        sitemap_url=sitemap_url,
+    )
+
+    project.sitemap_url = sitemap_url
+    project.save(update_fields=["sitemap_url"])
+
+    # Trigger sitemap parsing task
+    async_task("core.tasks.parse_sitemap_and_save_urls", project.id, group="Parse Sitemap")
+
+    return {
+        "status": "success",
+        "message": "Sitemap URL updated successfully. Pages will be analyzed in batches of 10.",
+    }
+
+
+@api.post(
+    "/project/{project_id}/sitemap/submit/", response=UpdateSitemapUrlOut, auth=[session_auth]
+)
+def submit_sitemap(request: HttpRequest, project_id: int, data: SubmitSitemapIn):
+    """
+    Submit/update the sitemap URL for a project. When a sitemap URL is added or updated,
+    it triggers automatic parsing and analysis of the sitemap pages.
+    """  # noqa: E501
+    profile = request.auth
+    project = get_object_or_404(Project, id=project_id, profile=profile)
+
+    sitemap_url = data.sitemap_url.strip()
+
+    if not sitemap_url:
+        return {
+            "status": "error",
+            "message": "Sitemap URL cannot be empty",
+        }
+
+    if not sitemap_url.startswith(("http://", "https://")):
+        return {
+            "status": "error",
+            "message": "Sitemap URL must start with http:// or https://",
+        }
+
+    logger.info(
+        "[Submit Sitemap] Submitting sitemap URL for project",
+        project_id=project.id,
+        profile_id=profile.id,
+        sitemap_url=sitemap_url,
+    )
+
+    project.sitemap_url = sitemap_url
+    project.save(update_fields=["sitemap_url"])
+
+    # Trigger sitemap parsing task
+    async_task("core.tasks.parse_sitemap_and_save_urls", project.id, group="Parse Sitemap")
+
+    return {
+        "status": "success",
+        "message": "Sitemap submitted successfully! Your pages will be analyzed shortly.",
+    }
+
+
 @api.post("/update-title-score/{suggestion_id}", response={200: dict}, auth=[session_auth])
 def update_title_score(request: HttpRequest, suggestion_id: int, data: UpdateTitleScoreIn):
     profile = request.auth
@@ -554,6 +646,7 @@ def user_settings(request: HttpRequest, project_id: int):
         project_data = {
             "name": project.name,
             "url": project.url,
+            "sitemap_url": project.sitemap_url,
             "has_auto_submission_setting": project.has_auto_submission_setting,
         }
         data = {"profile": profile_data, "project": project_data}
@@ -780,7 +873,14 @@ def submit_blog_post(request: HttpRequest, data: BlogPostIn):
         )
         return BlogPostOut(status="success", message="Blog post submitted successfully.")
     except Exception as e:
-        return BlogPostOut(status="error", message=f"Failed to submit blog post: {str(e)}")
+        logger.error(
+            "[Submit Blog Post] Failed to submit blog post",
+            error=str(e),
+            exc_info=True,
+            title=data.title,
+            slug=data.slug,
+        )
+        return BlogPostOut(status="error", message="Failed to submit blog post")
 
 
 @api.post("/post-generated-blog-post", response=PostGeneratedBlogPostOut, auth=[session_auth])
@@ -846,3 +946,39 @@ def fix_generated_blog_post(request: HttpRequest, data: FixGeneratedBlogPostIn):
             exc_info=True,
         )
         return {"status": "error", "message": f"Failed to fix blog post: {str(e)}"}
+
+
+@api.post(
+    "/project-pages/toggle-always-use", response=ToggleProjectPageAlwaysUseOut, auth=[session_auth]
+)
+def toggle_project_page_always_use(request: HttpRequest, data: ToggleProjectPageAlwaysUseIn):
+    """
+    Toggle the always_use field for a ProjectPage.
+    When enabled, the page link will always be included in generated blog posts.
+    """  # noqa: E501
+    profile = request.auth
+
+    try:
+        project_page = get_object_or_404(ProjectPage, id=data.page_id, project__profile=profile)
+
+        project_page.always_use = not project_page.always_use
+        project_page.save(update_fields=["always_use"])
+
+        return {
+            "status": "success",
+            "always_use": project_page.always_use,
+        }
+
+    except Exception as error:
+        logger.error(
+            "Failed to toggle ProjectPage always_use field",
+            error=str(error),
+            exc_info=True,
+            page_id=data.page_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "always_use": False,
+            "message": f"Failed to toggle always use: {str(error)}",
+        }
