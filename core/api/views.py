@@ -873,7 +873,14 @@ def submit_blog_post(request: HttpRequest, data: BlogPostIn):
         )
         return BlogPostOut(status="success", message="Blog post submitted successfully.")
     except Exception as e:
-        return BlogPostOut(status="error", message=f"Failed to submit blog post: {str(e)}")
+        logger.error(
+            "[Submit Blog Post] Failed to submit blog post",
+            error=str(e),
+            exc_info=True,
+            title=data.title,
+            slug=data.slug,
+        )
+        return BlogPostOut(status="error", message="Failed to submit blog post")
 
 
 @api.post("/post-generated-blog-post", response=PostGeneratedBlogPostOut, auth=[session_auth])

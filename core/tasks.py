@@ -116,8 +116,14 @@ def analyze_project_page(project_id: int, link: str):
                     project_id=project_id,
                     page_url=link,
                 )
-        except Exception:
-            pass
+        except Exception as delete_error:
+            logger.error(
+                "[Analyze Project Page] Failed to delete invalid page",
+                project_id=project_id,
+                page_url=link,
+                error=str(delete_error),
+                exc_info=True,
+            )
         return f"Invalid URL validation error for {link}: {str(e)}"
 
     except Exception as e:
@@ -194,13 +200,38 @@ def schedule_project_competitor_analysis(project_id):
 
 
 def analyze_project_competitor(competitor_id):
-    competitor = Competitor.objects.get(id=competitor_id)
-    got_content = competitor.get_page_content()
+    try:
+        competitor = Competitor.objects.get(id=competitor_id)
+    except Competitor.DoesNotExist:
+        logger.error(
+            "[Analyze Project Competitor] Competitor not found",
+            competitor_id=competitor_id,
+        )
+        return f"Competitor {competitor_id} not found"
 
-    if got_content:
-        competitor.analyze_competitor()
+    try:
+        got_content = competitor.get_page_content()
 
-    return f"Analyzed Competitor for {competitor.name}"
+        if got_content:
+            competitor.analyze_competitor()
+            return f"Analyzed Competitor for {competitor.name}"
+        else:
+            logger.warning(
+                "[Analyze Project Competitor] Failed to get page content",
+                competitor_id=competitor_id,
+                competitor_name=competitor.name,
+            )
+            return f"Failed to get content for competitor {competitor.name}"
+
+    except Exception as e:
+        logger.error(
+            "[Analyze Project Competitor] Error analyzing competitor",
+            competitor_id=competitor_id,
+            competitor_name=competitor.name,
+            error=str(e),
+            exc_info=True,
+        )
+        return f"Error analyzing competitor {competitor.name}: {str(e)}"
 
 
 def process_project_keywords(project_id: int):
@@ -989,8 +1020,15 @@ def analyze_sitemap_pages(project_id: int, limit: int = 10):
             # Delete pages that cause errors during analysis
             try:
                 project_page.delete()
-            except Exception:
-                pass
+            except Exception as delete_error:
+                logger.error(
+                    "[Analyze Sitemap Pages] Failed to delete page after analysis error",
+                    project_id=project_id,
+                    project_page_id=project_page.id,
+                    url=project_page.url,
+                    error=str(delete_error),
+                    exc_info=True,
+                )
 
     logger.info(
         "[Analyze Sitemap Pages] Completed analysis",
