@@ -42,7 +42,6 @@ from core.schemas import (
     GeneratedBlogPostSchema,
     ProjectDetails,
     ProjectPageContext,
-    ProjectPageDetails,
     TitleSuggestion,
     TitleSuggestionContext,
     TitleSuggestions,
@@ -1387,35 +1386,18 @@ class ProjectPage(BaseModel):
         Analyze the page content using Claude via PydanticAI and update project details.
         Should be called after get_page_content().
         """
-        agent = Agent(
-            "google-gla:gemini-2.5-flash",
-            output_type=ProjectPageDetails,
-            deps_type=WebPageContent,
-            system_prompt=(
-                "You are an expert content analyzer. Based on the web page content provided, "
-                "extract and infer the requested information. Make reasonable inferences based "
-                "on available content, context, and industry knowledge."
-            ),
-            retries=2,
+        from core.agents import summarize_page_agent
+
+        webpage_content = WebPageContent(
+            title=self.title,
+            description=self.description,
+            markdown_content=self.markdown_content,
         )
 
-        @agent.system_prompt
-        def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
-            return (
-                "Web page content:"
-                f"Title: {ctx.deps.title}"
-                f"Description: {ctx.deps.description}"
-                f"Content: {ctx.deps.markdown_content}"
-            )
-
-        result = run_agent_synchronously(
-            agent,
+        analysis_result = run_agent_synchronously(
+            summarize_page_agent,
             "Please analyze this web page.",
-            deps=WebPageContent(
-                title=self.title,
-                description=self.description,
-                markdown_content=self.markdown_content,
-            ),
+            deps=webpage_content,
             function_name="analyze_content",
             model_name="ProjectPage",
         )
@@ -1423,10 +1405,10 @@ class ProjectPage(BaseModel):
         self.date_analyzed = timezone.now()
 
         if self.type == "":
-            self.type = result.data.type
+            self.type = analysis_result.data.type
 
-        self.type_ai_guess = result.data.type_ai_guess
-        self.summary = result.data.summary
+        self.type_ai_guess = analysis_result.data.type_ai_guess
+        self.summary = analysis_result.data.summary
         self.save(
             update_fields=[
                 "date_analyzed",

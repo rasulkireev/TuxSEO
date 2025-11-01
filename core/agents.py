@@ -3,6 +3,7 @@ from pydantic_ai import Agent, RunContext
 from core.schemas import (
     GeneratedBlogPostSchema,
     ProjectDetails,
+    ProjectPageDetails,
     TitleSuggestion,
     WebPageContent,
 )
@@ -59,7 +60,7 @@ def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
 
 summarize_page_agent = Agent(
     "google-gla:gemini-2.5-flash",
-    output_type=str,
+    output_type=ProjectPageDetails,
     deps_type=WebPageContent,
     system_prompt=(
         "You are an expert content summarizer. Based on the web page content provided, "
