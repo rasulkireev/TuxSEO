@@ -20,6 +20,7 @@ from core.choices import (
     KeywordDataSource,
     Language,
     ProfileStates,
+    ProjectPageSource,
     ProjectPageType,
     ProjectStyle,
     ProjectType,
@@ -610,20 +611,23 @@ class Project(BaseModel):
         agent = Agent(
             "google-gla:gemini-2.5-flash",
             output_type=list[str],
+            deps_type=str,
             system_prompt="""
                 You are an expert link extractor.
-                Extract all the links from the text provided.
+                Extract all the URLs from the markdown-formatted text provided.
+                Return only valid, complete URLs (starting with http:// or https://).
+                If the text contains no valid URLs, return an empty list.
             """,
             retries=2,
         )
 
         @agent.system_prompt
-        def add_links(ctx: RunContext[list[str]]) -> str:
-            return f"Links: {ctx.deps}"
+        def add_links_text(ctx: RunContext[str]) -> str:
+            return f"Markdown text containing links:\n{ctx.deps}"
 
         result = run_agent_synchronously(
             agent,
-            "Please extract all the links from the text provided.",
+            "Please extract all the URLs from this markdown text and return them as a list.",
             deps=self.links,
             function_name="get_a_list_of_links",
             model_name="Project",
@@ -832,19 +836,44 @@ class BlogPostTitleSuggestion(BaseModel):
         def add_project_pages(ctx: RunContext[BlogPostGenerationContext]) -> str:
             pages = ctx.deps.project_pages
             if pages:
-                instruction = """
-                  Below is the list of pages this project has. Can you insert links to them
-                  in the content you are about to generate where it makes sense.\n
-                """
-                for page in pages:
-                    instruction += f"""
-                      --------
-                      - Title: {page.title}
-                      - URL: {page.url}
-                      - Description: {page.description}
-                      - Summary: {page.summary}
-                      --------
-                    """
+                always_use_pages = [page for page in pages if page.always_use]
+                optional_pages = [page for page in pages if not page.always_use]
+
+                instruction = ""
+
+                if always_use_pages:
+                    instruction += """
+                      REQUIRED PAGES TO LINK:
+                      The following pages MUST be linked in the content you generate. These are essential pages that should be referenced in the blog post where contextually relevant:
+
+                    """  # noqa: E501
+                    for page in always_use_pages:
+                        instruction += f"""
+                          --------
+                          - Title: {page.title}
+                          - URL: {page.url}
+                          - Description: {page.description}
+                          - Summary: {page.summary}
+                          --------
+                        """
+
+                if optional_pages:
+                    instruction += """
+
+                      OPTIONAL PAGES (Use Intelligently):
+                      The following pages are available for linking if they are contextually relevant to the content. Use your judgment to determine which pages would provide value to readers and enhance the blog post. Only include links where they naturally fit and add value:
+
+                    """  # noqa: E501
+                    for page in optional_pages:
+                        instruction += f"""
+                          --------
+                          - Title: {page.title}
+                          - URL: {page.url}
+                          - Description: {page.description}
+                          - Summary: {page.summary}
+                          --------
+                        """
+
                 return instruction
             else:
                 return ""
@@ -920,29 +949,17 @@ class BlogPostTitleSuggestion(BaseModel):
                   ...
              """
 
-        # Combine project pages and sitemap pages for context
+        # Get all analyzed project pages (from AI and sitemap sources)
         project_pages = [
             ProjectPageContext(
                 url=page.url,
                 title=page.title,
                 description=page.description,
                 summary=page.summary,
+                always_use=page.always_use,
             )
-            for page in self.project.project_pages.all()
+            for page in self.project.project_pages.filter(date_analyzed__isnull=False)
         ]
-
-        # Add analyzed sitemap pages
-        sitemap_pages = [
-            ProjectPageContext(
-                url=page.url,
-                title=page.title,
-                description=page.description,
-                summary=page.summary,
-            )
-            for page in self.project.sitemap_pages.filter(date_analyzed__isnull=False)
-        ]
-
-        project_pages.extend(sitemap_pages)
 
         project_keywords = [
             pk.keyword.keyword_text
@@ -1273,6 +1290,12 @@ class ProjectPage(BaseModel):
     )
 
     url = models.URLField(max_length=200)
+    source = models.CharField(
+        max_length=20,
+        choices=ProjectPageSource.choices,
+        default=ProjectPageSource.AI,
+        help_text="Source of the page: AI-discovered or from Sitemap",
+    )
 
     # Content from Jina Reader
     date_scraped = models.DateTimeField(null=True, blank=True)
@@ -1286,11 +1309,44 @@ class ProjectPage(BaseModel):
     type_ai_guess = models.CharField(max_length=255)
     summary = models.TextField(blank=True)
 
+    # Link usage in blog posts
+    always_use = models.BooleanField(
+        default=False,
+        help_text="When enabled, this page link will always be included in generated blog posts",
+    )
+
     def __str__(self):
         return f"{self.project.name}: {self.title}"
 
     class Meta:
-        unique_together = ("project", "url", "type")
+        unique_together = ("project", "url")
+
+    def clean(self):
+        """Validate that the URL is valid before saving."""
+        from django.core.exceptions import ValidationError
+
+        if not self.url:
+            raise ValidationError("URL cannot be empty")
+
+        if not isinstance(self.url, str):
+            raise ValidationError("URL must be a string")
+
+        if not self.url.startswith(("http://", "https://")):
+            raise ValidationError(
+                f"Invalid URL: {self.url}. URL must start with http:// or https://"
+            )
+
+        # Check if URL looks like an error message or invalid content
+        if any(
+            phrase in self.url.lower()
+            for phrase in ["i need", "please provide", "error", "invalid", "missing"]
+        ):
+            raise ValidationError(f"Invalid URL content detected: {self.url}")
+
+    def save(self, *args, **kwargs):
+        """Override save to validate URL before saving."""
+        self.clean()
+        super().save(*args, **kwargs)
 
     @property
     def web_page_content(self):
@@ -1806,82 +1862,3 @@ class Feedback(BaseModel):
             recipient_list = ["kireevr1996@gmail.com"]
 
             send_mail(subject, message, from_email, recipient_list, fail_silently=True)
-
-
-class SitemapPage(BaseModel):
-    project = models.ForeignKey(
-        Project, on_delete=models.CASCADE, related_name="sitemap_pages"
-    )
-    url = models.URLField(max_length=500)
-
-    # Content from Jina Reader
-    date_scraped = models.DateTimeField(null=True, blank=True)
-    title = models.CharField(max_length=500, blank=True, default="")
-    description = models.TextField(blank=True, default="")
-    markdown_content = models.TextField(blank=True, default="")
-
-    # AI Content
-    date_analyzed = models.DateTimeField(null=True, blank=True)
-    summary = models.TextField(blank=True, default="")
-
-    class Meta:
-        unique_together = ("project", "url")
-
-    def __str__(self):
-        return f"{self.project.name}: {self.url}"
-
-    def get_page_content(self):
-        """
-        Fetch page content using Jina Reader API and update the sitemap page.
-        Returns True if successful, False otherwise.
-        """
-        title, description, markdown_content = get_markdown_content(self.url)
-
-        if not markdown_content:
-            logger.error(
-                "[Get Page Content] Failed to get page content for sitemap page",
-                url=self.url,
-                project_id=self.project_id,
-            )
-            return False
-
-        self.date_scraped = timezone.now()
-        self.title = title
-        self.description = description
-        self.markdown_content = markdown_content
-
-        self.save(
-            update_fields=[
-                "date_scraped",
-                "title",
-                "description",
-                "markdown_content",
-            ]
-        )
-
-        return True
-
-    def analyze_content(self):
-        """
-        Analyze the page content using AI and update with summary.
-        Should be called after get_page_content().
-        """
-        from core.agents import summarize_page_agent
-
-        result = run_agent_synchronously(
-            summarize_page_agent,
-            "Summarize this web page content in 2-3 sentences.",
-            deps=WebPageContent(
-                title=self.title,
-                description=self.description,
-                markdown_content=self.markdown_content,
-            ),
-            function_name="analyze_content",
-            model_name="SitemapPage",
-        )
-
-        self.summary = result.data
-        self.date_analyzed = timezone.now()
-        self.save(update_fields=["summary", "date_analyzed"])
-
-        return True

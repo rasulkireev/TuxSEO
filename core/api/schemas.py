@@ -235,6 +235,20 @@ class UpdateSitemapUrlIn(Schema):
     sitemap_url: str
 
 
+class SubmitSitemapIn(Schema):
+    sitemap_url: str
+
+
 class UpdateSitemapUrlOut(Schema):
     status: str
     message: str
+
+
+class ToggleProjectPageAlwaysUseIn(Schema):
+    page_id: int
+
+
+class ToggleProjectPageAlwaysUseOut(Schema):
+    status: str
+    always_use: bool
+    message: str | None = None

@@ -23,6 +23,7 @@ urlpatterns = [
     path(
         "project/<int:pk>/keywords/", views.ProjectKeywordsView.as_view(), name="project_keywords"
     ),
+    path("project/<int:pk>/pages/", views.ProjectPagesView.as_view(), name="project_pages"),
     path(
         "project/<int:pk>/publish-history",
         views.PublishHistoryView.as_view(),

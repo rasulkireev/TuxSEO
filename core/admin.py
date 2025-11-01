@@ -7,7 +7,7 @@ from core.models import (
     GeneratedBlogPost,
     Profile,
     Project,
-    SitemapPage,
+    ProjectPage,
 )
 
 admin.site.register(Profile)
@@ -16,4 +16,4 @@ admin.site.register(Project)
 admin.site.register(BlogPostTitleSuggestion)
 admin.site.register(GeneratedBlogPost)
 admin.site.register(AutoSubmissionSetting)
-admin.site.register(SitemapPage)
+admin.site.register(ProjectPage)

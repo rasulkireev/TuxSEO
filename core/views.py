@@ -726,6 +726,57 @@ class ProjectKeywordsView(LoginRequiredMixin, DetailView):
         return context
 
 
+class ProjectPagesView(LoginRequiredMixin, DetailView):
+    model = Project
+    template_name = "project/project_pages.html"
+    context_object_name = "project"
+
+    def get_queryset(self):
+        # Ensure users can only see their own projects
+        return Project.objects.filter(profile=self.request.user.profile)
+
+    def get_context_data(self, **kwargs):
+        from urllib.parse import urlparse
+
+        context = super().get_context_data(**kwargs)
+        project = self.object
+
+        # Parse the project base URL to get the domain
+        project_parsed_url = urlparse(project.url)
+        project_base_url = f"{project_parsed_url.scheme}://{project_parsed_url.netloc}"
+
+        # Get all pages for this project, ordered by analyzed status and creation date
+        all_project_pages = project.project_pages.order_by("-date_analyzed", "-created_at")
+
+        # Filter to only show internal pages (same domain as project)
+        filtered_pages = []
+        for page in all_project_pages:
+            page_parsed_url = urlparse(page.url)
+            page_base_url = f"{page_parsed_url.scheme}://{page_parsed_url.netloc}"
+
+            # Only include pages that match the project's base URL
+            if page_base_url == project_base_url:
+                # Add the path for display purposes
+                page.url_path = page_parsed_url.path or "/"
+                filtered_pages.append(page)
+
+        # Calculate statistics (based on filtered pages)
+        total_pages_count = len(filtered_pages)
+        analyzed_pages_count = sum(1 for page in filtered_pages if page.date_analyzed)
+        ai_pages_count = sum(1 for page in filtered_pages if page.source == "AI")
+        sitemap_pages_count = sum(1 for page in filtered_pages if page.source == "SITEMAP")
+
+        context["pages"] = filtered_pages
+        context["project_base_url"] = project_base_url
+        context["total_pages_count"] = total_pages_count
+        context["analyzed_pages_count"] = analyzed_pages_count
+        context["ai_pages_count"] = ai_pages_count
+        context["sitemap_pages_count"] = sitemap_pages_count
+        context["unanalyzed_pages_count"] = total_pages_count - analyzed_pages_count
+
+        return context
+
+
 class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
     model = GeneratedBlogPost
     template_name = "blog/generated_blog_post_detail.html"

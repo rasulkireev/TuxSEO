@@ -18,6 +18,7 @@ class StaticViewSitemap(sitemaps.Sitemap):
             List: urlNames that will be in the Sitemap
         """
         return [
+            "landing",
             "home",
             "uses",
             "pricing",
