@@ -189,6 +189,19 @@ def schedule_project_page_analysis(project_id):
 
 
 def schedule_project_competitor_analysis(project_id):
+    """
+    Find competitors for a project and populate their details.
+
+    This task:
+    1. Uses Perplexity to find competitors
+    2. Saves competitor details (name, url, description)
+    3. Fetches homepage content using Jina Reader
+    4. Populates competitor name and description
+
+    Note:
+    - Competitor analysis (analyze_competitor) is not run to save costs
+    - VS blog post generation is triggered manually by the user via the UI
+    """
     project = Project.objects.get(id=project_id)
     competitors = project.find_competitors()
     if competitors:
@@ -196,10 +209,21 @@ def schedule_project_competitor_analysis(project_id):
         for competitor in competitors:
             async_task(analyze_project_competitor, competitor.id)
 
-    return f"Saved Competitors for {project.name}"
+    return f"Saved competitors and scheduled content fetching for {project.name}"
 
 
 def analyze_project_competitor(competitor_id):
+    """
+    Fetch competitor homepage content and populate competitor details.
+
+    This task:
+    1. Fetches homepage content using Jina Reader (title, description, markdown)
+    2. Populates competitor name/description using AI
+
+    Note:
+    - The full competitor analysis (analyze_competitor) is not run to save costs
+    - VS blog post generation is triggered manually by the user via the UI
+    """
     try:
         competitor = Competitor.objects.get(id=competitor_id)
     except Competitor.DoesNotExist:
@@ -213,8 +237,16 @@ def analyze_project_competitor(competitor_id):
         got_content = competitor.get_page_content()
 
         if got_content:
-            competitor.analyze_competitor()
-            return f"Analyzed Competitor for {competitor.name}"
+            competitor.populate_name_description()
+            # competitor.analyze_competitor()
+            # Note: competitor.analyze_competitor() is intentionally skipped to save costs
+            # VS blog post generation is now triggered manually by the user
+            logger.info(
+                "[Analyze Project Competitor] Competitor details populated",
+                competitor_id=competitor_id,
+                competitor_name=competitor.name,
+            )
+            return f"Got content for {competitor.name}. VS blog post can be generated manually by the user."  # noqa: E501
         else:
             logger.warning(
                 "[Analyze Project Competitor] Failed to get page content",
@@ -225,13 +257,13 @@ def analyze_project_competitor(competitor_id):
 
     except Exception as e:
         logger.error(
-            "[Analyze Project Competitor] Error analyzing competitor",
+            "[Analyze Project Competitor] Error processing competitor",
             competitor_id=competitor_id,
             competitor_name=competitor.name,
             error=str(e),
             exc_info=True,
         )
-        return f"Error analyzing competitor {competitor.name}: {str(e)}"
+        return f"Error processing competitor {competitor.name}: {str(e)}"
 
 
 def process_project_keywords(project_id: int):

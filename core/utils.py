@@ -204,7 +204,7 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
             function_name="blog_post_has_valid_ending",
         )
 
-        ending_is_valid = result.data
+        ending_is_valid = result.output
 
         if ending_is_valid:
             logger.info(

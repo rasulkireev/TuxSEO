@@ -138,8 +138,7 @@ class GenerateCompetitorVsTitleIn(Schema):
 class GenerateCompetitorVsTitleOut(Schema):
     status: str
     message: str = ""
-    suggestion: TitleSuggestionOut | None = None
-    suggestion_html: str = ""
+    competitor_id: int | None = None
 
 
 class SubmitFeedbackIn(Schema):

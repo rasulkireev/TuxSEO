@@ -17,13 +17,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.0.7] - 2025-11-02
 ### Changed
 - Project UI updated to be more intuitive.
+- PydanticAI library upgrade.
+- Competitor blog post generation agent moved to centralized agents.py file for easier maintenance.
 
 ### Added
 - Copy as HTML on Generated Blog Posts.
 - PDF Generation for blog posts.
 - Centralized location of all AI models used in the app.
 - Referrer model to display banners for expected referrer like producthunt
-
+- Competitors page to view all competitors for any given project
 
 ## [0.0.7] - 2025-11-01
 ### Changed

@@ -27,6 +27,15 @@ def post_structure() -> str:
     """  # noqa: E501
 
 
+def markdown_lists() -> str:
+    return """
+        - Add an empty line before the first item in the list.
+        - Use lists for bullet points where necessary.
+        - Use numbered lists for steps or instructions.
+        - Use nested lists for sub-points.
+    """  # noqa: E501
+
+
 def filler_content() -> str:
     return """
         - Do not add content that needs to be filled in later.
@@ -53,7 +62,12 @@ def add_project_details(ctx: RunContext[BlogPostGenerationContext]) -> str:
     """
 
 
-def add_project_pages(ctx: RunContext[BlogPostGenerationContext]) -> str:
+def add_project_pages(ctx: RunContext) -> str:
+    """
+    Generic function to add project pages to any context that has a project_pages attribute.
+    Works with BlogPostGenerationContext, CompetitorVsPostContext, and any other context
+    that includes project pages.
+    """
     pages = ctx.deps.project_pages
     if pages:
         always_use_pages = [page for page in pages if page.always_use]
