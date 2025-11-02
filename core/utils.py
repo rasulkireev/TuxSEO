@@ -5,7 +5,7 @@ from django.conf import settings
 from django.forms.utils import ErrorList
 from pydantic_ai import Agent
 
-from core.choices import KeywordDataSource
+from core.choices import KeywordDataSource, get_default_ai_model
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.model_utils import run_agent_synchronously
 from core.models import GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
@@ -173,7 +173,7 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
     content = content.strip()
 
     agent = Agent(
-        "google-gla:gemini-2.5-flash",
+        get_default_ai_model(),
         output_type=bool,
         system_prompt="""
         You are an expert content editor analyzing blog post endings. Your task is to determine
