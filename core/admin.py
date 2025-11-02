@@ -4,6 +4,7 @@ from core.models import (
     AutoSubmissionSetting,
     BlogPost,
     BlogPostTitleSuggestion,
+    EmailSent,
     GeneratedBlogPost,
     Profile,
     Project,
@@ -78,3 +79,4 @@ admin.site.register(BlogPostTitleSuggestion)
 admin.site.register(GeneratedBlogPost)
 admin.site.register(AutoSubmissionSetting)
 admin.site.register(ProjectPage)
+admin.site.register(EmailSent)
