@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Project UI updated to be more intuitive.
 
+### Added
+- Copy as HTML on Generated Blog Posts.
+
 
 ## [0.0.7] - 2025-11-01
 ### Changed
