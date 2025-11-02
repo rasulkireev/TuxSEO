@@ -35,6 +35,11 @@ urlpatterns = [
         views.GeneratedBlogPostDetailView.as_view(),
         name="generated_blog_post_detail",
     ),
+    path(
+        "project/<int:project_pk>/post/<int:pk>/download-pdf/",
+        views.download_blog_post_pdf,
+        name="download_blog_post_pdf",
+    ),
     # utils
     path("resend-confirmation/", views.resend_confirmation_email, name="resend_confirmation"),
     # payments
