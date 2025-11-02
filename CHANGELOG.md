@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Project UI updated to be more intuitive.
 
+### Added
+- Copy as HTML on Generated Blog Posts.
+- PDF Generation for blog posts.
+- Centralized location of all AI models used in the app.
+
 
 ## [0.0.7] - 2025-11-01
 ### Changed

@@ -27,6 +27,7 @@ from core.agents import (
 )
 from core.base_models import BaseModel
 from core.choices import (
+    AIModel,
     BlogPostStatus,
     Category,
     ContentType,
@@ -37,6 +38,7 @@ from core.choices import (
     ProjectPageType,
     ProjectStyle,
     ProjectType,
+    get_default_ai_model,
 )
 from core.model_utils import (
     generate_random_key,
@@ -469,10 +471,10 @@ class Project(BaseModel):
         return True
 
     def generate_title_suggestions(  # noqa: C901
-        self, content_type=ContentType.SHARING, num_titles=3, user_prompt=""
+        self, content_type=ContentType.SHARING, num_titles=3, user_prompt="", model=None
     ):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=TitleSuggestions,
             deps_type=TitleSuggestionContext,
             system_prompt=TITLE_SUGGESTION_SYSTEM_PROMPTS[content_type],
@@ -617,9 +619,9 @@ class Project(BaseModel):
 
             return created_suggestions
 
-    def get_a_list_of_links(self):
+    def get_a_list_of_links(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=list[str],
             deps_type=str,
             system_prompt="""
@@ -647,7 +649,7 @@ class Project(BaseModel):
 
     def find_competitors(self):
         model = OpenAIModel(
-            "sonar",
+            AIModel.PERPLEXITY_SONAR,
             provider=OpenAIProvider(
                 base_url="https://api.perplexity.ai",
                 api_key=settings.PERPLEXITY_API_KEY,
@@ -727,9 +729,9 @@ class Project(BaseModel):
 
         return result.data
 
-    def get_and_save_list_of_competitors(self):
+    def get_and_save_list_of_competitors(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=list[CompetitorDetails],
             system_prompt="""
                 You are an expert data extractor.
@@ -812,9 +814,9 @@ class BlogPostTitleSuggestion(BaseModel):
             suggested_meta_description=self.suggested_meta_description,
         )
 
-    def generate_content(self, content_type=ContentType.SHARING):
+    def generate_content(self, content_type=ContentType.SHARING, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=GeneratedBlogPostSchema,
             deps_type=BlogPostGenerationContext,
             system_prompt=GENERATE_CONTENT_SYSTEM_PROMPTS[content_type],
@@ -1404,9 +1406,9 @@ class Competitor(BaseModel):
 
         return True
 
-    def populate_name_description(self):
+    def populate_name_description(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=CompetitorDetails,
             deps_type=WebPageContent,
             system_prompt=(
@@ -1443,9 +1445,9 @@ class Competitor(BaseModel):
 
         return True
 
-    def analyze_competitor(self):
+    def analyze_competitor(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=CompetitorAnalysis,
             deps_type=CompetitorAnalysisContext,
             system_prompt=(

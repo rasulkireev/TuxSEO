@@ -8,6 +8,7 @@ from core.agent_system_prompts import (
     add_title_details,
     add_webpage_content,
 )
+from core.choices import get_default_ai_model
 from core.schemas import (
     BlogPostGenerationContext,
     ProjectDetails,
@@ -18,7 +19,7 @@ from core.schemas import (
 ########################################################
 
 content_editor_agent = Agent(
-    "google-gla:gemini-2.5-flash",
+    get_default_ai_model(),
     output_type=str,
     deps_type=BlogPostGenerationContext,
     system_prompt="""
@@ -48,7 +49,7 @@ content_editor_agent.system_prompt(add_target_keywords)
 ########################################################
 
 analyze_project_agent = Agent(
-    "google-gla:gemini-2.5-flash",
+    get_default_ai_model(),
     output_type=ProjectDetails,
     deps_type=WebPageContent,
     system_prompt=(
@@ -64,7 +65,7 @@ analyze_project_agent.system_prompt(add_webpage_content)
 ########################################################
 
 summarize_page_agent = Agent(
-    "google-gla:gemini-2.5-flash",
+    get_default_ai_model(),
     output_type=ProjectPageDetails,
     deps_type=WebPageContent,
     system_prompt=(

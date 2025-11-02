@@ -10,15 +10,16 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
-
-User = get_user_model()
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, Prefetch, Q
+from django.http import HttpResponse
 from django.shortcuts import redirect
+from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView, UpdateView
 from django_q.tasks import async_task
 from djstripe import models as djstripe_models
+from weasyprint import HTML
 
 from core.choices import BlogPostStatus, Language, ProfileStates
 from core.forms import AutoSubmissionSettingForm, ProfileUpdateForm, ProjectScanForm
@@ -42,6 +43,8 @@ stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
 logger = get_tuxseo_logger(__name__)
+
+User = get_user_model()
 
 
 class LandingView(TemplateView):
@@ -838,6 +841,40 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
                     )
 
         return context
+
+
+@login_required
+def download_blog_post_pdf(request, project_pk, pk):
+    generated_post = GeneratedBlogPost.objects.filter(
+        project__profile=request.user.profile, project__pk=project_pk, pk=pk
+    ).first()
+
+    if not generated_post:
+        messages.error(request, "Blog post not found.")
+        return redirect("home")
+
+    html_content = render_to_string(
+        "blog/generated_blog_post_pdf.html",
+        {
+            "generated_post": generated_post,
+            "project": generated_post.project,
+        },
+    )
+
+    pdf_file = HTML(string=html_content).write_pdf()
+
+    response = HttpResponse(pdf_file, content_type="application/pdf")
+    filename = f"{generated_post.slug}.pdf"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    logger.info(
+        "PDF downloaded for blog post",
+        blog_post_id=generated_post.id,
+        project_id=generated_post.project.id,
+        user_id=request.user.id,
+    )
+
+    return response
 
 
 class PublishHistoryView(LoginRequiredMixin, DetailView):

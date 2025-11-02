@@ -61,10 +61,10 @@
     </div>
 
     <!-- Main Layout: Sidebar + Content -->
-    <div class="flex flex-col gap-6 lg:flex-row">
+    <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
 
       <!-- Sidebar Navigation -->
-      <aside class="lg:w-64">
+      <aside class="w-full lg:w-64 lg:flex-shrink-0">
         <nav class="sticky top-24 bg-white rounded-lg border border-gray-200 shadow-sm">
           <div class="p-4">
             <h2 class="px-3 mb-2 text-xs font-semibold tracking-wider text-gray-500 uppercase">
@@ -134,7 +134,7 @@
       </aside>
 
       <!-- Main Content Area -->
-      <main class="flex-1 min-w-0">
+      <main class="relative flex-1 w-full pointer-events-auto lg:min-w-0">
         {% block project_content %}
         <!-- Project-specific content goes here -->
         {% endblock project_content %}
