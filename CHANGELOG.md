@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Copy as HTML on Generated Blog Posts.
 - PDF Generation for blog posts.
 - Centralized location of all AI models used in the app.
+- Referrer model to display banners for expected referrer like producthunt
 
 
 ## [0.0.7] - 2025-11-01
