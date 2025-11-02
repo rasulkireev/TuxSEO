@@ -47,6 +47,22 @@ logger = get_tuxseo_logger(__name__)
 class LandingView(TemplateView):
     template_name = "pages/landing.html"
 
+    def get_context_data(self, **kwargs):
+        from core.models import ReferrerBanner
+
+        context = super().get_context_data(**kwargs)
+
+        referrer_code = self.request.GET.get("ref")
+        if referrer_code:
+            try:
+                banner = ReferrerBanner.objects.get(referrer=referrer_code)
+                if banner.should_display:
+                    context["referrer_banner"] = banner
+            except ReferrerBanner.DoesNotExist:
+                pass
+
+        return context
+
 
 class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "pages/home.html"

@@ -1763,3 +1763,43 @@ class Feedback(BaseModel):
             recipient_list = ["kireevr1996@gmail.com"]
 
             send_mail(subject, message, from_email, recipient_list, fail_silently=True)
+
+
+class ReferrerBanner(BaseModel):
+    referrer = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="The referrer code from URL parameter (e.g., 'producthunt' from ?ref=producthunt)",
+    )
+    referrer_printable_name = models.CharField(
+        max_length=200,
+        help_text="Human-readable name to display in banner (e.g., 'Product Hunt')",
+    )
+    expiry_date = models.DateTimeField(help_text="When to stop showing this banner")
+    coupon_code = models.CharField(
+        max_length=100, blank=True, help_text="Optional discount coupon code"
+    )
+    discount_amount = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0,
+        help_text="Discount from 0.00 (0%) to 1.00 (100%)",
+    )
+    is_active = models.BooleanField(
+        default=True, help_text="Manually enable/disable banner without deleting it"
+    )
+
+    def __str__(self):
+        return f"{self.referrer_printable_name} ({self.referrer})"
+
+    @property
+    def is_expired(self):
+        return timezone.now() > self.expiry_date
+
+    @property
+    def should_display(self):
+        return self.is_active and not self.is_expired
+
+    @property
+    def discount_percentage(self):
+        return int(self.discount_amount * 100)
