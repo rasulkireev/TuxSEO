@@ -110,6 +110,7 @@ class ProjectPageSource(models.TextChoices):
 
 class AIModel(models.TextChoices):
     GEMINI_FLASH = "google-gla:gemini-2.5-flash", "Gemini 2.5 Flash"
+    PERPLEXITY_SONAR = "sonar", "Perplexity Sonar"
 
 
 DEFAULT_AI_MODEL = AIModel.GEMINI_FLASH

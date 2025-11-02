@@ -27,6 +27,7 @@ from core.agents import (
 )
 from core.base_models import BaseModel
 from core.choices import (
+    AIModel,
     BlogPostStatus,
     Category,
     ContentType,
@@ -648,7 +649,7 @@ class Project(BaseModel):
 
     def find_competitors(self):
         model = OpenAIModel(
-            "sonar",
+            AIModel.PERPLEXITY_SONAR,
             provider=OpenAIProvider(
                 base_url="https://api.perplexity.ai",
                 api_key=settings.PERPLEXITY_API_KEY,
