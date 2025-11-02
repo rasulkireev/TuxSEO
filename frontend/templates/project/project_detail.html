@@ -197,12 +197,86 @@
               >
                 SEO Optimized
               </button>
+              <button
+                data-action="title-suggestions#switchTab"
+                data-tab="VS_COMPETITOR"
+                class="px-1 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 focus:outline-none"
+              >
+                Vs. Competitor
+              </button>
             </nav>
           </div>
         </div>
 
         <!-- Suggestions Lists -->
         <div class="space-y-6" data-title-suggestions-target="suggestionsList">
+
+          <!-- VS Competitor Section (only visible when VS_COMPETITOR tab is active) -->
+          <div id="vs-competitor-section" class="hidden" data-title-suggestions-target="vsCompetitorSection">
+            <div class="mb-6 p-6 bg-blue-50 rounded-lg border border-blue-200">
+              <h4 class="mb-2 text-base font-semibold text-blue-900">Competitor Comparison Posts</h4>
+              <p class="mb-4 text-sm text-blue-700">
+                Generate comparison articles that position your product against competitors.
+                These posts use GPT Researcher for in-depth competitive analysis.
+              </p>
+              
+              {% if project.competitors.all %}
+                <div class="space-y-3">
+                  <h5 class="text-sm font-medium text-blue-900">Select a competitor to compare:</h5>
+                  <div class="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                    {% for competitor in project.competitors.all %}
+                      <div class="p-4 bg-white rounded-md border border-blue-200 shadow-sm"
+                           data-controller="vs-competitor"
+                           data-vs-competitor-competitor-id-value="{{ competitor.id }}">
+                        <div class="mb-2">
+                          <h6 class="text-sm font-semibold text-gray-900">{{ competitor.name }}</h6>
+                          <p class="text-xs text-gray-500 truncate">{{ competitor.url }}</p>
+                        </div>
+                        <p class="mb-3 text-xs text-gray-600 line-clamp-2">{{ competitor.description }}</p>
+                        
+                        {% if user.profile.reached_title_generation_limit %}
+                          <a
+                            href="{% url 'settings' %}"
+                            class="inline-flex items-center px-3 py-2 w-full text-xs font-medium text-center text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
+                            data-controller="tooltip"
+                            data-tooltip-message-value="You've reached the suggestion limit. Upgrade to Pro for unlimited suggestions."
+                            data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
+                          >
+                            <svg class="mr-1.5 w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Generate Title
+                          </a>
+                        {% else %}
+                          <button
+                            data-action="vs-competitor#generate"
+                            class="inline-flex items-center px-3 py-2 w-full text-xs font-medium text-center text-white bg-blue-600 rounded-md border border-blue-600 transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <svg class="mr-1.5 w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            Generate Title
+                          </button>
+                        {% endif %}
+                      </div>
+                    {% endfor %}
+                  </div>
+                </div>
+              {% else %}
+                <div class="p-4 text-sm text-blue-700 bg-blue-100 rounded-md">
+                  <p class="mb-2 font-medium">No competitors found yet.</p>
+                  <p>We're analyzing competitors for your project. This may take a few minutes. Check back soon!</p>
+                </div>
+              {% endif %}
+            </div>
+
+            <!-- VS Competitor Suggestions Container -->
+            <div id="vs-competitor-suggestions" class="space-y-4">
+              {% for suggestion in vs_competitor_suggestions %}
+                {% include "components/blog_post_suggestion_card.html" with suggestion=suggestion %}
+              {% endfor %}
+            </div>
+          </div>
 
           <!-- Active Suggestions -->
           <div id="active-suggestions-list" data-controller="archived-list" class="archived-list" data-archived-list-name-value="active">

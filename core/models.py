@@ -774,6 +774,14 @@ class BlogPostTitleSuggestion(BaseModel):
         on_delete=models.CASCADE,
         related_name="blog_post_title_suggestions",
     )
+    competitor = models.ForeignKey(
+        "Competitor",
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="blog_post_title_suggestions",
+        help_text="Competitor for VS_COMPETITOR content type",
+    )
 
     title = models.CharField(max_length=255)
     content_type = models.CharField(
@@ -786,6 +794,9 @@ class BlogPostTitleSuggestion(BaseModel):
     prompt = models.TextField(blank=True)
     target_keywords = models.JSONField(default=list, blank=True, null=True)
     suggested_meta_description = models.TextField(blank=True)
+    gpt_researcher_report = models.TextField(
+        blank=True, help_text="GPT Researcher report for VS_COMPETITOR content"
+    )
 
     user_score = models.SmallIntegerField(
         default=0,
@@ -813,6 +824,27 @@ class BlogPostTitleSuggestion(BaseModel):
         )
 
     def generate_content(self, content_type=ContentType.SHARING):
+        if content_type == ContentType.VS_COMPETITOR:
+            from core.gpt_researcher_integration import generate_vs_competitor_content_sync
+
+            if not self.competitor:
+                logger.error(
+                    "[Generate Content] VS_COMPETITOR content type requires competitor",
+                    title_suggestion_id=self.id,
+                )
+                raise ValueError("VS_COMPETITOR content type requires a competitor")
+
+            if not self.gpt_researcher_report:
+                gpt_researcher_report = generate_vs_competitor_content_sync(
+                    project_name=self.project.name,
+                    competitor_name=self.competitor.name,
+                    competitor_url=self.competitor.url,
+                    project_summary=self.project.summary,
+                    competitor_description=self.competitor.description,
+                )
+                self.gpt_researcher_report = gpt_researcher_report
+                self.save(update_fields=["gpt_researcher_report"])
+
         agent = Agent(
             "google-gla:gemini-2.5-flash",
             output_type=GeneratedBlogPostSchema,
@@ -831,6 +863,20 @@ class BlogPostTitleSuggestion(BaseModel):
         agent.system_prompt(valid_markdown_format)
         agent.system_prompt(post_structure)
         agent.system_prompt(filler_content)
+
+        if content_type == ContentType.VS_COMPETITOR and self.gpt_researcher_report:
+
+            @agent.system_prompt
+            def add_gpt_researcher_findings(ctx: RunContext[BlogPostGenerationContext]) -> str:
+                return f"""
+                    GPT Researcher Findings:
+                    The following is detailed research comparing the two products:
+
+                    {self.gpt_researcher_report}
+
+                    Use this research as the foundation for your comparison article.
+                    Make sure to incorporate specific details, features, and insights from this research.
+                """
 
         # Get all analyzed project pages (from AI and sitemap sources)
         project_pages = [
@@ -1519,6 +1565,108 @@ class Competitor(BaseModel):
         self.save()
 
         return True
+
+    def generate_vs_title_suggestion(self, num_titles=1):
+        """
+        Generate a vs competitor title suggestion for this competitor.
+        Returns BlogPostTitleSuggestion instance.
+        """
+        from core.schemas import TitleSuggestions, VsCompetitorTitleContext
+
+        agent = Agent(
+            "google-gla:gemini-2.5-flash",
+            output_type=TitleSuggestions,
+            deps_type=VsCompetitorTitleContext,
+            system_prompt=TITLE_SUGGESTION_SYSTEM_PROMPTS[ContentType.VS_COMPETITOR],
+            retries=2,
+            model_settings={"temperature": 0.9},
+        )
+
+        @agent.system_prompt
+        def add_todays_date() -> str:
+            return f"Today's Date: {timezone.now().strftime('%Y-%m-%d')}"
+
+        @agent.system_prompt
+        def add_project_details(ctx: RunContext[VsCompetitorTitleContext]) -> str:
+            project = ctx.deps.project_details
+            return f"""
+                My Project Details:
+                - Project Name: {project.name}
+                - Project Type: {project.type}
+                - Project Summary: {project.summary}
+                - Key Features: {project.key_features}
+                - Target Audience: {project.target_audience_summary}
+            """
+
+        @agent.system_prompt
+        def add_competitor_details(ctx: RunContext[VsCompetitorTitleContext]) -> str:
+            competitor = ctx.deps.competitor_details
+            return f"""
+                Competitor Details:
+                - Competitor Name: {competitor.name}
+                - Competitor URL: {competitor.url}
+                - Competitor Description: {competitor.description}
+            """
+
+        @agent.system_prompt
+        def add_number_of_titles_to_generate(ctx: RunContext[VsCompetitorTitleContext]) -> str:
+            return f"""IMPORTANT: Generate only {ctx.deps.num_titles} titles."""
+
+        @agent.system_prompt
+        def add_language_specification(ctx: RunContext[VsCompetitorTitleContext]) -> str:
+            project = ctx.deps.project_details
+            return f"""
+                IMPORTANT: Generate all titles in {project.language} language.
+            """
+
+        deps = VsCompetitorTitleContext(
+            project_details=self.project.project_details,
+            competitor_details=self.competitor_details,
+            num_titles=num_titles,
+            liked_suggestions=[
+                suggestion.title
+                for suggestion in self.project.liked_title_suggestions.filter(
+                    content_type=ContentType.VS_COMPETITOR
+                )
+            ],
+            disliked_suggestions=[
+                suggestion.title
+                for suggestion in self.project.disliked_title_suggestions.filter(
+                    content_type=ContentType.VS_COMPETITOR
+                )
+            ],
+            neutral_suggestions=[
+                suggestion.title
+                for suggestion in self.project.neutral_title_suggestions.filter(
+                    content_type=ContentType.VS_COMPETITOR
+                )
+            ],
+        )
+
+        result = run_agent_synchronously(
+            agent,
+            "Please generate vs competitor blog post title suggestions.",
+            deps=deps,
+            function_name="generate_vs_title_suggestion",
+            model_name="Competitor",
+        )
+
+        title_data = result.data.titles[0]
+        suggestion = BlogPostTitleSuggestion.objects.create(
+            project=self.project,
+            competitor=self,
+            title=title_data.title,
+            description=title_data.description,
+            category=title_data.category,
+            content_type=ContentType.VS_COMPETITOR,
+            target_keywords=title_data.target_keywords,
+            suggested_meta_description=title_data.suggested_meta_description,
+        )
+
+        if suggestion.target_keywords:
+            async_task("core.tasks.save_title_suggestion_keywords", suggestion.id)
+
+        return suggestion
 
 
 class Keyword(BaseModel):

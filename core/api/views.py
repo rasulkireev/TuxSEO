@@ -23,6 +23,8 @@ from core.api.schemas import (
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
+    GenerateVsCompetitorTitleIn,
+    GenerateVsCompetitorTitleOut,
     GetKeywordDetailsOut,
     PostGeneratedBlogPostIn,
     PostGeneratedBlogPostOut,
@@ -318,6 +320,66 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
             user_prompt=data.user_prompt,
         )
         raise e
+
+
+@api.post(
+    "/generate-vs-competitor-title", response=GenerateVsCompetitorTitleOut, auth=[session_auth]
+)
+def generate_vs_competitor_title(request: HttpRequest, data: GenerateVsCompetitorTitleIn):
+    """Generate a vs competitor title suggestion for a specific competitor."""
+    profile = request.auth
+    competitor = get_object_or_404(Competitor, id=data.competitor_id)
+    project = competitor.project
+
+    if project.profile != profile:
+        return {
+            "status": "error",
+            "message": "You do not have permission to access this competitor",
+        }
+
+    if profile.reached_title_generation_limit:
+        limit = profile.title_suggestion_limit
+        current_count = profile.number_of_title_suggestions_this_month
+        message = f"Title generation limit reached ({current_count}/{limit} suggestions this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited suggestions."  # noqa: E501
+        return {
+            "status": "error",
+            "message": message,
+        }
+
+    try:
+        suggestion = competitor.generate_vs_title_suggestion(num_titles=1)
+
+        context = {
+            "suggestion": suggestion,
+            "has_pro_subscription": profile.is_on_pro_plan,
+            "has_auto_submission_setting": project.has_auto_submission_setting,
+        }
+        suggestion_html = render_to_string("components/blog_post_suggestion_card.html", context)
+
+        return {
+            "status": "success",
+            "suggestion": {
+                "id": suggestion.id,
+                "title": suggestion.title,
+                "description": suggestion.description,
+                "category": suggestion.category,
+                "target_keywords": suggestion.target_keywords,
+                "suggested_meta_description": suggestion.suggested_meta_description,
+            },
+            "suggestion_html": suggestion_html,
+        }
+    except Exception as error:
+        logger.error(
+            "[GenerateVsCompetitorTitle] Error generating vs competitor title",
+            error=str(error),
+            exc_info=True,
+            competitor_id=competitor.id,
+            project_id=project.id,
+        )
+        return {
+            "status": "error",
+            "message": "An unexpected error occurred while generating the title suggestion",
+        }
 
 
 @api.post(

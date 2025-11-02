@@ -7,7 +7,7 @@ export default class extends Controller {
     currentTab: String
   };
 
-  static targets = ["suggestionsList", "suggestionsContainer", "activeSuggestionsList"];
+  static targets = ["suggestionsList", "suggestionsContainer", "activeSuggestionsList", "vsCompetitorSection"];
 
   connect() {
     // Get the last selected tab from localStorage, default to "SHARING" if none exists
@@ -50,15 +50,28 @@ export default class extends Controller {
   }
 
   filterSuggestions() {
-    const suggestions = this.suggestionsListTarget.querySelectorAll("[data-suggestion-type]");
-
-    suggestions.forEach(suggestion => {
-      if (suggestion.dataset.suggestionType === this.currentTabValue) {
-        suggestion.classList.remove("hidden");
-      } else {
-        suggestion.classList.add("hidden");
+    if (this.currentTabValue === "VS_COMPETITOR") {
+      if (this.hasVsCompetitorSectionTarget) {
+        this.vsCompetitorSectionTarget.classList.remove("hidden");
       }
-    });
+      const archivedLists = this.element.querySelectorAll(".archived-list");
+      archivedLists.forEach(list => list.classList.add("hidden"));
+    } else {
+      if (this.hasVsCompetitorSectionTarget) {
+        this.vsCompetitorSectionTarget.classList.add("hidden");
+      }
+      const archivedLists = this.element.querySelectorAll(".archived-list");
+      archivedLists.forEach(list => list.classList.remove("hidden"));
+      
+      const suggestions = this.suggestionsListTarget.querySelectorAll("[data-suggestion-type]");
+      suggestions.forEach(suggestion => {
+        if (suggestion.dataset.suggestionType === this.currentTabValue) {
+          suggestion.classList.remove("hidden");
+        } else {
+          suggestion.classList.add("hidden");
+        }
+      });
+    }
   }
 
 

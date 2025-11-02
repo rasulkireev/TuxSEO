@@ -250,3 +250,20 @@ class CompetitorAnalysis(BaseModel):
         https://{page-url}/pricing
     """
     )
+
+
+class VsCompetitorTitleContext(BaseModel):
+    """Context for generating vs competitor title suggestions."""
+
+    project_details: ProjectDetails
+    competitor_details: CompetitorDetails
+    num_titles: int = Field(default=1, description="Number of title suggestions to generate")
+    liked_suggestions: list[str] | None = Field(
+        default_factory=list, description="Titles the user has previously liked"
+    )
+    disliked_suggestions: list[str] | None = Field(
+        default_factory=list, description="Titles the user has previously disliked"
+    )
+    neutral_suggestions: list[str] | None = Field(
+        default_factory=list, description="Titles that users have not yet liked or disliked"
+    )
