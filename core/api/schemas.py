@@ -131,6 +131,17 @@ class CompetitorAnalysisOut(Schema):
     key_drawbacks: str | None = None
 
 
+class GenerateCompetitorVsTitleIn(Schema):
+    competitor_id: int
+
+
+class GenerateCompetitorVsTitleOut(Schema):
+    status: str
+    message: str = ""
+    suggestion: TitleSuggestionOut | None = None
+    suggestion_html: str = ""
+
+
 class SubmitFeedbackIn(Schema):
     feedback: str
     page: str

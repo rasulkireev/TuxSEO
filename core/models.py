@@ -1522,6 +1522,42 @@ class Competitor(BaseModel):
 
         return True
 
+    def generate_vs_title(self):
+        """
+        Generate a competitor comparison blog post title using Perplexity Sonar.
+        Returns a BlogPostTitleSuggestion instance.
+        """
+        from core.agents import competitor_vs_title_agent
+        from core.schemas import CompetitorVsTitleContext
+
+        deps = CompetitorVsTitleContext(
+            project_details=self.project.project_details,
+            competitor_details=self.competitor_details,
+        )
+
+        result = run_agent_synchronously(
+            competitor_vs_title_agent,
+            f"Generate a compelling comparison blog post title comparing {self.project.name} with {self.name}.",
+            deps=deps,
+            function_name="generate_vs_title",
+            model_name="Competitor",
+        )
+
+        title_suggestion = BlogPostTitleSuggestion.objects.create(
+            project=self.project,
+            title=result.data.title,
+            description=result.data.description,
+            category=result.data.category,
+            content_type=ContentType.VS_COMPETITOR,
+            target_keywords=result.data.target_keywords,
+            suggested_meta_description=result.data.suggested_meta_description,
+        )
+
+        if title_suggestion.target_keywords:
+            async_task("core.tasks.save_title_suggestion_keywords", title_suggestion.id)
+
+        return title_suggestion
+
 
 class Keyword(BaseModel):
     keyword_text = models.CharField(max_length=255, help_text="The keyword string")

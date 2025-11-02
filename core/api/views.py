@@ -20,6 +20,8 @@ from core.api.schemas import (
     FixGeneratedBlogPostIn,
     FixGeneratedBlogPostOut,
     GeneratedContentOut,
+    GenerateCompetitorVsTitleIn,
+    GenerateCompetitorVsTitleOut,
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
@@ -623,6 +625,65 @@ def add_competitor(request: HttpRequest, data: AddCompetitorIn):
             url=data.url,
         )
         return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+
+
+@api.post("/generate-competitor-vs-title", response=GenerateCompetitorVsTitleOut, auth=[session_auth])
+def generate_competitor_vs_title(request: HttpRequest, data: GenerateCompetitorVsTitleIn):
+    """Generate a competitor comparison blog post title using Perplexity Sonar."""
+    profile = request.auth
+    competitor = get_object_or_404(Competitor, id=data.competitor_id)
+    project = competitor.project
+
+    if project.profile != profile:
+        return {
+            "status": "error",
+            "message": "You do not have permission to access this competitor",
+        }
+
+    if not profile.can_generate_title_suggestions:
+        return {
+            "status": "error",
+            "message": f"You have reached the title generation limit for your {profile.product_name} plan",
+        }
+
+    try:
+        title_suggestion = competitor.generate_vs_title()
+
+        suggestion_html = render_to_string(
+            "title_suggestion_card.html",
+            {
+                "suggestion": title_suggestion,
+                "project": project,
+            },
+        )
+
+        return {
+            "status": "success",
+            "message": "Competitor comparison title generated successfully",
+            "suggestion": {
+                "id": title_suggestion.id,
+                "title": title_suggestion.title,
+                "category": title_suggestion.category,
+                "description": title_suggestion.description,
+                "target_keywords": title_suggestion.target_keywords or [],
+                "suggested_meta_description": title_suggestion.suggested_meta_description,
+            },
+            "suggestion_html": suggestion_html,
+        }
+
+    except Exception as e:
+        logger.error(
+            "Failed to generate competitor vs. title",
+            error=str(e),
+            exc_info=True,
+            competitor_id=data.competitor_id,
+            project_id=project.id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": f"Failed to generate competitor comparison title: {str(e)}",
+        }
 
 
 @api.post("/submit-feedback", auth=[session_auth])

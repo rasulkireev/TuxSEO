@@ -250,3 +250,10 @@ class CompetitorAnalysis(BaseModel):
         https://{page-url}/pricing
     """
     )
+
+
+class CompetitorVsTitleContext(BaseModel):
+    """Context for generating competitor comparison blog post titles."""
+
+    project_details: ProjectDetails
+    competitor_details: CompetitorDetails
