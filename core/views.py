@@ -793,6 +793,7 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         project = generated_post.project
         profile = self.request.user.profile
 
+        context["project"] = project
         context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project
