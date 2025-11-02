@@ -106,3 +106,9 @@ class BlogPostStatus(models.TextChoices):
 class ProjectPageSource(models.TextChoices):
     AI = "AI", "AI"
     SITEMAP = "SITEMAP", "Sitemap"
+
+
+class EmailType(models.TextChoices):
+    EMAIL_CONFIRMATION = "EMAIL_CONFIRMATION", "Email Confirmation"
+    WELCOME = "WELCOME", "Welcome"
+    FEEDBACK_NOTIFICATION = "FEEDBACK_NOTIFICATION", "Feedback Notification"

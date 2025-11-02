@@ -1,10 +1,36 @@
 import re
 import uuid
 
+from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
 
+from core.choices import EmailType
+from core.utils import track_email_sent
+
 User = get_user_model()
+
+
+class CustomAccountAdapter(DefaultAccountAdapter):
+    """
+    Custom adapter to track email confirmations and welcome emails.
+    """
+
+    def send_confirmation_mail(self, request, emailconfirmation, signup):
+        """
+        Override to track email confirmation sends.
+        """
+        profile = emailconfirmation.email_address.user.profile if hasattr(
+            emailconfirmation.email_address.user, "profile"
+        ) else None
+
+        track_email_sent(
+            email_address=emailconfirmation.email_address.email,
+            email_type=EmailType.EMAIL_CONFIRMATION,
+            profile=profile
+        )
+
+        return super().send_confirmation_mail(request, emailconfirmation, signup)
 
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -22,7 +48,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         if not user.username and user.email:
             base_username = re.sub(r"[^\w]", "", user.email.split("@")[0])
-            if not base_username:  # If email contained only special chars
+            if not base_username:
                 base_username = f"user{uuid.uuid4().hex[:8]}"
             username = base_username
 
