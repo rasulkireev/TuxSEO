@@ -7,10 +7,10 @@ export default class extends Controller {
 
   async copyAsHtml() {
     const markdownText = this.sourceTarget.value;
-    
+
     const rawHtml = marked.parse(markdownText);
     const cleanHtml = DOMPurify.sanitize(rawHtml);
-    
+
     await navigator.clipboard.writeText(cleanHtml);
 
     const button = this.buttonTarget;
