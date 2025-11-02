@@ -1,0 +1,146 @@
+{% extends "base_app.html" %}
+{% load static %}
+
+{% block content %}
+<div class="py-8 bg-gray-50 sm:py-12">
+  <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+    
+    <!-- Back to Projects Button -->
+    <div class="mb-6">
+      <a
+        href="{% url 'home' %}"
+        class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+      >
+        <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+        </svg>
+        Back to Projects
+      </a>
+    </div>
+
+    <!-- Project Header -->
+    <div class="mb-8">
+      <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">
+            {{ project.name }}
+          </h1>
+          <div class="flex items-center mt-2">
+            <span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full border">
+              {{ project.get_type_display }}
+            </span>
+            {% if project.url %}
+              <a href="{{ project.url }}" target="_blank" rel="noopener noreferrer" 
+                 class="inline-flex items-center ml-3 text-sm text-gray-600 hover:text-gray-900">
+                <svg class="mr-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Visit Site
+              </a>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Layout: Sidebar + Content -->
+    <div class="flex flex-col gap-6 lg:flex-row">
+      
+      <!-- Sidebar Navigation -->
+      <aside class="lg:w-64">
+        <nav class="sticky top-24 bg-white rounded-lg border border-gray-200 shadow-sm">
+          <div class="p-4">
+            <h2 class="px-3 mb-2 text-xs font-semibold tracking-wider text-gray-500 uppercase">
+              Navigation
+            </h2>
+            <ul class="space-y-1">
+              <li>
+                <a
+                  href="{% url 'project_detail' project.id %}"
+                  class="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {% if request.resolver_match.url_name == 'project_detail' %}bg-gray-100 text-gray-900{% else %}text-gray-700 hover:bg-gray-50 hover:text-gray-900{% endif %}"
+                >
+                  <svg class="mr-3 w-5 h-5 {% if request.resolver_match.url_name == 'project_detail' %}text-gray-900{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                  </svg>
+                  Overview
+                </a>
+              </li>
+              <li>
+                <a
+                  href="{% url 'project_keywords' project.id %}"
+                  class="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {% if request.resolver_match.url_name == 'project_keywords' %}bg-gray-100 text-gray-900{% else %}text-gray-700 hover:bg-gray-50 hover:text-gray-900{% endif %}"
+                >
+                  <svg class="mr-3 w-5 h-5 {% if request.resolver_match.url_name == 'project_keywords' %}text-gray-900{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+                  </svg>
+                  Keywords
+                </a>
+              </li>
+              <li>
+                <a
+                  href="{% url 'project_pages' project.id %}"
+                  class="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {% if request.resolver_match.url_name == 'project_pages' %}bg-gray-100 text-gray-900{% else %}text-gray-700 hover:bg-gray-50 hover:text-gray-900{% endif %}"
+                >
+                  <svg class="mr-3 w-5 h-5 {% if request.resolver_match.url_name == 'project_pages' %}text-gray-900{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Your Pages
+                </a>
+              </li>
+              
+              <!-- Future sections (commented out for now) -->
+              <!-- 
+              <li>
+                <a
+                  href="{% url 'project_inspirations' project.id %}"
+                  class="flex items-center px-3 py-2 text-sm font-medium text-gray-400 rounded-md cursor-not-allowed"
+                  title="Coming soon"
+                >
+                  <svg class="mr-3 w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  Inspirations
+                </a>
+              </li>
+              <li>
+                <a
+                  href="{% url 'project_competitors' project.id %}"
+                  class="flex items-center px-3 py-2 text-sm font-medium text-gray-400 rounded-md cursor-not-allowed"
+                  title="Coming soon"
+                >
+                  <svg class="mr-3 w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  Competitors
+                </a>
+              </li>
+              -->
+
+              <li class="pt-4 mt-4 border-t border-gray-200">
+                <a
+                  href="{% url 'project_settings' project.id %}"
+                  class="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {% if request.resolver_match.url_name == 'project_settings' %}bg-gray-100 text-gray-900{% else %}text-gray-700 hover:bg-gray-50 hover:text-gray-900{% endif %}"
+                >
+                  <svg class="mr-3 w-5 h-5 {% if request.resolver_match.url_name == 'project_settings' %}text-gray-900{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                  </svg>
+                  Settings
+                </a>
+              </li>
+            </ul>
+          </div>
+        </nav>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="flex-1 min-w-0">
+        {% block project_content %}
+        <!-- Project-specific content goes here -->
+        {% endblock project_content %}
+      </main>
+
+    </div>
+  </div>
+</div>
+{% endblock content %}
