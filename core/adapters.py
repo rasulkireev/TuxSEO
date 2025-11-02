@@ -45,13 +45,23 @@ class CustomAccountAdapter(DefaultAccountAdapter):
             email=emailconfirmation.email_address.email,
         )
 
-        track_email_sent(
-            email_address=emailconfirmation.email_address.email,
-            email_type=email_type,
-            profile=profile,
-        )
-
-        return super().send_confirmation_mail(request, emailconfirmation, signup)
+        try:
+            result = super().send_confirmation_mail(request, emailconfirmation, signup)
+            track_email_sent(
+                email_address=emailconfirmation.email_address.email,
+                email_type=email_type,
+                profile=profile,
+            )
+            return result
+        except Exception as error:
+            logger.error(
+                "[Send Confirmation Mail] Failed to send email",
+                error=str(error),
+                exc_info=True,
+                user_id=emailconfirmation.email_address.user.id,
+                email=emailconfirmation.email_address.email,
+            )
+            raise
 
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
