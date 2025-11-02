@@ -7,6 +7,9 @@ from django.contrib.auth import get_user_model
 
 from core.choices import EmailType
 from core.utils import track_email_sent
+from tuxseo.utils import get_tuxseo_logger
+
+logger = get_tuxseo_logger(__name__)
 
 User = get_user_model()
 
@@ -19,15 +22,33 @@ class CustomAccountAdapter(DefaultAccountAdapter):
     def send_confirmation_mail(self, request, emailconfirmation, signup):
         """
         Override to track email confirmation sends.
+
+        Args:
+            request: The HTTP request
+            emailconfirmation: The email confirmation object
+            signup: Boolean indicating if this is during signup (True) or resend (False)
         """
-        profile = emailconfirmation.email_address.user.profile if hasattr(
-            emailconfirmation.email_address.user, "profile"
-        ) else None
+        profile = (
+            emailconfirmation.email_address.user.profile
+            if hasattr(emailconfirmation.email_address.user, "profile")
+            else None
+        )
+
+        # Track as welcome email during signup, confirmation email on resend
+        email_type = EmailType.WELCOME if signup else EmailType.EMAIL_CONFIRMATION
+
+        logger.info(
+            "[Send Confirmation Mail] Sending email",
+            signup=signup,
+            email_type=email_type,
+            user_id=emailconfirmation.email_address.user.id,
+            email=emailconfirmation.email_address.email,
+        )
 
         track_email_sent(
             email_address=emailconfirmation.email_address.email,
-            email_type=EmailType.EMAIL_CONFIRMATION,
-            profile=profile
+            email_type=email_type,
+            profile=profile,
         )
 
         return super().send_confirmation_mail(request, emailconfirmation, signup)
