@@ -1,4 +1,4 @@
-{% extends "base_app.html" %}
+{% extends "base_project.html" %}
 {% load static %}
 
 {% block meta %}
@@ -6,165 +6,121 @@
 <meta name="description" content="{{ project.summary }}" />
 {% endblock meta %}
 
-{% block content %}
-<div class="py-16 bg-gray-50 sm:py-20">
-  <div class="px-6 mx-auto max-w-4xl lg:px-8">
+{% block project_content %}
+<div data-controller="title-suggestions"
+     data-title-suggestions-project-id-value="{{ project.id }}">
 
-    <!-- Project Header -->
-    <div class="text-center">
-      <div class="mb-3">
-        <span class="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-full border">
-          {{ project.get_type_display }}
-        </span>
-      </div>
+  <div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Posts</h2>
+    <p class="mt-2 text-gray-600">
+      Create and manage blog post ideas for your project
+    </p>
+  </div>
 
-      <h1 class="text-3xl font-bold text-gray-900 sm:text-4xl">
-        {{ project.name }}
-      </h1>
+  <!-- Main Action Area -->
+  <div class="mb-8">
+    <div class="p-8 bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div class="text-center">
+        <h2 class="mb-2 text-xl font-semibold text-gray-900">Content Generator</h2>
+        <p class="mb-6 text-gray-600">Create engaging blog post ideas for your project</p>
 
-      <div class="flex gap-4 justify-center mt-6">
-        <a
-          href="{% url 'project_keywords' project.id %}"
-          class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-        >
-          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-          </svg>
-          Keywords
-        </a>
-        <a
-          href="{% url 'project_pages' project.id %}"
-          class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-        >
-          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Your Pages
-        </a>
-        <a
-          href="{% url 'project_settings' project.id %}"
-          class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-        >
-          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-          </svg>
-          Settings
-        </a>
-      </div>
-    </div>
+        <!-- Primary Actions -->
+        <div class="flex justify-center">
+          <div data-controller="content-idea" data-content-idea-project-id-value="{{ project.id }}" class="w-full max-w-2xl">
+            <div class="mb-6 text-center">
+              <div class="flex flex-col gap-3 justify-center items-center sm:flex-row">
+                {% if user.profile.reached_title_generation_limit %}
+                  <a
+                    href="{% url 'settings' %}"
+                    class="inline-flex items-center px-6 py-3 text-base font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
+                    data-controller="tooltip"
+                    data-tooltip-message-value="You've reached the suggestion limit ({{ user.profile.number_of_title_suggestions_this_month }}/{{ user.profile.title_suggestion_limit }} suggestions this month on {{ user.profile.product_name }} plan).\nUpgrade to Pro in settings for unlimited suggestions."
+                    data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
+                  >
+                    <svg class="mr-2 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Share Content Ideas
+                  </a>
 
-    <!-- Content Generation Section -->
-    <div class="mt-12"
-         data-controller="title-suggestions"
-         data-title-suggestions-project-id-value="{{ project.id }}">
+                  <span class="text-gray-400">or</span>
 
-      <!-- Main Action Area -->
-      <div class="mb-8">
-        <div class="p-8 bg-white rounded-lg border border-gray-200 shadow-sm">
-          <div class="text-center">
-            <h2 class="mb-2 text-xl font-semibold text-gray-900">Content Generator</h2>
-            <p class="mb-6 text-gray-600">Create engaging blog post ideas for your project</p>
+                  <a
+                    href="{% url 'settings' %}"
+                    class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
+                    data-controller="tooltip"
+                    data-tooltip-message-value="You've reached the suggestion limit ({{ user.profile.number_of_title_suggestions_this_month }}/{{ user.profile.title_suggestion_limit }} suggestions this month on {{ user.profile.product_name }} plan).\nUpgrade to Pro in settings for unlimited suggestions."
+                    data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
+                  >
+                    <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Generate More Ideas
+                  </a>
+                {% else %}
+                  <button
+                    data-action="content-idea#toggleForm"
+                    class="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <svg class="mr-2 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                    </svg>
+                    Share Content Ideas
+                  </button>
 
-            <!-- Primary Actions -->
-            <div class="flex justify-center">
-              <div data-controller="content-idea" data-content-idea-project-id-value="{{ project.id }}" class="w-full max-w-2xl">
-                <div class="mb-6 text-center">
-                  <div class="flex flex-col gap-3 justify-center items-center sm:flex-row">
-                    {% if user.profile.reached_title_generation_limit %}
-                      <a
-                        href="{% url 'settings' %}"
-                        class="inline-flex items-center px-6 py-3 text-base font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
-                        data-controller="tooltip"
-                        data-tooltip-message-value="You've reached the suggestion limit ({{ user.profile.number_of_title_suggestions_this_month }}/{{ user.profile.title_suggestion_limit }} suggestions this month on {{ user.profile.product_name }} plan).\nUpgrade to Pro in settings for unlimited suggestions."
-                        data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
-                      >
-                        <svg class="mr-2 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Share Content Ideas
-                      </a>
+                  <span class="text-gray-400">or</span>
 
-                      <span class="text-gray-400">or</span>
+                  <button
+                    data-action="title-suggestions#generate"
+                    class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  >
+                    <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Generate More Ideas
+                  </button>
+                {% endif %}
+              </div>
+            </div>
 
-                      <a
-                        href="{% url 'settings' %}"
-                        class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 rounded-md border border-gray-200 transition-colors hover:bg-gray-200"
-                        data-controller="tooltip"
-                        data-tooltip-message-value="You've reached the suggestion limit ({{ user.profile.number_of_title_suggestions_this_month }}/{{ user.profile.title_suggestion_limit }} suggestions this month on {{ user.profile.product_name }} plan).\nUpgrade to Pro in settings for unlimited suggestions."
-                        data-action="mouseenter->tooltip#show mouseleave->tooltip#hide"
-                      >
-                        <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                        </svg>
-                        Generate More Ideas
-                      </a>
-                    {% else %}
+            <!-- Content Idea Form -->
+            <div data-content-idea-target="form" class="hidden">
+              <div class="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+                <div class="space-y-4">
+                  <div>
+                    <label class="block mb-3 text-base font-medium text-gray-900">
+                      Describe your content idea
+                    </label>
+                    <p class="mb-4 text-sm text-gray-600">
+                      Share your thoughts on what content would be valuable for your audience. Be as detailed or brief as you'd like.
+                    </p>
+                  </div>
+
+                  <div class="space-y-4">
+                    <textarea
+                      data-content-idea-target="input"
+                      rows="4"
+                      class="block px-4 py-3 w-full text-base placeholder-gray-500 text-gray-900 rounded-md border border-gray-300 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
+                      placeholder="Example: How our tool helps remote teams stay organized and productive, or share insights about industry trends you've noticed..."
+                    ></textarea>
+
+                    <div class="flex justify-between items-center pt-2">
                       <button
                         data-action="content-idea#toggleForm"
-                        class="inline-flex items-center px-6 py-3 text-base font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
                       >
-                        <svg class="mr-2 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Share Content Ideas
+                        Cancel
                       </button>
-
-                      <span class="text-gray-400">or</span>
 
                       <button
-                        data-action="title-suggestions#generate"
-                        class="inline-flex items-center px-5 py-2.5 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                        data-action="content-idea#generate"
+                        class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
                       >
-                        <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
                         </svg>
-                        Generate More Ideas
+                        Generate Blog Post Idea
                       </button>
-                    {% endif %}
-                  </div>
-                </div>
-
-                <!-- Content Idea Form -->
-                <div data-content-idea-target="form" class="hidden">
-                  <div class="p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
-                    <div class="space-y-4">
-                      <div>
-                        <label class="block mb-3 text-base font-medium text-gray-900">
-                          Describe your content idea
-                        </label>
-                        <p class="mb-4 text-sm text-gray-600">
-                          Share your thoughts on what content would be valuable for your audience. Be as detailed or brief as you'd like.
-                        </p>
-                      </div>
-
-                      <div class="space-y-4">
-                        <textarea
-                          data-content-idea-target="input"
-                          rows="4"
-                          class="block px-4 py-3 w-full text-base placeholder-gray-500 text-gray-900 rounded-md border border-gray-300 shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                          placeholder="Example: How our tool helps remote teams stay organized and productive, or share insights about industry trends you've noticed..."
-                        ></textarea>
-
-                        <div class="flex justify-between items-center pt-2">
-                          <button
-                            data-action="content-idea#toggleForm"
-                            class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                          >
-                            Cancel
-                          </button>
-
-                          <button
-                            data-action="content-idea#generate"
-                            class="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 transition-colors hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
-                          >
-                            <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            Generate Blog Post Idea
-                          </button>
-                        </div>
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -173,11 +129,13 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- Blog Posts Section -->
-      <div data-title-suggestions-target="suggestionsContainer">
-        <div class="mb-6">
-          <h3 class="mb-4 text-lg font-semibold text-gray-900">Your Blog Post Ideas</h3>
+  <!-- Blog Posts Section -->
+  <div data-title-suggestions-target="suggestionsContainer">
+    <div class="mb-6">
+      <h3 class="mb-4 text-lg font-semibold text-gray-900">Your Blog Post Ideas</h3>
 
           <!-- Content Type Tabs -->
           <div class="border-b border-gray-200">
@@ -207,19 +165,20 @@
             </nav>
           </div>
         </div>
+      </div>
 
         <!-- Suggestions Lists -->
         <div class="space-y-6" data-title-suggestions-target="suggestionsList">
 
           <!-- VS Competitor Section (only visible when VS_COMPETITOR tab is active) -->
           <div id="vs-competitor-section" class="hidden" data-title-suggestions-target="vsCompetitorSection">
-            <div class="mb-6 p-6 bg-blue-50 rounded-lg border border-blue-200">
+            <div class="p-6 mb-6 bg-blue-50 rounded-lg border border-blue-200">
               <h4 class="mb-2 text-base font-semibold text-blue-900">Competitor Comparison Posts</h4>
               <p class="mb-4 text-sm text-blue-700">
                 Generate comparison articles that position your product against competitors.
                 These posts use GPT Researcher for in-depth competitive analysis.
               </p>
-              
+
               {% if project.competitors.all %}
                 <div class="space-y-3">
                   <h5 class="text-sm font-medium text-blue-900">Select a competitor to compare:</h5>
@@ -233,7 +192,7 @@
                           <p class="text-xs text-gray-500 truncate">{{ competitor.url }}</p>
                         </div>
                         <p class="mb-3 text-xs text-gray-600 line-clamp-2">{{ competitor.description }}</p>
-                        
+
                         {% if user.profile.reached_title_generation_limit %}
                           <a
                             href="{% url 'settings' %}"
@@ -297,50 +256,30 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          <!-- Posted Suggestions -->
-          <div data-controller="archived-list" class="archived-list" data-archived-list-name-value="posted">
-            <div class="bg-gray-50 rounded-lg border border-gray-200">
-              <button
-                class="flex justify-between items-center px-6 py-4 w-full text-left rounded-t-lg transition-colors hover:bg-gray-100 focus:outline-none"
-                data-action="click->archived-list#toggle"
-              >
-                <h4 class="text-base font-medium text-gray-900">Published Posts</h4>
-                <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-              </button>
-              <div data-archived-list-target="list" class="hidden p-4 border-t border-gray-200">
-                {% for suggestion in posted_suggestions %}
-                  {% include "components/blog_post_suggestion_card.html" with suggestion=suggestion %}
-                {% endfor %}
-              </div>
-            </div>
-          </div>
-
-          <!-- Archived Suggestions -->
-          <div id="archived-suggestions-list" data-controller="archived-list" class="archived-list" data-archived-list-name-value="archived">
-            <div class="bg-gray-50 rounded-lg border border-gray-200">
-              <button
-                class="flex justify-between items-center px-6 py-4 w-full text-left rounded-t-lg transition-colors hover:bg-gray-100 focus:outline-none"
-                data-action="click->archived-list#toggle"
-              >
-                <h4 class="text-base font-medium text-gray-900">Archived Ideas</h4>
-                <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-              </button>
-              <div data-archived-list-target="list" class="hidden p-4 border-t border-gray-200">
-                {% for suggestion in archived_suggestions %}
-                  {% include "components/blog_post_suggestion_card.html" with suggestion=suggestion %}
-                {% endfor %}
-              </div>
-            </div>
+      <!-- Archived Suggestions -->
+      <div id="archived-suggestions-list" data-controller="archived-list" class="archived-list" data-archived-list-name-value="archived">
+        <div class="bg-gray-50 rounded-lg border border-gray-200">
+          <button
+            class="flex justify-between items-center px-6 py-4 w-full text-left rounded-t-lg transition-colors hover:bg-gray-100 focus:outline-none"
+            data-action="click->archived-list#toggle"
+          >
+            <h4 class="text-base font-medium text-gray-900">Archived Ideas</h4>
+            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </button>
+          <div data-archived-list-target="list" class="hidden p-4 border-t border-gray-200">
+            {% for suggestion in archived_suggestions %}
+              {% include "components/blog_post_suggestion_card.html" with suggestion=suggestion %}
+            {% endfor %}
           </div>
         </div>
       </div>
     </div>
-
   </div>
+
 </div>
-{% endblock content %}
+{% endblock project_content %}
