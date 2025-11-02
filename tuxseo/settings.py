@@ -123,6 +123,7 @@ TEMPLATES = [
                 "core.context_processors.posthog_api_key",
                 "core.context_processors.available_social_providers",
                 "core.context_processors.turnstile_site_key",
+                "core.context_processors.referrer_banner",
             ],
         },
     },
