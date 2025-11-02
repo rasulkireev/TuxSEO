@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Copy as HTML on Generated Blog Posts.
+- PDF Generation for blog posts.
 
 
 ## [0.0.7] - 2025-11-01
