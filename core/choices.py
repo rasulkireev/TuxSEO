@@ -4,6 +4,7 @@ from django.db import models
 class ContentType(models.TextChoices):
     SHARING = "SHARING", "Sharing"
     SEO = "SEO", "SEO"
+    VS_COMPETITOR = "VS_COMPETITOR", "Vs. Competitor"
 
 
 class Category(models.TextChoices):

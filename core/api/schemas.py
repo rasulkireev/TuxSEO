@@ -76,6 +76,17 @@ class GenerateTitleSuggestionsOut(Schema):
     message: str = ""
 
 
+class GenerateVsCompetitorTitleIn(Schema):
+    competitor_id: int
+
+
+class GenerateVsCompetitorTitleOut(Schema):
+    status: str
+    message: str = ""
+    suggestion: TitleSuggestionOut = {}
+    suggestion_html: str = ""
+
+
 class GeneratedContentOut(Schema):
     status: str = "success"
     message: str | None = None

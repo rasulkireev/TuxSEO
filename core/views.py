@@ -610,6 +610,30 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         context["posted_suggestions"] = posted_suggestions
         context["archived_suggestions"] = archived_suggestions
         context["active_suggestions"] = active_suggestions
+        
+        # Get VS Competitor suggestions
+        vs_competitor_suggestions = project.blog_post_title_suggestions.filter(
+            content_type="VS_COMPETITOR"
+        ).prefetch_related("competitor", "generated_blog_posts")
+        
+        for suggestion in vs_competitor_suggestions:
+            suggestion.keywords_with_usage = []
+            if suggestion.target_keywords:
+                for keyword_text in suggestion.target_keywords:
+                    keyword_info = project_keywords.get(
+                        keyword_text.lower(),
+                        {"keyword": None, "in_use": False, "project_keyword_id": None},
+                    )
+                    suggestion.keywords_with_usage.append(
+                        {
+                            "text": keyword_text,
+                            "keyword": keyword_info["keyword"],
+                            "in_use": keyword_info["in_use"],
+                            "project_keyword_id": keyword_info["project_keyword_id"],
+                        }
+                    )
+        
+        context["vs_competitor_suggestions"] = vs_competitor_suggestions
 
         context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
