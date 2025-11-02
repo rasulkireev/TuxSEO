@@ -38,6 +38,16 @@ class ReferrerBannerAdmin(admin.ModelAdmin):
             },
         ),
         (
+            "Design",
+            {
+                "fields": (
+                    "background_color",
+                    "text_color",
+                ),
+                "description": "Customize banner appearance using Tailwind CSS classes",
+            },
+        ),
+        (
             "Discount Details",
             {
                 "fields": (
