@@ -11,7 +11,20 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from core.agents import content_editor_agent
+from core.agent_system_prompts import (
+    add_todays_date,
+    filler_content,
+    post_structure,
+    valid_markdown_format,
+)
+from core.agents import (
+    add_language_specification,
+    add_project_details,
+    add_project_pages,
+    add_target_keywords,
+    add_title_details,
+    content_editor_agent,
+)
 from core.base_models import BaseModel
 from core.choices import (
     BlogPostStatus,
@@ -467,9 +480,7 @@ class Project(BaseModel):
             model_settings={"temperature": 0.9},
         )
 
-        @agent.system_prompt
-        def add_todays_date() -> str:
-            return f"Today's Date: {timezone.now().strftime('%Y-%m-%d')}"
+        agent.system_prompt(add_todays_date)
 
         @agent.system_prompt
         def add_project_details(ctx: RunContext[TitleSuggestionContext]) -> str:
@@ -811,142 +822,15 @@ class BlogPostTitleSuggestion(BaseModel):
             model_settings={"max_tokens": 65500, "temperature": 0.8},
         )
 
-        @agent.system_prompt
-        def add_todays_date() -> str:
-            return f"Today's Date: {timezone.now().strftime('%Y-%m-%d')}"
-
-        @agent.system_prompt
-        def add_project_details(ctx: RunContext[BlogPostGenerationContext]) -> str:
-            project = ctx.deps.project_details
-            return f"""
-                Project Details:
-                - Project Name: {project.name}
-                - Project Type: {project.type}
-                - Project Summary: {project.summary}
-                - Blog Theme: {project.blog_theme}
-                - Founders: {project.founders}
-                - Key Features: {project.key_features}
-                - Target Audience: {project.target_audience_summary}
-                - Pain Points: {project.pain_points}
-                - Product Usage: {project.product_usage}
-            """
-
-        @agent.system_prompt
-        def add_project_pages(ctx: RunContext[BlogPostGenerationContext]) -> str:
-            pages = ctx.deps.project_pages
-            if pages:
-                always_use_pages = [page for page in pages if page.always_use]
-                optional_pages = [page for page in pages if not page.always_use]
-
-                instruction = ""
-
-                if always_use_pages:
-                    instruction += """
-                      REQUIRED PAGES TO LINK:
-                      The following pages MUST be linked in the content you generate. These are essential pages that should be referenced in the blog post where contextually relevant:
-
-                    """  # noqa: E501
-                    for page in always_use_pages:
-                        instruction += f"""
-                          --------
-                          - Title: {page.title}
-                          - URL: {page.url}
-                          - Description: {page.description}
-                          - Summary: {page.summary}
-                          --------
-                        """
-
-                if optional_pages:
-                    instruction += """
-
-                      OPTIONAL PAGES (Use Intelligently):
-                      The following pages are available for linking if they are contextually relevant to the content. Use your judgment to determine which pages would provide value to readers and enhance the blog post. Only include links where they naturally fit and add value:
-
-                    """  # noqa: E501
-                    for page in optional_pages:
-                        instruction += f"""
-                          --------
-                          - Title: {page.title}
-                          - URL: {page.url}
-                          - Description: {page.description}
-                          - Summary: {page.summary}
-                          --------
-                        """
-
-                return instruction
-            else:
-                return ""
-
-        @agent.system_prompt
-        def add_title_details(ctx: RunContext[BlogPostGenerationContext]) -> str:
-            title = ctx.deps.title_suggestion
-            return f"""
-                This is the title suggestion gnerate by AI using project information:
-                - Title: {title.title}
-                - Description: {title.description}
-                - Category: {title.category}
-                - Target Keywords: {
-                ", ".join(title.target_keywords) if title.target_keywords else "None specified"
-            }
-                - Suggested Meta Description: {
-                title.suggested_meta_description
-                if title.suggested_meta_description
-                else "None specified"
-            }
-            """
-
-        @agent.system_prompt
-        def add_language_specification(ctx: RunContext[BlogPostGenerationContext]) -> str:
-            return f"""
-                IMPORTANT: Generate the content in {ctx.deps.project_details.language} language.
-                Make sure the content is grammatically correct and culturally appropriate for
-                {ctx.deps.project_details.language}-speaking audiences.
-            """
-
-        @agent.system_prompt
-        def add_target_keywords(ctx: RunContext[BlogPostGenerationContext]) -> str:
-            if ctx.deps.project_keywords:
-                keywords_list = ", ".join(ctx.deps.project_keywords)
-                return f"""
-                    Focus Keywords for SEO
-                    The user wants to focus on these specific keywords in the blog post:
-                    {keywords_list}
-
-                    Please incorporate these keywords naturally throughout the content where appropriate.
-                    Don't force them in, but use them when they fit contextually and help improve the readability and SEO value of the post.
-                    Don't make them bold, just a regular part of the text.
-                """  # noqa: E501
-            else:
-                return ""
-
-        @agent.system_prompt
-        def valid_markdown_format() -> str:
-            return """
-                IMPORTANT: Generate the content in valid markdown format.
-                Make sure the content is formatted correctly with:
-                  - headings
-                  - paragraphs
-                  - lists
-                  - links
-            """
-
-        @agent.system_prompt
-        def post_structure() -> str:
-            return """
-                - Don't start with a title, header or a subheader (#, ##, ###). Instead start with a plain text as intro.
-                - Use '##' (h2 headers) for sections of the post where necessary.
-                - Don't use 3rd levle subheaders (###) or deeper. That should not be necessary for the post.
-            """  # noqa: E501
-
-        @agent.system_prompt
-        def filler_content() -> str:
-            return """
-                - Do not add content that needs to be filled in later.
-                - No placeholders either. This means no:
-                  - Image Suggestion: [Image]
-                  - Link Suggestion: [Link]
-                  ...
-             """
+        agent.system_prompt(add_project_details)
+        agent.system_prompt(add_project_pages)
+        agent.system_prompt(add_title_details)
+        agent.system_prompt(add_todays_date)
+        agent.system_prompt(add_language_specification)
+        agent.system_prompt(add_target_keywords)
+        agent.system_prompt(valid_markdown_format)
+        agent.system_prompt(post_structure)
+        agent.system_prompt(filler_content)
 
         # Get all analyzed project pages (from AI and sitemap sources)
         project_pages = [
@@ -1137,7 +1021,39 @@ class GeneratedBlogPost(BaseModel):
             starts_with_header=self.starts_with_header,
         )
 
+    def _build_fix_context(self):
+        """Build full context for content editor agent to ensure accurate regeneration."""
+        from core.schemas import BlogPostGenerationContext, ProjectPageContext
+
+        project_pages = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+            )
+            for page in self.project.project_pages.all()
+        ]
+
+        project_keywords = [
+            pk.keyword.keyword_text
+            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
+        ]
+
+        return BlogPostGenerationContext(
+            project_details=self.project.project_details,
+            title_suggestion=self.title.title_suggestion_schema,
+            project_pages=project_pages,
+            content_type=self.title.content_type,
+            project_keywords=project_keywords,
+        )
+
     def fix_header_start(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+
+        context = self._build_fix_context()
+
         result = run_agent_synchronously(
             content_editor_agent,
             """
@@ -1145,10 +1061,7 @@ class GeneratedBlogPost(BaseModel):
 
             Please remove it such that the content starts with regular text, usually an introduction.
             """,  # noqa: E501
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_header_start",
             model_name="GeneratedBlogPost",
         )
@@ -1211,6 +1124,11 @@ class GeneratedBlogPost(BaseModel):
             return False
 
     def fix_content_length(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+
+        context = self._build_fix_context()
+
         result = run_agent_synchronously(
             content_editor_agent,
             """
@@ -1218,10 +1136,7 @@ class GeneratedBlogPost(BaseModel):
             I think something went wrong during generation.
             Please regenerate.
           """,
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_content_length",
             model_name="GeneratedBlogPost",
         )
@@ -1231,6 +1146,11 @@ class GeneratedBlogPost(BaseModel):
         self.run_validation()
 
     def fix_valid_ending(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+
+        context = self._build_fix_context()
+
         result = run_agent_synchronously(
             content_editor_agent,
             """
@@ -1238,10 +1158,7 @@ class GeneratedBlogPost(BaseModel):
             Most likely generation failed at some point and returned half completed content.
             Please regenerate the blog post.
             """,
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_valid_ending",
             model_name="GeneratedBlogPost",
         )
@@ -1251,16 +1168,18 @@ class GeneratedBlogPost(BaseModel):
         self.run_validation()
 
     def fix_placeholders(self):
+        self.refresh_from_db()
+        self.title.refresh_from_db()
+
+        context = self._build_fix_context()
+
         result = run_agent_synchronously(
             content_editor_agent,
             """
             The content contains placeholders.
             Please regenerate the blog post without placeholders.
             """,
-            deps=[
-                self.generated_blog_post_schema,
-                self.title.title_suggestion_schema,
-            ],
+            deps=context,
             function_name="fix_placeholders",
             model_name="GeneratedBlogPost",
         )

@@ -1,10 +1,17 @@
-from pydantic_ai import Agent, RunContext
+from pydantic_ai import Agent
 
+from core.agent_system_prompts import (
+    add_language_specification,
+    add_project_details,
+    add_project_pages,
+    add_target_keywords,
+    add_title_details,
+    add_webpage_content,
+)
 from core.schemas import (
-    GeneratedBlogPostSchema,
+    BlogPostGenerationContext,
     ProjectDetails,
     ProjectPageDetails,
-    TitleSuggestion,
     WebPageContent,
 )
 
@@ -13,7 +20,7 @@ from core.schemas import (
 content_editor_agent = Agent(
     "google-gla:gemini-2.5-flash",
     output_type=str,
-    deps_type=[GeneratedBlogPostSchema, TitleSuggestion],
+    deps_type=BlogPostGenerationContext,
     system_prompt="""
     You are an expert content editor.
 
@@ -31,6 +38,13 @@ def only_return_the_edited_content() -> str:
     """
 
 
+content_editor_agent.system_prompt(add_project_details)
+content_editor_agent.system_prompt(add_project_pages)
+content_editor_agent.system_prompt(add_title_details)
+content_editor_agent.system_prompt(add_language_specification)
+content_editor_agent.system_prompt(add_target_keywords)
+
+
 ########################################################
 
 analyze_project_agent = Agent(
@@ -44,16 +58,7 @@ analyze_project_agent = Agent(
     ),
     retries=2,
 )
-
-
-@analyze_project_agent.system_prompt
-def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
-    return (
-        "Web page content:"
-        f"Title: {ctx.deps.title}"
-        f"Description: {ctx.deps.description}"
-        f"Content: {ctx.deps.markdown_content}"
-    )
+analyze_project_agent.system_prompt(add_webpage_content)
 
 
 ########################################################
@@ -70,13 +75,4 @@ summarize_page_agent = Agent(
     retries=2,
     model_settings={"temperature": 0.5},
 )
-
-
-@summarize_page_agent.system_prompt
-def add_page_content(ctx: RunContext[WebPageContent]) -> str:
-    return (
-        "Web page content to summarize:"
-        f"Title: {ctx.deps.title}"
-        f"Description: {ctx.deps.description}"
-        f"Content: {ctx.deps.markdown_content}"
-    )
+summarize_page_agent.system_prompt(add_webpage_content)
