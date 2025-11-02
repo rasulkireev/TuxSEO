@@ -823,6 +823,46 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         return context
 
 
+@login_required
+def download_blog_post_pdf(request, project_pk, pk):
+    from django.http import HttpResponse
+    from django.template.loader import render_to_string
+    from weasyprint import HTML
+    
+    generated_post = GeneratedBlogPost.objects.filter(
+        project__profile=request.user.profile, 
+        project__pk=project_pk,
+        pk=pk
+    ).first()
+    
+    if not generated_post:
+        messages.error(request, "Blog post not found.")
+        return redirect("home")
+    
+    html_content = render_to_string(
+        "blog/generated_blog_post_pdf.html",
+        {
+            "generated_post": generated_post,
+            "project": generated_post.project,
+        }
+    )
+    
+    pdf_file = HTML(string=html_content).write_pdf()
+    
+    response = HttpResponse(pdf_file, content_type="application/pdf")
+    filename = f"{generated_post.slug}.pdf"
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    
+    logger.info(
+        "PDF downloaded for blog post",
+        blog_post_id=generated_post.id,
+        project_id=generated_post.project.id,
+        user_id=request.user.id,
+    )
+    
+    return response
+
+
 class PublishHistoryView(LoginRequiredMixin, DetailView):
     login_url = "account_login"
     model = Project

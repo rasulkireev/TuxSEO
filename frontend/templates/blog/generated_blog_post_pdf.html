@@ -1,0 +1,254 @@
+{% load markdown_extras %}
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ generated_post.title.title }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            @bottom-center {
+                content: counter(page) " / " counter(pages);
+                font-size: 10pt;
+                color: #666;
+            }
+        }
+
+        body {
+            font-family: 'Georgia', 'Times New Roman', serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        .header {
+            margin-bottom: 2em;
+            padding-bottom: 1em;
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        .project-name {
+            font-size: 12pt;
+            color: #6b7280;
+            margin-bottom: 0.5em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        h1 {
+            font-size: 28pt;
+            line-height: 1.2;
+            margin: 0 0 0.5em 0;
+            color: #111827;
+            font-weight: 700;
+        }
+
+        .description {
+            font-size: 13pt;
+            color: #4b5563;
+            margin: 1em 0;
+            line-height: 1.5;
+        }
+
+        .metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5em;
+            margin: 1.5em 0;
+            padding: 1em;
+            background-color: #f9fafb;
+            border-radius: 4px;
+            font-size: 10pt;
+            color: #6b7280;
+        }
+
+        .metadata-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metadata-label {
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 0.25em;
+        }
+
+        .metadata-value {
+            color: #6b7280;
+        }
+
+        .content {
+            margin-top: 2em;
+        }
+
+        .content h2 {
+            font-size: 20pt;
+            color: #111827;
+            margin: 1.5em 0 0.5em 0;
+            font-weight: 600;
+            page-break-after: avoid;
+        }
+
+        .content h3 {
+            font-size: 16pt;
+            color: #1f2937;
+            margin: 1.2em 0 0.5em 0;
+            font-weight: 600;
+            page-break-after: avoid;
+        }
+
+        .content h4 {
+            font-size: 14pt;
+            color: #374151;
+            margin: 1em 0 0.5em 0;
+            font-weight: 600;
+            page-break-after: avoid;
+        }
+
+        .content p {
+            margin: 0.8em 0;
+            text-align: justify;
+            orphans: 3;
+            widows: 3;
+        }
+
+        .content ul, .content ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+
+        .content li {
+            margin: 0.5em 0;
+        }
+
+        .content code {
+            background-color: #f3f4f6;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 9pt;
+        }
+
+        .content pre {
+            background-color: #f3f4f6;
+            padding: 1em;
+            border-radius: 4px;
+            overflow-x: auto;
+            margin: 1em 0;
+            page-break-inside: avoid;
+        }
+
+        .content pre code {
+            background-color: transparent;
+            padding: 0;
+        }
+
+        .content blockquote {
+            border-left: 4px solid #e5e7eb;
+            margin: 1.5em 0;
+            padding-left: 1.5em;
+            color: #4b5563;
+            font-style: italic;
+        }
+
+        .content strong {
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .content em {
+            font-style: italic;
+        }
+
+        .content a {
+            color: #2563eb;
+            text-decoration: none;
+        }
+
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5em 0;
+            page-break-inside: avoid;
+        }
+
+        .content table th,
+        .content table td {
+            border: 1px solid #e5e7eb;
+            padding: 0.5em 0.75em;
+            text-align: left;
+        }
+
+        .content table th {
+            background-color: #f9fafb;
+            font-weight: 600;
+            color: #111827;
+        }
+
+        .content table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+
+        .content img {
+            max-width: 100%;
+            height: auto;
+            page-break-inside: avoid;
+        }
+
+        .footer {
+            margin-top: 3em;
+            padding-top: 1em;
+            border-top: 1px solid #e5e7eb;
+            font-size: 9pt;
+            color: #9ca3af;
+            text-align: center;
+        }
+
+        /* Ensure nice page breaks */
+        h1, h2, h3, h4, h5, h6 {
+            page-break-after: avoid;
+        }
+
+        p, blockquote, ul, ol, pre {
+            page-break-inside: avoid;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="project-name">{{ project.name }}</div>
+        <h1>{{ generated_post.title.title }}</h1>
+        {% if generated_post.description %}
+        <div class="description">{{ generated_post.description }}</div>
+        {% endif %}
+    </div>
+
+    <div class="metadata">
+        <div class="metadata-item">
+            <span class="metadata-label">Slug</span>
+            <span class="metadata-value">{{ generated_post.slug }}</span>
+        </div>
+        {% if generated_post.tags %}
+        <div class="metadata-item">
+            <span class="metadata-label">Tags</span>
+            <span class="metadata-value">{{ generated_post.tags }}</span>
+        </div>
+        {% endif %}
+        <div class="metadata-item">
+            <span class="metadata-label">Created</span>
+            <span class="metadata-value">{{ generated_post.created_at|date:"F j, Y" }}</span>
+        </div>
+    </div>
+
+    <div class="content">
+        {{ generated_post.content|markdown }}
+    </div>
+
+    <div class="footer">
+        Generated by TuxSEO &bull; {{ project.name }}
+    </div>
+</body>
+</html>
