@@ -1,10 +1,67 @@
 import re
 import uuid
 
+from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
 
+from core.choices import EmailType
+from core.utils import track_email_sent
+from tuxseo.utils import get_tuxseo_logger
+
+logger = get_tuxseo_logger(__name__)
+
 User = get_user_model()
+
+
+class CustomAccountAdapter(DefaultAccountAdapter):
+    """
+    Custom adapter to track email confirmations and welcome emails.
+    """
+
+    def send_confirmation_mail(self, request, emailconfirmation, signup):
+        """
+        Override to track email confirmation sends.
+
+        Args:
+            request: The HTTP request
+            emailconfirmation: The email confirmation object
+            signup: Boolean indicating if this is during signup (True) or resend (False)
+        """
+        profile = (
+            emailconfirmation.email_address.user.profile
+            if hasattr(emailconfirmation.email_address.user, "profile")
+            else None
+        )
+
+        # Track as welcome email during signup, confirmation email on resend
+        email_type = EmailType.WELCOME if signup else EmailType.EMAIL_CONFIRMATION
+
+        logger.info(
+            "[Send Confirmation Mail] Sending email",
+            signup=signup,
+            email_type=email_type,
+            user_id=emailconfirmation.email_address.user.id,
+            email=emailconfirmation.email_address.email,
+        )
+
+        try:
+            result = super().send_confirmation_mail(request, emailconfirmation, signup)
+            track_email_sent(
+                email_address=emailconfirmation.email_address.email,
+                email_type=email_type,
+                profile=profile,
+            )
+            return result
+        except Exception as error:
+            logger.error(
+                "[Send Confirmation Mail] Failed to send email",
+                error=str(error),
+                exc_info=True,
+                user_id=emailconfirmation.email_address.user.id,
+                email=emailconfirmation.email_address.email,
+            )
+            raise
 
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
@@ -22,7 +79,7 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
 
         if not user.username and user.email:
             base_username = re.sub(r"[^\w]", "", user.email.split("@")[0])
-            if not base_username:  # If email contained only special chars
+            if not base_username:
                 base_username = f"user{uuid.uuid4().hex[:8]}"
             username = base_username
 

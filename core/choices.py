@@ -109,6 +109,12 @@ class ProjectPageSource(models.TextChoices):
     SITEMAP = "SITEMAP", "Sitemap"
 
 
+class EmailType(models.TextChoices):
+    EMAIL_CONFIRMATION = "EMAIL_CONFIRMATION", "Email Confirmation"
+    WELCOME = "WELCOME", "Welcome"
+    FEEDBACK_NOTIFICATION = "FEEDBACK_NOTIFICATION", "Feedback Notification"
+
+
 class AIModel(models.TextChoices):
     GEMINI_FLASH = "google-gla:gemini-2.5-flash", "Gemini 2.5 Flash"
     PERPLEXITY_SONAR = "sonar", "Perplexity Sonar"

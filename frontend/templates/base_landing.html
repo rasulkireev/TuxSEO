@@ -54,12 +54,14 @@
 </head>
 
 <body>
+  {% include "components/referrer_banner.html" %}
+
   {% block default_messages %}
     {% include 'components/messages.html' with messages=messages %}
   {% endblock default_messages %}
 
-  <div class="bg-white">
-    <header class="sticky left-0 top-3 z-10">
+  <div class="bg-white {% if referrer_banner %}pt-24{% else %}pt-8{% endif %}">
+    <header class="left-0 z-10">
       <div class="mx-auto w-full max-w-[1376px] px-4">
         <div class="flex gap-2 items-center px-4 py-3.5 bg-white rounded-xl border border-gray-200 sm:gap-4 md:px-6 lg:rounded-full">
 

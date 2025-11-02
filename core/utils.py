@@ -5,10 +5,10 @@ from django.conf import settings
 from django.forms.utils import ErrorList
 from pydantic_ai import Agent
 
-from core.choices import KeywordDataSource, get_default_ai_model
+from core.choices import EmailType, KeywordDataSource, get_default_ai_model
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.model_utils import run_agent_synchronously
-from core.models import GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
+from core.models import EmailSent, GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -253,3 +253,30 @@ def blog_post_starts_with_header(blog_post: GeneratedBlogPost) -> bool:
         )
 
     return starts_with_header_or_asterisk
+
+
+def track_email_sent(email_address: str, email_type: EmailType, profile: Profile = None):
+    """
+    Track sent emails by creating EmailSent records.
+    """
+    try:
+        email_sent = EmailSent.objects.create(
+            email_address=email_address, email_type=email_type, profile=profile
+        )
+        logger.info(
+            "[Track Email Sent] Email tracked successfully",
+            email_address=email_address,
+            email_type=email_type,
+            profile_id=profile.id if profile else None,
+            email_sent_id=email_sent.id,
+        )
+        return email_sent
+    except Exception as e:
+        logger.error(
+            "[Track Email Sent] Failed to track email",
+            email_address=email_address,
+            email_type=email_type,
+            error=str(e),
+            exc_info=True,
+        )
+        return None

@@ -123,6 +123,7 @@ TEMPLATES = [
                 "core.context_processors.posthog_api_key",
                 "core.context_processors.available_social_providers",
                 "core.context_processors.turnstile_site_key",
+                "core.context_processors.referrer_banner",
             ],
         },
     },
@@ -262,6 +263,7 @@ ACCOUNT_USERNAME_REQUIRED = True
 ACCOUNT_EMAIL_REQUIRED = True
 ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_SESSION_REMEMBER = True
+ACCOUNT_ADAPTER = "core.adapters.CustomAccountAdapter"
 ACCOUNT_FORMS = {
     "signup": "core.forms.CustomSignUpForm",
     "login": "core.forms.CustomLoginForm",
