@@ -5,7 +5,7 @@ from django.conf import settings
 from django.forms.utils import ErrorList
 from pydantic_ai import Agent
 
-from core.choices import EmailType, KeywordDataSource
+from core.choices import EmailType, KeywordDataSource, get_default_ai_model
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.model_utils import run_agent_synchronously
 from core.models import EmailSent, GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
@@ -173,7 +173,7 @@ def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
     content = content.strip()
 
     agent = Agent(
-        "google-gla:gemini-2.5-flash",
+        get_default_ai_model(),
         output_type=bool,
         system_prompt="""
         You are an expert content editor analyzing blog post endings. Your task is to determine
@@ -261,16 +261,14 @@ def track_email_sent(email_address: str, email_type: EmailType, profile: Profile
     """
     try:
         email_sent = EmailSent.objects.create(
-            email_address=email_address,
-            email_type=email_type,
-            profile=profile
+            email_address=email_address, email_type=email_type, profile=profile
         )
         logger.info(
             "[Track Email Sent] Email tracked successfully",
             email_address=email_address,
             email_type=email_type,
             profile_id=profile.id if profile else None,
-            email_sent_id=email_sent.id
+            email_sent_id=email_sent.id,
         )
         return email_sent
     except Exception as e:
@@ -279,6 +277,6 @@ def track_email_sent(email_address: str, email_type: EmailType, profile: Profile
             email_address=email_address,
             email_type=email_type,
             error=str(e),
-            exc_info=True
+            exc_info=True,
         )
         return None

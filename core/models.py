@@ -27,6 +27,7 @@ from core.agents import (
 )
 from core.base_models import BaseModel
 from core.choices import (
+    AIModel,
     BlogPostStatus,
     Category,
     ContentType,
@@ -38,6 +39,7 @@ from core.choices import (
     ProjectPageType,
     ProjectStyle,
     ProjectType,
+    get_default_ai_model,
 )
 from core.model_utils import (
     generate_random_key,
@@ -470,10 +472,10 @@ class Project(BaseModel):
         return True
 
     def generate_title_suggestions(  # noqa: C901
-        self, content_type=ContentType.SHARING, num_titles=3, user_prompt=""
+        self, content_type=ContentType.SHARING, num_titles=3, user_prompt="", model=None
     ):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=TitleSuggestions,
             deps_type=TitleSuggestionContext,
             system_prompt=TITLE_SUGGESTION_SYSTEM_PROMPTS[content_type],
@@ -618,9 +620,9 @@ class Project(BaseModel):
 
             return created_suggestions
 
-    def get_a_list_of_links(self):
+    def get_a_list_of_links(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=list[str],
             deps_type=str,
             system_prompt="""
@@ -648,7 +650,7 @@ class Project(BaseModel):
 
     def find_competitors(self):
         model = OpenAIModel(
-            "sonar",
+            AIModel.PERPLEXITY_SONAR,
             provider=OpenAIProvider(
                 base_url="https://api.perplexity.ai",
                 api_key=settings.PERPLEXITY_API_KEY,
@@ -728,9 +730,9 @@ class Project(BaseModel):
 
         return result.data
 
-    def get_and_save_list_of_competitors(self):
+    def get_and_save_list_of_competitors(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=list[CompetitorDetails],
             system_prompt="""
                 You are an expert data extractor.
@@ -813,9 +815,9 @@ class BlogPostTitleSuggestion(BaseModel):
             suggested_meta_description=self.suggested_meta_description,
         )
 
-    def generate_content(self, content_type=ContentType.SHARING):
+    def generate_content(self, content_type=ContentType.SHARING, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=GeneratedBlogPostSchema,
             deps_type=BlogPostGenerationContext,
             system_prompt=GENERATE_CONTENT_SYSTEM_PROMPTS[content_type],
@@ -1405,9 +1407,9 @@ class Competitor(BaseModel):
 
         return True
 
-    def populate_name_description(self):
+    def populate_name_description(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=CompetitorDetails,
             deps_type=WebPageContent,
             system_prompt=(
@@ -1444,9 +1446,9 @@ class Competitor(BaseModel):
 
         return True
 
-    def analyze_competitor(self):
+    def analyze_competitor(self, model=None):
         agent = Agent(
-            "google-gla:gemini-2.5-flash",
+            model or get_default_ai_model(),
             output_type=CompetitorAnalysis,
             deps_type=CompetitorAnalysisContext,
             system_prompt=(
@@ -1771,16 +1773,68 @@ class Feedback(BaseModel):
                 track_email_sent(
                     email_address=recipient_email,
                     email_type=EmailType.FEEDBACK_NOTIFICATION,
-                    profile=self.profile
+                    profile=self.profile,
                 )
+
+
+class ReferrerBanner(BaseModel):
+    referrer = models.CharField(
+        max_length=100,
+        unique=True,
+        help_text="The referrer code from URL parameter (e.g., 'producthunt' from ?ref=producthunt)",  # noqa: E501
+    )
+    referrer_printable_name = models.CharField(
+        max_length=200,
+        help_text="Human-readable name to display in banner (e.g., 'Product Hunt')",
+    )
+    expiry_date = models.DateTimeField(
+        null=True, blank=True, help_text="When to stop showing this banner"
+    )
+    coupon_code = models.CharField(
+        max_length=100, blank=True, help_text="Optional discount coupon code"
+    )
+    discount_amount = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0,
+        help_text="Discount from 0.00 (0%) to 1.00 (100%)",
+    )
+    is_active = models.BooleanField(
+        default=True, help_text="Manually enable/disable banner without deleting it"
+    )
+    background_color = models.CharField(
+        max_length=100,
+        default="bg-gradient-to-r from-red-500 to-red-600",
+        help_text="Tailwind CSS background color classes (e.g., 'bg-gradient-to-r from-red-500 to-red-600' or 'bg-blue-600')",  # noqa: E501
+    )
+    text_color = models.CharField(
+        max_length=50,
+        default="text-white",
+        help_text="Tailwind CSS text color class (e.g., 'text-white' or 'text-gray-900')",  # noqa: E501
+    )
+
+    def __str__(self):
+        return f"{self.referrer_printable_name} ({self.referrer})"
+
+    @property
+    def is_expired(self):
+        if self.expiry_date is None:
+            return False
+        return timezone.now() > self.expiry_date
+
+    @property
+    def should_display(self):
+        return self.is_active and not self.is_expired
+
+    @property
+    def discount_percentage(self):
+        return int(self.discount_amount * 100)
 
 
 class EmailSent(BaseModel):
     email_address = models.EmailField(help_text="The recipient email address")
     email_type = models.CharField(
-        max_length=50,
-        choices=EmailType.choices,
-        help_text="Type of email sent"
+        max_length=50, choices=EmailType.choices, help_text="Type of email sent"
     )
     profile = models.ForeignKey(
         Profile,
@@ -1788,13 +1842,13 @@ class EmailSent(BaseModel):
         blank=True,
         on_delete=models.SET_NULL,
         related_name="emails_sent",
-        help_text="Associated user profile, if applicable"
+        help_text="Associated user profile, if applicable",
     )
-
-    def __str__(self):
-        return f"{self.email_type} to {self.email_address}"
 
     class Meta:
         verbose_name = "Email Sent"
         verbose_name_plural = "Emails Sent"
         ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.email_type} to {self.email_address}"

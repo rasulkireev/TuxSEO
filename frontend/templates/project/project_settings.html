@@ -1,15 +1,12 @@
-{% extends "base_app.html" %}
+{% extends "base_project.html" %}
 {% load static %}
 {% load widget_tweaks %}
 
-{% block content %}
-<div class="px-6 py-12 mx-auto max-w-7xl sm:py-16">
-  <div class="mx-auto max-w-4xl">
-    <!-- Page Header -->
-    <div class="mb-8">
-      <h1 class="text-2xl font-bold tracking-tight text-gray-900">Project Settings</h1>
-      <p class="mt-2 text-sm text-gray-600">Configure your project details and automation preferences.</p>
-    </div>
+{% block project_content %}
+<div class="mb-6">
+  <h2 class="text-2xl font-bold text-gray-900">Settings</h2>
+  <p class="mt-2 text-gray-600">Configure your project details and automation preferences.</p>
+</div>
     <!-- Project Details Section -->
     <div class="bg-white rounded-md border border-gray-200 shadow-sm" id="project-details">
       <div data-controller="archived-list" class="archived-list" data-archived-list-name-value="project-details">
@@ -287,7 +284,7 @@
                     data-auto-submit-body-initial-value="{{ field.value|default:'{}' }}"
                   >
                     <label class="block mb-1 text-sm font-medium text-gray-700">Request Body</label>
-                    <p class="mb-1 text-xs text-gray-500">Add key-value pairs for the request body. <span class="font-semibold">Values entered without <code>{% templatetag openvariable %} {% templatetag closevariable %}</code> will be used as-is.</span> To use dynamic values (like <code>title</code> or <code>content</code>), wrap them in <code>{% templatetag openvariable %} {% templatetag closevariable %}</code>—these will be replaced dynamically. When entering a value, available dynamic options will appear in a dropdown list for your convenience.</p>
+                    <p class="mb-1 text-xs text-gray-500">Add key-value pairs for the request body. <span class="font-semibold">Values entered without <code>{% templatetag openvariable %} {% templatetag closevariable %}</code> will be used as-is.</span> To use dynamic values (like <code>title</code> or <code>content</code>), wrap them in <code>{% templatetag openvariable %} {% templatetag closevariable %}</code>-these will be replaced dynamically. When entering a value, available dynamic options will appear in a dropdown list for your convenience.</p>
                     <div data-auto-submit-body-target="rows" class="space-y-2"></div>
                     <button type="button" data-action="auto-submit-body#addRow" class="px-3 py-1.5 mt-2 text-xs font-semibold text-gray-700 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100">Add Field</button>
                     <input type="hidden" name="body" data-auto-submit-body-target="jsonInput">
@@ -372,7 +369,4 @@
         </div>
       </div>
     </div>
-
-  </div>
-</div>
-{% endblock content %}
+{% endblock project_content %}
