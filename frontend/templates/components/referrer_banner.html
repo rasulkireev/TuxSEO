@@ -16,7 +16,9 @@
             {% if referrer_banner.coupon_code %}
               <strong class="px-2 py-1 font-bold rounded bg-white/20">{{ referrer_banner.coupon_code }}</strong>
             {% endif %}
-            until {{ referrer_banner.expiry_date|date:"M j, Y" }}
+            {% if referrer_banner.expiry_date %}
+              until {{ referrer_banner.expiry_date|date:"M j, Y" }}
+            {% endif %}
           </span>
         {% else %}
           <span class="hidden sm:inline">
