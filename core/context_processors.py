@@ -57,12 +57,13 @@ def turnstile_site_key(request):
 
 def referrer_banner(request):
     """
-    Adds referrer banner to context if ref parameter is provided and a matching banner exists.
+    Adds referrer banner to context if ref or utm_source parameter is
+    provided and a matching banner exists.
     Banner is only shown if it's active and not expired.
     """
     from core.models import ReferrerBanner
 
-    referrer_code = request.GET.get("ref")
+    referrer_code = request.GET.get("ref") or request.GET.get("utm_source")
     if referrer_code:
         try:
             banner = ReferrerBanner.objects.get(referrer=referrer_code)
