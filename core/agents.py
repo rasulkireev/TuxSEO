@@ -4,6 +4,7 @@ from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from core.agent_system_prompts import (
+    add_inspirations,
     add_language_specification,
     add_project_details,
     add_project_pages,
@@ -51,6 +52,7 @@ content_editor_agent.system_prompt(add_project_pages)
 content_editor_agent.system_prompt(add_title_details)
 content_editor_agent.system_prompt(add_language_specification)
 content_editor_agent.system_prompt(add_target_keywords)
+content_editor_agent.system_prompt(add_inspirations)
 
 
 ########################################################

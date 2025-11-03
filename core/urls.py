@@ -30,6 +30,11 @@ urlpatterns = [
         name="project_competitors",
     ),
     path(
+        "project/<int:pk>/inspirations/",
+        views.ProjectInspirationsView.as_view(),
+        name="project_inspirations",
+    ),
+    path(
         "project/<int:pk>/publish-history",
         views.PublishHistoryView.as_view(),
         name="publish_history",

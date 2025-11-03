@@ -153,6 +153,41 @@ def add_target_keywords(ctx: RunContext[BlogPostGenerationContext]) -> str:
         return ""
 
 
+def add_inspirations(ctx: RunContext[BlogPostGenerationContext]) -> str:
+    if not ctx.deps.inspirations:
+        return ""
+
+    inspiration_sections = []
+    inspiration_sections.append(
+        """
+        INSPIRATION SOURCES:
+        The user has shared the following blog posts and blogs as inspiration sources
+        they would like to emulate in style, tone, and structure.
+        Use these as reference points when generating content:
+        """
+    )
+
+    for inspiration in ctx.deps.inspirations:
+        inspiration_sections.append(
+            f"""
+            - Title: {inspiration.title}
+              URL: {inspiration.url}
+              Description: {inspiration.description or 'No description provided'}
+            """
+        )
+
+    inspiration_sections.append(
+        """
+        IMPORTANT: Draw inspiration from these sources' writing style, tone, structure,
+        and approach while creating content that is unique and appropriate for the current project.
+        Consider how these inspirations structure their content, engage their audience,
+        and present information.
+        """
+    )
+
+    return "\n".join(inspiration_sections)
+
+
 def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
     return (
         "Web page content:"

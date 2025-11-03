@@ -6,6 +6,7 @@ from core.models import (
     BlogPostTitleSuggestion,
     EmailSent,
     GeneratedBlogPost,
+    Inspiration,
     Profile,
     Project,
     ProjectPage,
@@ -80,3 +81,4 @@ admin.site.register(GeneratedBlogPost)
 admin.site.register(AutoSubmissionSetting)
 admin.site.register(ProjectPage)
 admin.site.register(EmailSent)
+admin.site.register(Inspiration)
