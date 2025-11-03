@@ -25,6 +25,11 @@ urlpatterns = [
     ),
     path("project/<int:pk>/pages/", views.ProjectPagesView.as_view(), name="project_pages"),
     path(
+        "project/<int:pk>/competitors/",
+        views.ProjectCompetitorsView.as_view(),
+        name="project_competitors",
+    ),
+    path(
         "project/<int:pk>/publish-history",
         views.PublishHistoryView.as_view(),
         name="publish_history",
@@ -39,6 +44,11 @@ urlpatterns = [
         "project/<int:project_pk>/post/<int:pk>/download-pdf/",
         views.download_blog_post_pdf,
         name="download_blog_post_pdf",
+    ),
+    path(
+        "project/<int:project_pk>/competitor/<int:pk>/post/",
+        views.CompetitorBlogPostDetailView.as_view(),
+        name="competitor_blog_post_detail",
     ),
     # utils
     path("resend-confirmation/", views.resend_confirmation_email, name="resend_confirmation"),

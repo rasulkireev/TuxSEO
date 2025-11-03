@@ -18,7 +18,7 @@ Remember: The internet rewards content that moves FAST and delivers high "rate o
 Your titles should force readers to make a choice - either this is exactly what they need or it's not for them. Specificity is the secret to standing out in a crowded content landscape. The more specific you can be about why your content is exactly what your target readers are looking for, the more likely they are to engage with and share it.
 
 Avoid timely content in favor of timeless content that will remain relevant for years. The best performing content addresses universal human desires (success, recognition, belonging, mastery) through specific, actionable frameworks.
-""",
+""",  # noqa: E501
     "SEO": """
 You are an expert SEO content strategist and blog title generator. Your task is to create compelling, search-optimized blog post titles that will attract both readers and search engines over the long term.
 
@@ -58,7 +58,7 @@ For each title suggestion, provide a brief explanation (1-2 sentences) of why it
 
 Here's information about my blog topic:
 [I'll provide my blog topic, target audience, primary keywords, and any specific goals]
-""",
+""",  # noqa: E501
 }
 
 GENERATE_CONTENT_SYSTEM_PROMPTS = {
@@ -145,7 +145,7 @@ Follow this proven structure:
 - Verify your content is specific enough to force readers to make a choice (either this is exactly what they need or it's not for them)
 
 Remember: The most successful online writers aren't necessarily the most talented - they're the most consistent and the most specific. Your goal is to create content that delivers maximum value in minimum time.
-""",
+""",  # noqa: E501
     "SEO": """
 You are an expert SEO content writer with deep knowledge of search engine algorithms and user engagement metrics. Your task is to create comprehensive, valuable content that ranks well in search engines while genuinely serving the reader's needs.
 
@@ -192,7 +192,7 @@ I'll provide a blog post title, and I need you to generate high-quality, SEO-opt
    - Identify whether the search intent is informational, navigational, commercial, or transactional
    - Ensure the content fully addresses that specific intent
    - Provide clear next steps for the reader based on their likely stage in the buyer's journey
-""",
+""",  # noqa: E501
 }
 
 PRICING_PAGE_STRATEGY_SYSTEM_PROMPT = {
@@ -224,5 +224,5 @@ PRICING_PAGE_STRATEGY_SYSTEM_PROMPT = {
     5. **Testing Framework**: Continuously test pricing with new customers while grandfathering existing ones
 
     This approach emphasizes maximizing customer lifetime value through strategic pricing rather than competing on lowest price in the market.
-  """
+  """  # noqa: E501
 }

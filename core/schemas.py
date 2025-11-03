@@ -250,3 +250,26 @@ class CompetitorAnalysis(BaseModel):
         https://{page-url}/pricing
     """
     )
+
+
+class CompetitorVsTitleContext(BaseModel):
+    """Context for generating competitor comparison blog post titles."""
+
+    project_details: ProjectDetails
+    competitor_details: CompetitorDetails
+
+
+class CompetitorVsPostContext(BaseModel):
+    """Context for generating competitor comparison blog post content."""
+
+    project_name: str
+    project_url: str
+    project_summary: str
+    competitor_name: str
+    competitor_url: str
+    competitor_description: str
+    title: str
+    language: str
+    project_pages: list[ProjectPageContext] = Field(
+        default_factory=list, description="List of project pages available for linking"
+    )

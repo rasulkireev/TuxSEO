@@ -8,12 +8,13 @@ from django.urls import reverse
 from django.utils import timezone
 from django_q.tasks import async_task
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIModel
+from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
 from core.agent_system_prompts import (
     add_todays_date,
     filler_content,
+    markdown_lists,
     post_structure,
     valid_markdown_format,
 )
@@ -178,7 +179,7 @@ class Profile(BaseModel):
 
     @property
     def is_on_free_plan(self):
-        return self.product_name == "Free"
+        return self.product_name == "Free" and not self.user.is_superuser
 
     @property
     def is_on_pro_plan(self):
@@ -270,6 +271,59 @@ class Profile(BaseModel):
     @property
     def can_generate_blog_posts(self):
         return not self.reached_content_generation_limit
+
+    @property
+    def competitor_limit(self):
+        """Maximum number of competitors a user can have across all projects."""
+        if self.is_on_free_plan:
+            return 5
+        return None
+
+    @property
+    def competitor_posts_limit(self):
+        """Maximum number of competitor VS blog posts a user can generate."""
+        if self.is_on_free_plan:
+            return 3
+        return None
+
+    @property
+    def number_of_competitors(self):
+        """Total number of competitors across all projects."""
+        projects = self.projects.all()
+        return sum(project.competitors.count() for project in projects)
+
+    @property
+    def number_of_competitor_posts_generated(self):
+        """Total number of competitor VS blog posts that have been generated."""
+        projects = self.projects.all()
+        competitor_posts_count = 0
+        for project in projects:
+            competitor_posts_count += (
+                project.competitors.filter(blog_post__isnull=False).exclude(blog_post="").count()
+            )
+        return competitor_posts_count
+
+    @property
+    def reached_competitor_limit(self):
+        limit = self.competitor_limit
+        if limit is None:
+            return False
+        return self.number_of_competitors >= limit
+
+    @property
+    def reached_competitor_posts_limit(self):
+        limit = self.competitor_posts_limit
+        if limit is None:
+            return False
+        return self.number_of_competitor_posts_generated >= limit
+
+    @property
+    def can_add_competitors(self):
+        return not self.reached_competitor_limit
+
+    @property
+    def can_generate_competitor_posts(self):
+        return not self.reached_competitor_posts_limit
 
 
 class ProfileStateTransition(BaseModel):
@@ -448,19 +502,19 @@ class Project(BaseModel):
             model_name="Project",
         )
 
-        self.name = result.data.name
-        self.type = result.data.type
-        self.summary = result.data.summary
-        self.blog_theme = result.data.blog_theme
-        self.founders = result.data.founders
-        self.key_features = result.data.key_features
-        self.target_audience_summary = result.data.target_audience_summary
-        self.pain_points = result.data.pain_points
-        self.product_usage = result.data.product_usage
-        self.links = result.data.links
-        self.language = result.data.language
-        self.proposed_keywords = result.data.proposed_keywords
-        self.location = result.data.location
+        self.name = result.output.name
+        self.type = result.output.type
+        self.summary = result.output.summary
+        self.blog_theme = result.output.blog_theme
+        self.founders = result.output.founders
+        self.key_features = result.output.key_features
+        self.target_audience_summary = result.output.target_audience_summary
+        self.pain_points = result.output.pain_points
+        self.product_usage = result.output.product_usage
+        self.links = result.output.links
+        self.language = result.output.language
+        self.proposed_keywords = result.output.proposed_keywords
+        self.location = result.output.location
         self.date_analyzed = timezone.now()
         self.save()
 
@@ -598,7 +652,7 @@ class Project(BaseModel):
 
         with transaction.atomic():
             suggestions = []
-            for title in result.data.titles:
+            for title in result.output.titles:
                 suggestion = BlogPostTitleSuggestion(
                     project=self,
                     title=title.title,
@@ -646,10 +700,10 @@ class Project(BaseModel):
             model_name="Project",
         )
 
-        return result.data
+        return result.output
 
     def find_competitors(self):
-        model = OpenAIModel(
+        model = OpenAIChatModel(
             AIModel.PERPLEXITY_SONAR,
             provider=OpenAIProvider(
                 base_url="https://api.perplexity.ai",
@@ -693,7 +747,11 @@ class Project(BaseModel):
             return "Make sure that each competitor has a name, url, and description."
 
         @agent.system_prompt
-        def number_of_competitors() -> str:
+        def number_of_competitors(ctx: RunContext[ProjectDetails]) -> str:
+            # Check if user is on free plan through the project's profile
+            profile = self.profile
+            if profile.is_on_free_plan:
+                return "Give me a list of exactly 3 competitors."
             return "Give me a list of at least 20 competitors."
 
         @agent.system_prompt
@@ -725,10 +783,10 @@ class Project(BaseModel):
             model_name="Project",
         )
 
-        self.competitors_list = result.data
+        self.competitors_list = result.output
         self.save(update_fields=["competitors_list"])
 
-        return result.data
+        return result.output
 
     def get_and_save_list_of_competitors(self, model=None):
         agent = Agent(
@@ -754,7 +812,7 @@ class Project(BaseModel):
         )
 
         competitors = []
-        for competitor in result.data:
+        for competitor in result.output:
             competitors.append(
                 Competitor(
                     project=self,
@@ -832,6 +890,7 @@ class BlogPostTitleSuggestion(BaseModel):
         agent.system_prompt(add_language_specification)
         agent.system_prompt(add_target_keywords)
         agent.system_prompt(valid_markdown_format)
+        agent.system_prompt(markdown_lists)
         agent.system_prompt(post_structure)
         agent.system_prompt(filler_content)
 
@@ -871,10 +930,10 @@ class BlogPostTitleSuggestion(BaseModel):
         return GeneratedBlogPost.objects.create_and_validate(
             project=self.project,
             title=self,
-            description=result.data.description,
-            slug=result.data.slug,
-            tags=result.data.tags,
-            content=result.data.content,
+            description=result.output.description,
+            slug=result.output.slug,
+            tags=result.output.tags,
+            content=result.output.content,
         )
 
 
@@ -1069,7 +1128,7 @@ class GeneratedBlogPost(BaseModel):
             model_name="GeneratedBlogPost",
         )
 
-        self.content = result.data
+        self.content = result.output
         self.save(update_fields=["content"])
         self.run_validation()
 
@@ -1144,7 +1203,7 @@ class GeneratedBlogPost(BaseModel):
             model_name="GeneratedBlogPost",
         )
 
-        self.content = result.data
+        self.content = result.output
         self.save(update_fields=["content"])
         self.run_validation()
 
@@ -1166,7 +1225,7 @@ class GeneratedBlogPost(BaseModel):
             model_name="GeneratedBlogPost",
         )
 
-        self.content = result.data
+        self.content = result.output
         self.save(update_fields=["content"])
         self.run_validation()
 
@@ -1187,7 +1246,7 @@ class GeneratedBlogPost(BaseModel):
             model_name="GeneratedBlogPost",
         )
 
-        self.content = result.data
+        self.content = result.output
         self.save(update_fields=["content"])
         self.run_validation()
 
@@ -1327,10 +1386,10 @@ class ProjectPage(BaseModel):
         self.date_analyzed = timezone.now()
 
         if self.type == "":
-            self.type = analysis_result.data.type
+            self.type = analysis_result.output.type
 
-        self.type_ai_guess = analysis_result.data.type_ai_guess
-        self.summary = analysis_result.data.summary
+        self.type_ai_guess = analysis_result.output.type_ai_guess
+        self.summary = analysis_result.output.summary
         self.save(
             update_fields=[
                 "date_analyzed",
@@ -1369,6 +1428,9 @@ class Competitor(BaseModel):
     key_benefits = models.TextField(blank=True)
     key_drawbacks = models.TextField(blank=True)
     links = models.JSONField(default=list, blank=True, null=True)
+
+    # VS comparison blog post content
+    blog_post = models.TextField(blank=True, default="")
 
     def __str__(self):
         return f"{self.name}"
@@ -1425,7 +1487,7 @@ class Competitor(BaseModel):
 
         @agent.system_prompt
         def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
-            return f"Web page content:Content: {ctx.deps.markdown_content}"
+            return f"Content: {ctx.deps.markdown_content}"
 
         deps = WebPageContent(
             title=self.homepage_title,
@@ -1440,8 +1502,8 @@ class Competitor(BaseModel):
             model_name="Competitor",
         )
 
-        self.name = result.data.name
-        self.description = result.data.description
+        self.name = result.output.name
+        self.description = result.output.description
         self.save(update_fields=["name", "description"])
 
         return True
@@ -1507,21 +1569,70 @@ class Competitor(BaseModel):
             model_name="Competitor",
         )
 
-        self.competitor_analysis = result.data.competitor_analysis
-        self.key_differences = result.data.key_differences
-        self.strengths = result.data.strengths
-        self.summary = result.data.summary
-        self.weaknesses = result.data.weaknesses
-        self.opportunities = result.data.opportunities
-        self.threats = result.data.threats
-        self.key_features = result.data.key_features
-        self.key_benefits = result.data.key_benefits
-        self.key_drawbacks = result.data.key_drawbacks
-        self.links = result.data.links
+        self.competitor_analysis = result.output.competitor_analysis
+        self.key_differences = result.output.key_differences
+        self.strengths = result.output.strengths
+        self.summary = result.output.summary
+        self.weaknesses = result.output.weaknesses
+        self.opportunities = result.output.opportunities
+        self.threats = result.output.threats
+        self.key_features = result.output.key_features
+        self.key_benefits = result.output.key_benefits
+        self.key_drawbacks = result.output.key_drawbacks
+        self.links = result.output.links
         self.date_analyzed = timezone.now()
         self.save()
 
         return True
+
+    def generate_vs_blog_post(self):
+        """
+        Generate comparison blog post content using Perplexity Sonar.
+        This method uses Perplexity's web search capabilities to research both products.
+        """
+        from core.agents import competitor_vs_blog_post_agent
+        from core.schemas import CompetitorVsPostContext, ProjectPageContext
+
+        title = f"{self.project.name} vs. {self.name}: Which is Better?"
+
+        # Get all analyzed project pages (from AI and sitemap sources)
+        project_pages = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+                always_use=page.always_use,
+            )
+            for page in self.project.project_pages.filter(date_analyzed__isnull=False)
+        ]
+
+        context = CompetitorVsPostContext(
+            project_name=self.project.name,
+            project_url=self.project.url,
+            project_summary=self.project.summary,
+            competitor_name=self.name,
+            competitor_url=self.url,
+            competitor_description=self.description,
+            title=title,
+            language=self.project.language,
+            project_pages=project_pages,
+        )
+
+        prompt = "Write a comprehensive comparison blog post. Return ONLY the markdown content for the blog post, nothing else."  # noqa: E501
+
+        result = run_agent_synchronously(
+            competitor_vs_blog_post_agent,
+            prompt,
+            deps=context,
+            function_name="generate_vs_blog_post",
+            model_name="Competitor",
+        )
+
+        self.blog_post = result.output
+        self.save(update_fields=["blog_post"])
+
+        return self.blog_post
 
 
 class Keyword(BaseModel):

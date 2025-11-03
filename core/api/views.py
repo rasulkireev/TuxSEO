@@ -19,6 +19,8 @@ from core.api.schemas import (
     DeleteProjectKeywordOut,
     FixGeneratedBlogPostIn,
     FixGeneratedBlogPostOut,
+    GenerateCompetitorVsTitleIn,
+    GenerateCompetitorVsTitleOut,
     GeneratedContentOut,
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
@@ -567,51 +569,54 @@ def add_competitor(request: HttpRequest, data: AddCompetitorIn):
     profile = request.auth
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
+    # Check if user has reached competitor limit
+    if not profile.can_add_competitors:
+        return {
+            "status": "error",
+            "message": f"You have reached the competitor limit for your {profile.product_name} plan. Please upgrade to add more competitors.",  # noqa: E501
+        }
+
     try:
         if Competitor.objects.filter(project=project, url=data.url).exists():
             return {"status": "error", "message": "This competitor already exists for your project"}
 
         competitor = Competitor.objects.create(
             project=project,
-            name=data.name if hasattr(data, "name") and data.name else "Unknown Competitor",
+            name=data.name if hasattr(data, "name") and data.name else "Processing...",
             url=data.url,
             description=data.description
             if hasattr(data, "description") and data.description
             else "",
         )
 
+        # Fetch homepage content and populate name/description synchronously
         got_content = competitor.get_page_content()
-        got_name_and_description = competitor.populate_name_description()
-
-        if not got_content or not got_name_and_description:
-            competitor.delete()
+        if got_content:
+            competitor.populate_name_description()
+            logger.info(
+                "[Add Competitor] Successfully populated competitor details",
+                competitor_id=competitor.id,
+                competitor_name=competitor.name,
+                project_id=project.id,
+            )
+        else:
+            logger.warning(
+                "[Add Competitor] Failed to get page content for competitor",
+                competitor_id=competitor.id,
+                url=data.url,
+                project_id=project.id,
+            )
             return {
                 "status": "error",
-                "message": "Failed to get page content for this competitor URL",
+                "message": "Failed to get page content for competitor",
             }
-
-        analyzed = competitor.analyze_competitor()
-
-        if not analyzed:
-            competitor.delete()
-            return {"status": "error", "message": "Failed to analyze this competitor"}
 
         return {
             "status": "success",
             "competitor_id": competitor.id,
             "name": competitor.name,
             "url": competitor.url,
-            "description": competitor.description,
-            "summary": competitor.summary,
-            "competitor_analysis": competitor.competitor_analysis,
-            "key_differences": competitor.key_differences,
-            "strengths": competitor.strengths,
-            "weaknesses": competitor.weaknesses,
-            "opportunities": competitor.opportunities,
-            "threats": competitor.threats,
-            "key_features": competitor.key_features,
-            "key_benefits": competitor.key_benefits,
-            "key_drawbacks": competitor.key_drawbacks,
+            "message": "Competitor added successfully!",
         }
 
     except Exception as e:
@@ -623,6 +628,75 @@ def add_competitor(request: HttpRequest, data: AddCompetitorIn):
             url=data.url,
         )
         return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+
+
+@api.post(
+    "/generate-competitor-vs-title", response=GenerateCompetitorVsTitleOut, auth=[session_auth]
+)
+def generate_competitor_vs_title(request: HttpRequest, data: GenerateCompetitorVsTitleIn):
+    """Generate a competitor comparison blog post using Perplexity Sonar."""
+    profile = request.auth
+    competitor = get_object_or_404(Competitor, id=data.competitor_id)
+    project = competitor.project
+
+    if project.profile != profile:
+        return {
+            "status": "error",
+            "message": "You do not have permission to access this competitor",
+        }
+
+    # Check if user has reached competitor posts generation limit
+    if not profile.can_generate_competitor_posts:
+        return {
+            "status": "error",
+            "message": f"You have reached the competitor post generation limit for your {profile.product_name} plan. Please upgrade to generate more competitor comparison posts.",  # noqa: E501
+        }
+
+    if not profile.can_generate_blog_posts:
+        return {
+            "status": "error",
+            "message": f"You have reached the content generation limit for your {profile.product_name} plan",  # noqa: E501
+        }
+
+    try:
+        logger.info(
+            "Generating VS competitor blog post",
+            competitor_id=competitor.id,
+            competitor_name=competitor.name,
+            project_id=project.id,
+            profile_id=profile.id,
+        )
+
+        blog_post_content = competitor.generate_vs_blog_post()
+
+        logger.info(
+            "VS competitor blog post generated successfully",
+            competitor_id=competitor.id,
+            competitor_name=competitor.name,
+            content_length=len(blog_post_content),
+            project_id=project.id,
+            profile_id=profile.id,
+        )
+
+        return {
+            "status": "success",
+            "message": "VS blog post generated successfully!",
+            "competitor_id": competitor.id,
+        }
+
+    except Exception as e:
+        logger.error(
+            "Failed to generate competitor vs. blog post",
+            error=str(e),
+            exc_info=True,
+            competitor_id=data.competitor_id,
+            project_id=project.id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": f"Failed to generate competitor comparison blog post: {str(e)}",
+        }
 
 
 @api.post("/submit-feedback", auth=[session_auth])

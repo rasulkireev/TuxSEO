@@ -25,6 +25,7 @@ from core.forms import AutoSubmissionSettingForm, ProfileUpdateForm, ProjectScan
 from core.models import (
     AutoSubmissionSetting,
     BlogPost,
+    Competitor,
     GeneratedBlogPost,
     KeywordTrend,
     Profile,
@@ -820,6 +821,47 @@ class ProjectPagesView(LoginRequiredMixin, DetailView):
         return context
 
 
+class ProjectCompetitorsView(LoginRequiredMixin, DetailView):
+    model = Project
+    template_name = "project/project_competitors.html"
+    context_object_name = "project"
+
+    def get_queryset(self):
+        return Project.objects.filter(profile=self.request.user.profile)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        project = self.object
+        profile = self.request.user.profile
+
+        competitors = project.competitors.order_by("-date_analyzed", "-created_at")
+
+        total_competitors_count = competitors.count()
+        analyzed_competitors_count = competitors.filter(date_analyzed__isnull=False).count()
+        scraped_competitors_count = competitors.filter(date_scraped__isnull=False).count()
+
+        context["competitors"] = competitors
+        context["total_competitors_count"] = total_competitors_count
+        context["analyzed_competitors_count"] = analyzed_competitors_count
+        context["scraped_competitors_count"] = scraped_competitors_count
+        context["unanalyzed_competitors_count"] = (
+            total_competitors_count - analyzed_competitors_count
+        )
+
+        # Add limit information for free users
+        context["competitor_limit"] = profile.competitor_limit
+        context["number_of_competitors"] = profile.number_of_competitors
+        context["can_add_competitors"] = profile.can_add_competitors
+        context["competitor_posts_limit"] = profile.competitor_posts_limit
+        context["number_of_competitor_posts_generated"] = (
+            profile.number_of_competitor_posts_generated
+        )
+        context["can_generate_competitor_posts"] = profile.can_generate_competitor_posts
+        context["is_on_free_plan"] = profile.is_on_free_plan
+
+        return context
+
+
 class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
     model = GeneratedBlogPost
     template_name = "blog/generated_blog_post_detail.html"
@@ -863,6 +905,27 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
                             "project_keyword_id": keyword_info["project_keyword_id"],
                         }
                     )
+
+        return context
+
+
+class CompetitorBlogPostDetailView(LoginRequiredMixin, DetailView):
+    model = Competitor
+    template_name = "project/competitor_blog_post_detail.html"
+    context_object_name = "competitor"
+
+    def get_queryset(self):
+        return Competitor.objects.filter(
+            project__profile=self.request.user.profile, project__pk=self.kwargs["project_pk"]
+        )
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        competitor = self.object
+        project = competitor.project
+
+        context["project"] = project
+        context["blog_post_title"] = f"{project.name} vs. {competitor.name}: Which is Better?"
 
         return context
 
