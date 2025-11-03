@@ -18,7 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Project UI updated to be more intuitive.
 - PydanticAI library upgrade.
-- Competitor blog post generation agent moved to centralized agents.py file for easier maintenance.
 
 ### Added
 - Copy as HTML on Generated Blog Posts.

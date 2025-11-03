@@ -49,18 +49,38 @@
 
   <!-- Blog Post Content -->
   {% if competitor.blog_post %}
-    <!-- Copy Action -->
-    <div class="flex justify-end mb-4" data-controller="copy-markdown" data-copy-markdown-content-value="{{ competitor.blog_post }}">
-      <button
-        data-copy-markdown-target="button"
-        data-action="click->copy-markdown#copy"
-        class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-      >
-        <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-        Copy as Markdown
-      </button>
+    <!-- Copy Actions -->
+    <div class="flex gap-3 justify-end mb-4">
+      <div data-controller="copy-markdown" data-copy-markdown-content-value="{{ competitor.blog_post }}">
+        <button
+          data-copy-markdown-target="button"
+          data-action="click->copy-markdown#copy"
+          class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+        >
+          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+          </svg>
+          Copy as Markdown
+        </button>
+      </div>
+
+      <div data-controller="copy-html">
+        <button
+          data-action="copy-html#copyAsHtml"
+          data-copy-html-target="button"
+          class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+        >
+          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+          </svg>
+          Copy as HTML
+        </button>
+        <textarea
+          data-copy-html-target="source"
+          class="sr-only"
+          readonly
+        >{{ competitor.blog_post }}</textarea>
+      </div>
     </div>
 
     <div class="overflow-hidden bg-white rounded-lg border border-gray-200 shadow-sm">
