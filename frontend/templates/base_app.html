@@ -68,7 +68,7 @@
   <div class="bg-white {% if referrer_banner %}pt-24{% else %}pt-8{% endif %}">
     <header class="left-0 z-10">
       <div class="mx-auto w-full max-w-[1376px] px-4">
-        <div class="flex gap-2 items-center px-4 py-3.5 bg-white rounded-xl border border-gray-200 sm:gap-4 md:px-6 lg:rounded-full">
+        <div class="flex relative gap-2 items-center px-4 py-3.5 bg-white rounded-xl border border-gray-200 sm:gap-4 md:px-6 lg:rounded-full">
 
           <!-- Logo and Navigation -->
           <div class="flex gap-6 items-center">
@@ -136,7 +136,7 @@
             </button>
 
             <!-- Mobile Menu Dropdown -->
-            <div data-dropdown-target="menu" class="hidden absolute right-4 left-4 top-full z-10 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg">
+            <div data-dropdown-target="menu" class="hidden absolute right-0 left-0 top-full z-10 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg">
               <nav class="flex-1 justify-center items-center">
                 <ul class="flex flex-col px-4">
                   <li class="py-5 text-center border-b border-gray-200">
@@ -186,7 +186,7 @@
       </div>
     </header>
 
-    <div class="px-2 sm:px-0">
+    <div class="px-2 pt-12 sm:px-0 sm:pt-16">
       {% block content %}
       {% endblock content %}
     </div>

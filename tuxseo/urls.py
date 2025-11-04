@@ -30,6 +30,7 @@ urlpatterns = [
     path("uses", TemplateView.as_view(template_name="pages/uses.html"), name="uses"),
     path("stripe/", include("djstripe.urls", namespace="djstripe")),
     path("", include("core.urls")),
+    path("docs/", include("docs.urls")),
     path(
         "sitemap.xml",
         sitemap,

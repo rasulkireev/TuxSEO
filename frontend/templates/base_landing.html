@@ -63,7 +63,7 @@
   <div class="bg-white {% if referrer_banner %}pt-24{% else %}pt-8{% endif %}">
     <header class="left-0 z-10">
       <div class="mx-auto w-full max-w-[1376px] px-4">
-        <div class="flex gap-2 items-center px-4 py-3.5 bg-white rounded-xl border border-gray-200 sm:gap-4 md:px-6 lg:rounded-full">
+        <div class="flex relative gap-2 items-center px-4 py-3.5 bg-white rounded-xl border border-gray-200 sm:gap-4 md:px-6 lg:rounded-full">
 
           <!-- Logo and Navigation -->
           <div class="flex gap-6 items-center">
@@ -78,6 +78,11 @@
                 <li>
                   <a href="{% url 'blog_posts' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
                     Blog
+                  </a>
+                </li>
+                <li>
+                  <a href="{% url 'docs_page' category='getting-started' page='introduction' %}" class="rounded-full px-6 py-3 text-base font-semibold leading-[1.7] tracking-[-0.09px] text-gray-900 transition-colors hover:bg-gray-100">
+                    Docs
                   </a>
                 </li>
                 <li>
@@ -120,12 +125,17 @@
             </button>
 
             <!-- Mobile Menu Dropdown -->
-            <div data-dropdown-target="menu" class="hidden absolute right-4 left-4 top-full z-10 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg">
+            <div data-dropdown-target="menu" class="hidden absolute right-0 left-0 top-full z-10 mt-2 bg-white rounded-2xl border border-gray-200 shadow-lg">
               <nav class="flex-1 justify-center items-center">
                 <ul class="flex flex-col px-4">
                   <li class="py-5 text-center border-b border-gray-200">
                     <a href="{% url 'blog_posts' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
                       Blog
+                    </a>
+                  </li>
+                  <li class="py-5 text-center border-b border-gray-200">
+                    <a href="{% url 'docs_page' category='getting-started' page='introduction' %}" class="text-sm font-semibold text-gray-900 hover:text-red-600">
+                      Docs
                     </a>
                   </li>
                   <li class="py-5 text-center border-b border-gray-200">
@@ -160,7 +170,7 @@
       </div>
     </header>
 
-    <div class="px-2 sm:px-0">
+    <div class="px-2 pt-12 sm:px-0 sm:pt-16">
       {% block content %}
       {% endblock content %}
     </div>

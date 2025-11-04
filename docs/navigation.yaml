@@ -1,0 +1,42 @@
+# Documentation navigation configuration
+#
+# Define the order of categories and pages in the sidebar navigation.
+# If a category or page is not listed here, it will be added alphabetically
+# at the end of the respective section.
+#
+# Configuration format:
+# - Use category directory names as keys (e.g., 'getting-started', not 'Getting Started')
+# - List page file names without .md extension (e.g., 'introduction', not 'introduction.md')
+# - Order matters: categories and pages appear in the order listed
+#
+# How it works:
+# 1. Categories listed here appear first, in the order specified
+# 2. Categories not listed appear after, in alphabetical order
+# 3. Within each category, pages listed appear first, in the order specified
+# 4. Pages not listed appear after, in alphabetical order
+#
+# Example:
+#   navigation:
+#     getting-started:
+#       - introduction
+#       - quickstart
+#     api:
+#       - overview
+#       - authentication
+#
+# Result: Getting Started section first, API section second, any other sections alphabetically after
+
+navigation:
+  getting-started:
+    - introduction
+    - quickstart
+    # Any pages not listed here will appear after these, in alphabetical order
+
+  features:
+    - blog-post-suggestions
+
+  deployment:
+    - render-deployment
+    - docker-compose-deployment
+
+  # Any categories not listed here will appear after these, in alphabetical order
