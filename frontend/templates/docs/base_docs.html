@@ -1,0 +1,63 @@
+{% extends "base_landing.html" %}
+
+{% block content %}
+<div class="px-4 mx-auto max-w-[1400px] sm:px-6 lg:px-8" data-controller="toc">
+  <div class="flex flex-col gap-8 xl:flex-row xl:gap-12">
+    <!-- Left Sidebar Navigation -->
+    <aside class="flex-shrink-0 xl:w-72">
+      <nav class="sticky top-8 pb-8 space-y-8">
+        {% for section in navigation %}
+        <div class="space-y-3">
+          <h3 class="px-4 text-xs font-bold tracking-wider text-gray-500 uppercase">
+            {{ section.category }}
+          </h3>
+          <ul class="space-y-1">
+            {% for page in section.pages %}
+            <li>
+              <a href="{{ page.url }}"
+                 class="block px-4 py-2.5 text-[15px] leading-snug rounded-lg transition-all duration-150 {% if current_category == section.category_slug and current_page == page.slug %}bg-red-50 text-red-600 font-semibold shadow-sm{% else %}text-gray-700 hover:bg-gray-50 hover:text-gray-900 hover:pl-5{% endif %}">
+                {{ page.title }}
+              </a>
+            </li>
+            {% endfor %}
+          </ul>
+        </div>
+        {% endfor %}
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 min-w-0 max-w-4xl">
+      <!-- Work in Progress Notice -->
+      <div class="px-4 py-3 mb-6 text-sm text-blue-800 bg-blue-50 rounded-lg border border-blue-200">
+        <p class="flex gap-2 items-center mb-1">
+          <svg class="flex-shrink-0 w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+          </svg>
+          <span><strong>Work in Progress:</strong> This documentation is being actively developed. More content will be added soon!</span>
+        </p>
+        <p class="ml-7">
+          If you run into any issues, please email <a href="mailto:rasul@tuxseo.com" class="font-semibold underline hover:text-blue-900">rasul@tuxseo.com</a>
+        </p>
+      </div>
+
+      <article class="max-w-none prose prose-lg prose-gray prose-headings:font-semibold prose-headings:text-gray-900 prose-h1:text-4xl prose-h1:mb-4 prose-h2:text-3xl prose-h2:mt-8 prose-h2:mb-4 prose-h3:text-2xl prose-h3:mt-6 prose-h3:mb-3 prose-p:text-gray-700 prose-p:leading-relaxed prose-a:text-red-600 prose-a:no-underline hover:prose-a:underline prose-strong:text-gray-900 prose-strong:font-semibold prose-code:text-red-600 prose-code:bg-red-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:rounded-lg prose-pre:shadow-lg prose-ol:list-decimal prose-ol:pl-6 prose-ul:list-disc prose-ul:pl-6 prose-li:text-gray-700 docs-code-blocks" data-toc-target="content">
+        {% block docs_content %}
+        {% endblock docs_content %}
+      </article>
+    </main>
+
+    <!-- Right Sidebar Table of Contents -->
+    <aside class="hidden flex-shrink-0 xl:block xl:w-64" data-toc-target="sidebar">
+      <nav class="sticky top-8 space-y-4">
+        <h3 class="px-3 text-xs font-bold tracking-wider text-gray-500 uppercase">
+          On This Page
+        </h3>
+        <ul class="space-y-0" data-toc-target="list">
+          <!-- TOC items will be inserted here by JavaScript -->
+        </ul>
+      </nav>
+    </aside>
+  </div>
+</div>
+{% endblock content %}

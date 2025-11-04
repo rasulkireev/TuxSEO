@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "django_structlog",
     "mjml",
     "core.apps.CoreConfig",
+    "docs.apps.DocsConfig",
 ]
 
 MIDDLEWARE = [

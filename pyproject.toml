@@ -36,6 +36,9 @@ structlog-sentry = "^2.2.1"
 django-mjml = "^1.4"
 weasyprint = "^66.0"
 pydantic-ai = "^1.9.1"
+python-frontmatter = "^1.1.0"
+pyyaml = "^6.0.3"
+pygments = "^2.19.2"
 
 [tool.poetry.group.dev.dependencies]
 pre-commit = "^3.2.1"
