@@ -142,7 +142,7 @@ envVarGroups:
         value: $RENDER_EXTERNAL_URL
 
       # AI Keys
-      - key: GEMINI_API_KEY
+      - key: REPLICATE_API_TOKEN
         value: ""
       - key: PERPLEXITY_API_KEY
         value: ""

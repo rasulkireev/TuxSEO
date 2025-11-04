@@ -9,8 +9,7 @@ from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django_q.tasks import async_task
-from google import genai
-from PIL import Image
+import replicate
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -1104,54 +1103,53 @@ class GeneratedBlogPost(BaseModel):
             self.fix_placeholders()
 
     def generate_og_image(self):
-        gemini_client = genai.Client(api_key=settings.GEMINI_API_KEY)
-
         try:
-            response = gemini_client.models.generate_content(
-                model="gemini-2.5-flash-image",
-                contents=[
-                    "Create an abstract, modern, clean, minimalist (no text) og image for a\
-                    blog post. Title: {self.title.title}. Description: {self.title.description}"
-                ],
+            prompt = (
+                f"Create an abstract, modern, clean, minimalist og image for a blog post. "
+                f"Title: {self.title.title}. Description: {self.title.description}. "
+                f"No text or words in the image, only visual elements."
             )
 
-            first_candidate = response.candidates[0]
-            content_parts = first_candidate.content.parts
+            output = replicate.run(
+                "black-forest-labs/flux-schnell",
+                input={
+                    "prompt": prompt,
+                    "aspect_ratio": "16:9",
+                    "output_format": "png",
+                    "output_quality": 90,
+                },
+            )
 
-            for part in content_parts:
-                if part.inline_data is None:
-                    continue
-
-                generated_image = Image.open(BytesIO(part.inline_data.data))
-
-                image_buffer = BytesIO()
-                generated_image.save(image_buffer, format="PNG")
-                image_buffer.seek(0)
-
-                image_filename = f"{self.slug}-image.png"
-                self.image.save(
-                    image_filename,
-                    ContentFile(image_buffer.read()),
-                    save=True,
-                )
-
-                logger.info(
-                    "[Generate Image] Image generated and saved successfully",
+            if not output:
+                logger.warning(
+                    "[Generate Image] No image data found in response",
                     blog_post_id=self.id,
-                    image_filename=image_filename,
                 )
+                return None
 
-                return self
+            image_url = output[0] if isinstance(output, list) else output
 
-            logger.warning(
-                "[Generate Image] No image data found in response",
-                blog_post_id=self.id,
+            response = requests.get(image_url, timeout=30)
+            response.raise_for_status()
+
+            image_filename = f"{self.slug}-og-image.png"
+            self.image.save(
+                image_filename,
+                ContentFile(response.content),
+                save=True,
             )
-            return None
 
-        except ValueError as e:
+            logger.info(
+                "[Generate Image] Image generated and saved successfully",
+                blog_post_id=self.id,
+                image_filename=image_filename,
+            )
+
+            return self
+
+        except requests.RequestException as e:
             logger.error(
-                "[Generate Image] Failed to generate image - invalid value",
+                "[Generate Image] Failed to download generated image",
                 error=str(e),
                 exc_info=True,
                 blog_post_id=self.id,

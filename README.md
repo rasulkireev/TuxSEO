@@ -39,7 +39,7 @@
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rasulkireev/tuxseo)
 
 The only required env vars are:
-- GEMINI_API_KEY
+- REPLICATE_API_TOKEN
 - PERPLEXITY_API_KEY
 - JINA_READER_API_KEY
 - KEYWORDS_EVERYWHERE_API_KEY
