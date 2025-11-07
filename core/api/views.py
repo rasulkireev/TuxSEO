@@ -30,6 +30,11 @@ from core.api.schemas import (
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
     GetKeywordDetailsOut,
+    PipelineCompleteOut,
+    PipelineRetryOut,
+    PipelineStartOut,
+    PipelineStatusOut,
+    PipelineStepOut,
     PostGeneratedBlogPostIn,
     PostGeneratedBlogPostOut,
     ProjectScanIn,
@@ -1189,4 +1194,297 @@ def generate_og_image(request: HttpRequest, data: GenerateOGImageIn):
         return {
             "status": "error",
             "message": f"An unexpected error occurred: {str(error)}",
+        }
+
+
+########################################################
+# Blog Post Generation Pipeline Endpoints
+########################################################
+
+
+@api.post(
+    "/generate-blog-content-pipeline/{suggestion_id}/start",
+    response=PipelineStartOut,
+    auth=[session_auth],
+)
+def start_pipeline(request: HttpRequest, suggestion_id: int):
+    """
+    Initialize a new blog post generation pipeline.
+
+    Creates a GeneratedBlogPost with initialized pipeline state.
+    """
+    profile = request.auth
+    suggestion = get_object_or_404(
+        BlogPostTitleSuggestion, id=suggestion_id, project__profile=profile
+    )
+
+    if profile.reached_content_generation_limit:
+        limit = profile.blog_post_generation_limit
+        current_count = profile.number_of_generated_blog_posts_this_month
+        message = f"Content generation limit reached ({current_count}/{limit} blog posts this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited content."  # noqa: E501
+        return {
+            "status": "error",
+            "message": message,
+            "blog_post_id": None,
+            "pipeline_state": None,
+        }
+
+    try:
+        blog_post = suggestion.start_generation_pipeline()
+        pipeline_state = blog_post.get_pipeline_status()
+
+        logger.info(
+            "[Pipeline API] Started pipeline",
+            blog_post_id=blog_post.id,
+            suggestion_id=suggestion_id,
+            profile_id=profile.id,
+        )
+
+        return {
+            "status": "success",
+            "message": "Pipeline initialized successfully",
+            "blog_post_id": blog_post.id,
+            "pipeline_state": pipeline_state,
+        }
+
+    except Exception as error:
+        logger.error(
+            "[Pipeline API] Failed to start pipeline",
+            error=str(error),
+            exc_info=True,
+            suggestion_id=suggestion_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": f"Failed to start pipeline: {str(error)}",
+            "blog_post_id": None,
+            "pipeline_state": None,
+        }
+
+
+@api.post(
+    "/generate-blog-content-pipeline/{blog_post_id}/step/{step_name}",
+    response=PipelineStepOut,
+    auth=[session_auth],
+)
+def execute_pipeline_step(request: HttpRequest, blog_post_id: int, step_name: str):
+    """
+    Execute a specific pipeline step.
+
+    Valid step names: structure, content, preliminary_validation, internal_links, final_validation
+    """
+    profile = request.auth
+    blog_post = get_object_or_404(GeneratedBlogPost, id=blog_post_id, project__profile=profile)
+
+    step_map = {
+        "structure": ("generate_structure", "Structure generated successfully"),
+        "content": ("generate_content_from_structure", "Content generated successfully"),
+        "preliminary_validation": (
+            "run_preliminary_validation",
+            "Preliminary validation completed",
+        ),
+        "internal_links": ("insert_internal_links", "Internal links inserted successfully"),
+        "final_validation": ("run_final_validation", "Final validation completed"),
+    }
+
+    if step_name not in step_map:
+        return {
+            "status": "error",
+            "message": f"Invalid step name: {step_name}",
+            "step_name": step_name,
+            "pipeline_state": None,
+            "result": None,
+        }
+
+    method_name, success_message = step_map[step_name]
+
+    try:
+        # Get the method from the title suggestion
+        suggestion = blog_post.title
+        method = getattr(suggestion, method_name)
+
+        # Execute the step
+        result = method(blog_post)
+
+        # Get updated pipeline state
+        pipeline_state = blog_post.get_pipeline_status()
+
+        logger.info(
+            "[Pipeline API] Step executed successfully",
+            blog_post_id=blog_post_id,
+            step_name=step_name,
+            profile_id=profile.id,
+        )
+
+        return {
+            "status": "success",
+            "message": success_message,
+            "step_name": step_name,
+            "pipeline_state": pipeline_state,
+            "result": {"data": str(result)[:200]} if result else None,
+        }
+
+    except Exception as error:
+        logger.error(
+            "[Pipeline API] Step execution failed",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=blog_post_id,
+            step_name=step_name,
+            profile_id=profile.id,
+        )
+
+        # Update pipeline step to failed
+        blog_post.refresh_from_db()
+        pipeline_state = blog_post.get_pipeline_status()
+
+        return {
+            "status": "error",
+            "message": f"Step failed: {str(error)}",
+            "step_name": step_name,
+            "pipeline_state": pipeline_state,
+            "result": None,
+        }
+
+
+@api.get(
+    "/generate-blog-content-pipeline/{blog_post_id}/status",
+    response=PipelineStatusOut,
+    auth=[session_auth],
+)
+def get_pipeline_status(request: HttpRequest, blog_post_id: int):
+    """Get the current status of the pipeline."""
+    profile = request.auth
+    blog_post = get_object_or_404(GeneratedBlogPost, id=blog_post_id, project__profile=profile)
+
+    try:
+        pipeline_status = blog_post.get_pipeline_status()
+
+        return {
+            "status": "success",
+            "current_step": pipeline_status.get("current_step"),
+            "steps": pipeline_status.get("steps"),
+            "progress_percentage": pipeline_status.get("progress_percentage"),
+            "metadata": pipeline_status.get("metadata"),
+        }
+
+    except Exception as error:
+        logger.error(
+            "[Pipeline API] Failed to get pipeline status",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=blog_post_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "current_step": None,
+            "steps": None,
+            "progress_percentage": 0,
+            "metadata": None,
+        }
+
+
+@api.post(
+    "/generate-blog-content-pipeline/{blog_post_id}/retry/{step_name}",
+    response=PipelineRetryOut,
+    auth=[session_auth],
+)
+def retry_pipeline_step(request: HttpRequest, blog_post_id: int, step_name: str):
+    """Retry a failed pipeline step if retry count < 3."""
+    profile = request.auth
+    blog_post = get_object_or_404(GeneratedBlogPost, id=blog_post_id, project__profile=profile)
+
+    # Check if step can be retried
+    if not blog_post.can_retry_step(step_name):
+        return {
+            "status": "error",
+            "message": "Step cannot be retried (max 3 attempts reached)",
+            "pipeline_state": blog_post.get_pipeline_status(),
+        }
+
+    # Reset step status to pending
+    blog_post.update_pipeline_step(step_name, "pending")
+
+    logger.info(
+        "[Pipeline API] Step reset for retry",
+        blog_post_id=blog_post_id,
+        step_name=step_name,
+        profile_id=profile.id,
+    )
+
+    return {
+        "status": "success",
+        "message": f"Step {step_name} reset and ready for retry",
+        "pipeline_state": blog_post.get_pipeline_status(),
+    }
+
+
+@api.post(
+    "/generate-blog-content-pipeline/{suggestion_id}/complete",
+    response=PipelineCompleteOut,
+    auth=[session_auth],
+)
+def complete_pipeline(request: HttpRequest, suggestion_id: int):
+    """
+    Execute the complete pipeline sequentially without UI updates.
+
+    This is useful for scheduled tasks or when you want to run
+    the entire pipeline in one go.
+    """
+    profile = request.auth
+    suggestion = get_object_or_404(
+        BlogPostTitleSuggestion, id=suggestion_id, project__profile=profile
+    )
+
+    if profile.reached_content_generation_limit:
+        limit = profile.blog_post_generation_limit
+        current_count = profile.number_of_generated_blog_posts_this_month
+        message = f"Content generation limit reached ({current_count}/{limit} blog posts this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited content."  # noqa: E501
+        return {
+            "status": "error",
+            "message": message,
+            "blog_post_id": None,
+            "blog_post": None,
+        }
+
+    try:
+        blog_post = suggestion.execute_complete_pipeline()
+
+        logger.info(
+            "[Pipeline API] Complete pipeline executed successfully",
+            blog_post_id=blog_post.id,
+            suggestion_id=suggestion_id,
+            profile_id=profile.id,
+        )
+
+        return {
+            "status": "success",
+            "message": "Blog post generated successfully",
+            "blog_post_id": blog_post.id,
+            "blog_post": {
+                "id": blog_post.id,
+                "slug": blog_post.slug,
+                "title": blog_post.post_title,
+                "description": blog_post.description,
+                "tags": blog_post.tags,
+                "content_length": len(blog_post.content),
+                "is_valid": blog_post.blog_post_content_is_valid,
+            },
+        }
+
+    except Exception as error:
+        logger.error(
+            "[Pipeline API] Complete pipeline failed",
+            error=str(error),
+            exc_info=True,
+            suggestion_id=suggestion_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": f"Pipeline execution failed: {str(error)}",
+            "blog_post_id": None,
+            "blog_post": None,
         }

@@ -15,8 +15,12 @@ from core.agent_system_prompts import (
 from core.choices import AIModel, get_default_ai_model
 from core.schemas import (
     BlogPostGenerationContext,
+    BlogPostStructure,
     CompetitorVsPostContext,
     CompetitorVsTitleContext,
+    ContentFixContext,
+    ContentValidationReport,
+    InternalLinkContext,
     ProjectDetails,
     ProjectPageDetails,
     TitleSuggestion,
@@ -230,4 +234,213 @@ def add_competitor_vs_post_context(ctx) -> str:
         Create an informative comparison that helps readers make an informed decision.
 
         Have a slight preference toward {context.project_name} but remain fair and unbiased.
+    """
+
+
+########################################################
+# Pipeline Agents
+########################################################
+
+blog_structure_agent = Agent(
+    get_default_ai_model(),
+    output_type=BlogPostStructure,
+    deps_type=BlogPostGenerationContext,
+    system_prompt="""
+    You are an expert content strategist and SEO specialist.
+
+    Your task is to create a comprehensive, well-structured outline for a blog post.
+    Think deeply about:
+
+    1. **Logical Flow**: How should information be presented for maximum clarity and impact?
+    2. **SEO Optimization**: What headings and structure will rank well in search engines?
+    3. **User Intent**: What questions does the reader have, and in what order should they be answered?
+    4. **Comprehensiveness**: What topics must be covered for this to be a complete resource?
+    5. **Readability**: How can we break down complex topics into digestible sections?
+
+    Consider the project details, title suggestion, and available project pages when creating the structure.
+    The structure should be detailed enough that a writer can follow it to create excellent content.
+
+    Important guidelines:
+    - Use H2 (level 2) for main sections
+    - Use H3 (level 3) for subsections within main sections
+    - Aim for 5-8 main sections (H2) for a comprehensive post
+    - Each section should have 3-5 key points to cover
+    - Target 2000-3000 total words for the post
+    - Include specific guidance for introduction and conclusion
+    """,  # noqa: E501
+    retries=2,
+    model_settings={"temperature": 0.7},
+)
+
+blog_structure_agent.system_prompt(add_project_details)
+blog_structure_agent.system_prompt(add_project_pages)
+blog_structure_agent.system_prompt(add_title_details)
+blog_structure_agent.system_prompt(add_language_specification)
+blog_structure_agent.system_prompt(add_target_keywords)
+
+
+########################################################
+
+internal_links_agent = Agent(
+    get_default_ai_model(),
+    output_type=str,
+    deps_type=InternalLinkContext,
+    system_prompt="""
+    You are an expert at strategically inserting internal links into content.
+
+    Your task is to identify relevant places in the blog post content where internal links
+    to the project's pages would add value for readers and improve SEO.
+
+    Guidelines:
+    - Only insert links where they are contextually relevant and add value
+    - Use natural anchor text that fits the flow of the content
+    - For "always_use" pages, you MUST find appropriate places to link them
+    - For optional pages, only link if they truly enhance the content
+    - Avoid over-linking (max 1 link per 200 words as a general rule)
+    - Vary your anchor text - don't use the same text repeatedly
+    - Link early in the content when possible, but prioritize natural placement
+
+    Return the content with internal links inserted in markdown format: [anchor text](url)
+
+    IMPORTANT: Return ONLY the modified content, no additional commentary or explanation.
+    """,
+    retries=2,
+    model_settings={"temperature": 0.3},
+)
+
+
+@internal_links_agent.system_prompt
+def add_internal_link_context(ctx) -> str:
+    context: InternalLinkContext = ctx.deps
+
+    always_use_pages = [page for page in context.available_pages if page.always_use]
+    optional_pages = [page for page in context.available_pages if not page.always_use]
+
+    instruction = f"""
+    Current Content:
+    {context.content}
+
+    """
+
+    if always_use_pages:
+        instruction += """
+        REQUIRED PAGES TO LINK (Must be included):
+        """
+        for page in always_use_pages:
+            instruction += f"""
+            - Title: {page.title}
+            - URL: {page.url}
+            - Description: {page.description}
+
+            """
+
+    if optional_pages:
+        instruction += """
+        OPTIONAL PAGES (Link only if contextually relevant):
+        """
+        for page in optional_pages:
+            instruction += f"""
+            - Title: {page.title}
+            - URL: {page.url}
+            - Description: {page.description}
+
+            """
+
+    return instruction
+
+
+########################################################
+
+content_validator_agent = Agent(
+    get_default_ai_model(),
+    output_type=ContentValidationReport,
+    deps_type=str,
+    system_prompt="""
+    You are an expert content quality auditor.
+
+    Your task is to thoroughly review blog post content and identify any issues that would
+    prevent it from being published successfully.
+
+    Check for these specific issues:
+
+    1. **Content Length**: Is the content at least 3000 characters? If not, it's too short.
+
+    2. **Placeholders**: Look for any placeholder text like:
+       - [IMAGE], [LINK], [TODO], [TBD]
+       - "Insert X here"
+       - "Add details about..."
+       - Bracketed suggestions
+
+    3. **Valid Ending**: Does the content have a proper conclusion?
+       - Should not end abruptly mid-sentence
+       - Should not end with an incomplete thought
+       - Should have a concluding section or final thoughts
+
+    4. **Header Start**: Does the content start with a markdown header (#, ##, ###)?
+       - Content should start with plain text (introduction)
+       - Not start with a heading
+
+    5. **Broken Markdown**: Check for markdown syntax errors:
+       - Unclosed brackets or parentheses
+       - Broken links
+       - Malformed lists
+       - Invalid heading syntax
+
+    Be thorough but fair. If something is a minor stylistic issue, don't flag it as critical.
+    Focus on issues that would prevent publication or significantly harm content quality.
+    """,
+    retries=1,
+    model_settings={"temperature": 0.2},
+)
+
+
+########################################################
+
+content_fixer_agent = Agent(
+    get_default_ai_model(),
+    output_type=str,
+    deps_type=ContentFixContext,
+    system_prompt="""
+    You are an expert content editor specialized in fixing specific content issues.
+
+    Your task is to fix the identified validation issues while preserving the quality
+    and intent of the original content.
+
+    Guidelines:
+    - Fix ONLY the issues mentioned in the validation report
+    - Maintain the original style, tone, and voice
+    - Do not rewrite sections that don't need fixing
+    - Be surgical - make targeted fixes, not wholesale changes
+    - Ensure all fixes maintain content quality and coherence
+
+    IMPORTANT: Return ONLY the fixed content, no additional commentary or explanation.
+    """,
+    retries=2,
+    model_settings={"temperature": 0.4},
+)
+
+content_fixer_agent.system_prompt(add_project_details)
+content_fixer_agent.system_prompt(add_title_details)
+
+
+@content_fixer_agent.system_prompt
+def add_fix_context(ctx) -> str:
+    context: ContentFixContext = ctx.deps
+
+    issues_text = "\n".join(
+        [
+            f"- {issue.issue_type}: {issue.details}"
+            + (f" (Location: {issue.location})" if issue.location else "")
+            for issue in context.validation_report.issues
+        ]
+    )
+
+    return f"""
+    Content to Fix:
+    {context.content}
+
+    Issues Found:
+    {issues_text}
+
+    Please fix these issues while maintaining the original content's quality and intent.
     """

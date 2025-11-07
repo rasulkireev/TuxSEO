@@ -275,3 +275,83 @@ class CompetitorVsPostContext(BaseModel):
     project_pages: list[ProjectPageContext] = Field(
         default_factory=list, description="List of project pages available for linking"
     )
+
+
+class BlogPostSection(BaseModel):
+    """A single section in the blog post structure."""
+
+    heading: str = Field(description="H2 or H3 heading for this section")
+    level: int = Field(description="Heading level (2 for H2, 3 for H3)")
+    description: str = Field(
+        description="Brief description of what this section should cover (2-3 sentences)"
+    )
+    target_word_count: int = Field(
+        description="Approximate number of words this section should contain"
+    )
+    key_points: list[str] = Field(
+        description="List of 3-5 key points that should be covered in this section"
+    )
+
+
+class BlogPostStructure(BaseModel):
+    """Complete structure outline for a blog post."""
+
+    introduction_guidance: str = Field(
+        description="Guidance for writing the introduction (what to cover, tone, hook)"
+    )
+    sections: list[BlogPostSection] = Field(
+        description="Ordered list of sections that make up the blog post body"
+    )
+    conclusion_guidance: str = Field(
+        description="Guidance for writing the conclusion (key takeaways, CTA, final thoughts)"
+    )
+    estimated_total_word_count: int = Field(
+        description="Estimated total word count for the entire blog post"
+    )
+    seo_focus: list[str] = Field(
+        description="Primary keywords and topics to emphasize throughout the post"
+    )
+
+
+class InternalLinkContext(BaseModel):
+    """Context for inserting internal links into blog post content."""
+
+    content: str = Field(description="The blog post content in markdown format")
+    available_pages: list[ProjectPageContext] = Field(
+        description="List of project pages available for linking"
+    )
+
+
+class ContentValidationIssue(BaseModel):
+    """A single validation issue found in the content."""
+
+    issue_type: str = Field(
+        description="Type of issue: content_too_short, has_placeholders, invalid_ending, starts_with_header, broken_markdown"  # noqa: E501
+    )
+    details: str = Field(description="Detailed description of the issue")
+    location: str | None = Field(
+        default=None, description="Location in content where issue was found (optional)"
+    )
+
+
+class ContentValidationReport(BaseModel):
+    """Validation report for blog post content."""
+
+    is_valid: bool = Field(description="Whether the content passes all validation checks")
+    issues: list[ContentValidationIssue] = Field(
+        default_factory=list, description="List of validation issues found"
+    )
+    suggestions: list[str] = Field(
+        default_factory=list, description="Suggestions for improving the content"
+    )
+
+
+class ContentFixContext(BaseModel):
+    """Context for fixing content validation issues."""
+
+    content: str = Field(description="The blog post content that needs fixing")
+    validation_report: ContentValidationReport = Field(
+        description="The validation report with issues to fix"
+    )
+    project_details: ProjectDetails
+    title_suggestion: TitleSuggestion

@@ -474,9 +474,8 @@ def generate_and_post_blog_post(project_id: int):
                 project_name=project.name,
             )
             ungenerated_blog_post_suggestion = ungenerated_blog_post_suggestions.first()
-            blog_post_to_post = ungenerated_blog_post_suggestion.generate_content(
-                content_type=ungenerated_blog_post_suggestion.content_type
-            )
+            # Use the new pipeline for generation
+            blog_post_to_post = ungenerated_blog_post_suggestion.execute_complete_pipeline()
 
     # if neither, create a new blog post title suggestion, generate the blog post
     if not blog_post_to_post:
@@ -487,9 +486,8 @@ def generate_and_post_blog_post(project_id: int):
         )
         content_type = random.choice([choice[0] for choice in ContentType.choices])
         suggestions = project.generate_title_suggestions(content_type=content_type, num_titles=1)
-        blog_post_to_post = suggestions[0].generate_content(
-            content_type=suggestions[0].content_type
-        )
+        # Use the new pipeline for generation
+        blog_post_to_post = suggestions[0].execute_complete_pipeline()
 
     # once you have the generated blog post, submit it to the endpoint
     if blog_post_to_post:

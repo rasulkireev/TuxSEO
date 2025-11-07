@@ -54,6 +54,18 @@
                 </svg>
                 View Post
               </a>
+            {% else %}
+              {# In-progress generation - show Continue button #}
+              <button
+                data-action="generate-content#continue"
+                data-generate-content-blog-post-id-value="{{ generated_post.id }}"
+                class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md border border-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Continue
+              </button>
             {% endif %}
           {% endwith %}
         </div>
@@ -92,7 +104,11 @@
             </div>
           {% endif %}
         {% elif generated_post %}
-          <div class="w-5 h-5 rounded-full border-2 border-gray-300 animate-spin border-t-gray-600"></div>
+          {# In-progress generation #}
+          <div class="flex gap-1.5 items-center">
+            <div class="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+            <span class="text-sm font-medium text-blue-700">In Progress</span>
+          </div>
         {% else %}
           <div class="flex gap-1.5 items-center">
             <div class="w-3 h-3 bg-gray-400 rounded-full"></div>

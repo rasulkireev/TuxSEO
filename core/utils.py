@@ -509,3 +509,114 @@ def get_jina_embedding(text: str) -> list[float] | None:
             exc_info=True,
         )
         return None
+
+
+def validate_markdown_syntax(content: str) -> list[dict]:
+    """
+    Check for broken markdown syntax.
+
+    Returns a list of issues found.
+    """
+    issues = []
+
+    # Check for unclosed brackets in links
+    for line_num, line in enumerate(content.split("\n"), 1):
+        # Check for unclosed square brackets
+        if line.count("[") != line.count("]"):
+            issues.append(
+                {
+                    "type": "broken_markdown",
+                    "details": f"Unmatched square brackets on line {line_num}",
+                    "location": f"Line {line_num}",
+                }
+            )
+
+        # Check for unclosed parentheses in what looks like links
+        if "[" in line and "]" in line:
+            bracket_pos = line.find("]")
+            if bracket_pos < len(line) - 1 and line[bracket_pos + 1] == "(":
+                paren_count = 0
+                for char in line[bracket_pos + 1 :]:
+                    if char == "(":
+                        paren_count += 1
+                    elif char == ")":
+                        paren_count -= 1
+                if paren_count != 0:
+                    issues.append(
+                        {
+                            "type": "broken_markdown",
+                            "details": f"Unmatched parentheses in link on line {line_num}",
+                            "location": f"Line {line_num}",
+                        }
+                    )
+
+        # Check for malformed headings (# without space)
+        if line.startswith("#") and len(line) > 1 and line[1] != " " and line[1] != "#":
+            issues.append(
+                {
+                    "type": "broken_markdown",
+                    "details": f"Malformed heading (missing space after #) on line {line_num}",
+                    "location": f"Line {line_num}",
+                }
+            )
+
+    return issues
+
+
+def find_internal_link_opportunities(
+    content: str, project_pages: list, max_links: int = 10
+) -> list[dict]:
+    """
+    Use embeddings to find relevant spots for internal links.
+
+    Args:
+        content: The blog post content
+        project_pages: List of ProjectPage objects with embeddings
+        max_links: Maximum number of link opportunities to find
+
+    Returns:
+        List of link opportunities with position and relevance info
+    """
+    # This is a simplified version - in production, you would:
+    # 1. Split content into paragraphs
+    # 2. Get embeddings for each paragraph
+    # 3. Use cosine similarity to find relevant pages
+    # 4. Return top matches with position information
+
+    opportunities = []
+
+    # For now, return empty list - actual implementation would use vector similarity
+    # This would be filled out when embeddings are ready
+    logger.info(
+        "[FindInternalLinkOpportunities] Finding link opportunities",
+        content_length=len(content),
+        available_pages=len(project_pages),
+    )
+
+    return opportunities
+
+
+def insert_link_at_position(content: str, link_url: str, link_text: str, position: int) -> str:
+    """
+    Smart link insertion at a specific position in the content.
+
+    Args:
+        content: The original content
+        link_url: URL to link to
+        link_text: Anchor text for the link
+        position: Character position where to insert the link
+
+    Returns:
+        Content with link inserted
+    """
+    # Find the text to replace with a link
+    start_pos = max(0, position - len(link_text) // 2)
+    end_pos = min(len(content), position + len(link_text) // 2)
+
+    # Create the markdown link
+    markdown_link = f"[{link_text}]({link_url})"
+
+    # Insert the link
+    new_content = content[:start_pos] + markdown_link + content[end_pos:]
+
+    return new_content

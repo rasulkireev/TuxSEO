@@ -278,3 +278,42 @@ class GenerateOGImageOut(Schema):
     status: str
     message: str = ""
     image_url: str = ""
+
+
+# Pipeline API Schemas
+
+
+class PipelineStartOut(Schema):
+    status: str
+    message: str = ""
+    blog_post_id: int | None = None
+    pipeline_state: dict | None = None
+
+
+class PipelineStepOut(Schema):
+    status: str
+    message: str = ""
+    step_name: str = ""
+    pipeline_state: dict | None = None
+    result: dict | None = None
+
+
+class PipelineStatusOut(Schema):
+    status: str
+    current_step: str | None = None
+    steps: dict | None = None
+    progress_percentage: int = 0
+    metadata: dict | None = None
+
+
+class PipelineRetryOut(Schema):
+    status: str
+    message: str = ""
+    pipeline_state: dict | None = None
+
+
+class PipelineCompleteOut(Schema):
+    status: str
+    message: str = ""
+    blog_post_id: int | None = None
+    blog_post: dict | None = None

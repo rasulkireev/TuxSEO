@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal, InvalidOperation
 
 import requests
@@ -954,6 +955,582 @@ class BlogPostTitleSuggestion(BaseModel):
 
         return blog_post
 
+    def start_generation_pipeline(self):
+        """
+        Initialize a new blog post generation pipeline.
+
+        Creates a GeneratedBlogPost with initialized pipeline state.
+        Returns the blog post object ready for pipeline execution.
+        """
+        blog_post = GeneratedBlogPost.objects.create(
+            project=self.project,
+            title=self,
+            description="",
+            slug="",
+            tags="",
+            content="",
+        )
+
+        blog_post.initialize_pipeline()
+
+        logger.info(
+            "[Pipeline] Started generation pipeline",
+            blog_post_id=blog_post.id,
+            project_id=self.project_id,
+            title_suggestion_id=self.id,
+            title=self.title,
+        )
+
+        return blog_post
+
+    def generate_structure(self, blog_post):
+        """
+        Step 1: Generate the blog post structure/outline.
+
+        Args:
+            blog_post: The GeneratedBlogPost object to update
+
+        Returns:
+            The structure as a JSON-serializable dict
+        """
+        from core.agents import blog_structure_agent
+        from core.schemas import BlogPostGenerationContext, ProjectPageContext
+
+        blog_post.update_pipeline_step("generate_structure", "in_progress")
+
+        try:
+            project_pages = [
+                ProjectPageContext(
+                    url=page.url,
+                    title=page.title,
+                    description=page.description,
+                    summary=page.summary,
+                    always_use=page.always_use,
+                )
+                for page in self.project.project_pages.filter(date_analyzed__isnull=False)
+            ]
+
+            project_keywords = [
+                pk.keyword.keyword_text
+                for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
+            ]
+
+            deps = BlogPostGenerationContext(
+                project_details=self.project.project_details,
+                title_suggestion=self.title_suggestion_schema,
+                project_pages=project_pages,
+                content_type=self.content_type,
+                project_keywords=project_keywords,
+            )
+
+            result = run_agent_synchronously(
+                blog_structure_agent,
+                "Please create a comprehensive structure outline for this blog post.",
+                deps=deps,
+                function_name="generate_structure",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Convert structure to dict for JSON storage
+            structure_dict = result.output.model_dump()
+
+            # Save structure to blog post
+            blog_post.generation_structure = json.dumps(structure_dict, indent=2)
+            blog_post.save(update_fields=["generation_structure"])
+
+            blog_post.update_pipeline_step("generate_structure", "completed")
+
+            logger.info(
+                "[Pipeline] Structure generation completed",
+                blog_post_id=blog_post.id,
+                sections_count=len(structure_dict.get("sections", [])),
+            )
+
+            return structure_dict
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "generate_structure",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Structure generation failed",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def generate_content_from_structure(self, blog_post):
+        """
+        Step 2: Generate the full blog post content based on the structure.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with structure already generated
+
+        Returns:
+            The generated content as a string
+        """
+        from pydantic_ai import Agent
+
+        from core.agent_system_prompts import (
+            add_language_specification,
+            add_project_details,
+            add_target_keywords,
+            add_title_details,
+            add_todays_date,
+            filler_content,
+            markdown_lists,
+            post_structure,
+            valid_markdown_format,
+        )
+        from core.prompts import GENERATE_CONTENT_SYSTEM_PROMPTS
+        from core.schemas import (
+            BlogPostGenerationContext,
+            GeneratedBlogPostSchema,
+            ProjectPageContext,
+        )
+
+        blog_post.update_pipeline_step("generate_content", "in_progress")
+
+        try:
+            # Load the structure
+            structure_dict = json.loads(blog_post.generation_structure)
+
+            # Create agent with modified system prompt that includes structure
+            agent = Agent(
+                get_default_ai_model(),
+                output_type=GeneratedBlogPostSchema,
+                deps_type=BlogPostGenerationContext,
+                system_prompt=GENERATE_CONTENT_SYSTEM_PROMPTS[self.content_type],
+                retries=2,
+                model_settings={"max_tokens": 65500, "temperature": 0.8},
+            )
+
+            agent.system_prompt(add_project_details)
+            agent.system_prompt(add_title_details)
+            agent.system_prompt(add_todays_date)
+            agent.system_prompt(add_language_specification)
+            agent.system_prompt(add_target_keywords)
+            agent.system_prompt(valid_markdown_format)
+            agent.system_prompt(markdown_lists)
+            agent.system_prompt(post_structure)
+            agent.system_prompt(filler_content)
+
+            # Add structure-specific system prompt
+            @agent.system_prompt
+            def add_structure_guidance(ctx) -> str:
+                return f"""
+                IMPORTANT: Follow this detailed structure outline:
+
+                {json.dumps(structure_dict, indent=2)}
+
+                Make sure to:
+                - Follow the section headings and their hierarchy (H2 vs H3)
+                - Cover all the key points listed for each section
+                - Aim for the target word counts specified
+                - Follow the introduction and conclusion guidance provided
+                - Focus on the SEO keywords mentioned in the structure
+                """
+
+            project_pages = [
+                ProjectPageContext(
+                    url=page.url,
+                    title=page.title,
+                    description=page.description,
+                    summary=page.summary,
+                    always_use=page.always_use,
+                )
+                for page in self.project.project_pages.filter(date_analyzed__isnull=False)
+            ]
+
+            project_keywords = [
+                pk.keyword.keyword_text
+                for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
+            ]
+
+            deps = BlogPostGenerationContext(
+                project_details=self.project.project_details,
+                title_suggestion=self.title_suggestion_schema,
+                project_pages=project_pages,
+                content_type=self.content_type,
+                project_keywords=project_keywords,
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                "Please generate the full blog post content following the provided structure outline.",  # noqa: E501
+                deps=deps,
+                function_name="generate_content_from_structure",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Update blog post with generated content
+            blog_post.description = result.output.description
+            blog_post.slug = result.output.slug
+            blog_post.tags = result.output.tags
+            blog_post.raw_content = result.output.content
+            blog_post.content = result.output.content
+            blog_post.save(update_fields=["description", "slug", "tags", "raw_content", "content"])
+
+            blog_post.update_pipeline_step("generate_content", "completed")
+
+            logger.info(
+                "[Pipeline] Content generation completed",
+                blog_post_id=blog_post.id,
+                content_length=len(result.output.content),
+            )
+
+            return result.output.content
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "generate_content",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Content generation failed",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def run_preliminary_validation(self, blog_post):
+        """
+        Step 3: Run preliminary validation on the generated content.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with content
+
+        Returns:
+            Validation report dict
+        """
+        blog_post.update_pipeline_step("preliminary_validation", "in_progress")
+
+        try:
+            validation_report = blog_post.run_detailed_validation()
+
+            if validation_report["is_valid"]:
+                blog_post.update_pipeline_step("preliminary_validation", "completed")
+                logger.info(
+                    "[Pipeline] Preliminary validation passed",
+                    blog_post_id=blog_post.id,
+                )
+            else:
+                blog_post.update_pipeline_step(
+                    "preliminary_validation",
+                    "failed",
+                    error=f"Validation found {len(validation_report['issues'])} issues",
+                )
+                logger.warning(
+                    "[Pipeline] Preliminary validation failed",
+                    blog_post_id=blog_post.id,
+                    issues_count=len(validation_report["issues"]),
+                    issues=validation_report["issues"],
+                )
+
+            return validation_report
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "preliminary_validation",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Preliminary validation error",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def insert_internal_links(self, blog_post):
+        """
+        Step 4: Insert internal links into the content.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with validated content
+
+        Returns:
+            Content with internal links inserted
+        """
+        from core.agents import internal_links_agent
+        from core.schemas import InternalLinkContext, ProjectPageContext
+
+        blog_post.update_pipeline_step("insert_internal_links", "in_progress")
+
+        try:
+            project_pages = [
+                ProjectPageContext(
+                    url=page.url,
+                    title=page.title,
+                    description=page.description,
+                    summary=page.summary,
+                    always_use=page.always_use,
+                )
+                for page in self.project.project_pages.filter(date_analyzed__isnull=False)
+            ]
+
+            if not project_pages:
+                logger.info(
+                    "[Pipeline] No project pages available for internal links, skipping",
+                    blog_post_id=blog_post.id,
+                )
+                blog_post.update_pipeline_step("insert_internal_links", "completed")
+                return blog_post.content
+
+            deps = InternalLinkContext(
+                content=blog_post.content,
+                available_pages=project_pages,
+            )
+
+            result = run_agent_synchronously(
+                internal_links_agent,
+                "Please insert relevant internal links into this content.",
+                deps=deps,
+                function_name="insert_internal_links",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Update blog post with content that has internal links
+            blog_post.content = result.output
+            blog_post.save(update_fields=["content"])
+
+            blog_post.update_pipeline_step("insert_internal_links", "completed")
+
+            logger.info(
+                "[Pipeline] Internal links insertion completed",
+                blog_post_id=blog_post.id,
+            )
+
+            return result.output
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "insert_internal_links",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Internal links insertion failed",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def run_final_validation(self, blog_post):
+        """
+        Step 5: Run final validation on the complete content with internal links.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with final content
+
+        Returns:
+            Validation report dict
+        """
+        blog_post.update_pipeline_step("final_validation", "in_progress")
+
+        try:
+            validation_report = blog_post.run_detailed_validation()
+
+            if validation_report["is_valid"]:
+                blog_post.update_pipeline_step("final_validation", "completed")
+                logger.info(
+                    "[Pipeline] Final validation passed - blog post ready",
+                    blog_post_id=blog_post.id,
+                )
+            else:
+                blog_post.update_pipeline_step(
+                    "final_validation",
+                    "failed",
+                    error=f"Validation found {len(validation_report['issues'])} issues",
+                )
+                logger.warning(
+                    "[Pipeline] Final validation failed",
+                    blog_post_id=blog_post.id,
+                    issues_count=len(validation_report["issues"]),
+                    issues=validation_report["issues"],
+                )
+
+            return validation_report
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "final_validation",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Final validation error",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def fix_validation_issues(self, blog_post, validation_report):
+        """
+        Attempt to fix validation issues using the content fixer agent.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with issues
+            validation_report: The validation report dict with issues
+
+        Returns:
+            Fixed content string
+        """
+        from core.agents import content_fixer_agent
+        from core.schemas import ContentFixContext, ContentValidationIssue, ContentValidationReport
+
+        logger.info(
+            "[Pipeline] Attempting to fix validation issues",
+            blog_post_id=blog_post.id,
+            issues_count=len(validation_report["issues"]),
+        )
+
+        try:
+            # Convert validation report to schema format
+            validation_issues = [
+                ContentValidationIssue(**issue) for issue in validation_report["issues"]
+            ]
+
+            validation_schema = ContentValidationReport(
+                is_valid=validation_report["is_valid"],
+                issues=validation_issues,
+            )
+
+            deps = ContentFixContext(
+                content=blog_post.content,
+                validation_report=validation_schema,
+                project_details=self.project.project_details,
+                title_suggestion=self.title_suggestion_schema,
+            )
+
+            result = run_agent_synchronously(
+                content_fixer_agent,
+                "Please fix the validation issues identified in this content.",
+                deps=deps,
+                function_name="fix_validation_issues",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Update blog post with fixed content
+            blog_post.content = result.output
+            blog_post.save(update_fields=["content"])
+
+            logger.info(
+                "[Pipeline] Content fixes applied",
+                blog_post_id=blog_post.id,
+            )
+
+            return result.output
+
+        except Exception as error:
+            logger.error(
+                "[Pipeline] Failed to fix validation issues",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def execute_complete_pipeline(self):
+        """
+        Execute the complete blog post generation pipeline sequentially.
+
+        This method runs all steps without UI updates, suitable for scheduled tasks.
+        Returns the final GeneratedBlogPost or raises an exception on failure.
+        """
+        logger.info(
+            "[Pipeline] Starting complete pipeline execution",
+            title_suggestion_id=self.id,
+            project_id=self.project_id,
+            title=self.title,
+        )
+
+        blog_post = self.start_generation_pipeline()
+
+        try:
+            # Step 1: Generate structure
+            self.generate_structure(blog_post)
+
+            # Step 2: Generate content
+            self.generate_content_from_structure(blog_post)
+
+            # Step 3: Preliminary validation
+            validation_report = self.run_preliminary_validation(blog_post)
+
+            # If validation fails, try to fix (max 3 attempts)
+            retry_count = 0
+            while not validation_report["is_valid"] and retry_count < 3:
+                logger.info(
+                    "[Pipeline] Attempting to fix content",
+                    blog_post_id=blog_post.id,
+                    retry_count=retry_count + 1,
+                )
+                self.fix_validation_issues(blog_post, validation_report)
+                validation_report = self.run_preliminary_validation(blog_post)
+                retry_count += 1
+
+            if not validation_report["is_valid"]:
+                raise ValueError(f"Content validation failed after {retry_count} attempts")
+
+            # Step 4: Insert internal links
+            self.insert_internal_links(blog_post)
+
+            # Step 5: Final validation
+            final_validation = self.run_final_validation(blog_post)
+
+            # Try to fix if final validation fails
+            retry_count = 0
+            while not final_validation["is_valid"] and retry_count < 3:
+                logger.info(
+                    "[Pipeline] Attempting final fixes",
+                    blog_post_id=blog_post.id,
+                    retry_count=retry_count + 1,
+                )
+                self.fix_validation_issues(blog_post, final_validation)
+                final_validation = self.run_final_validation(blog_post)
+                retry_count += 1
+
+            if not final_validation["is_valid"]:
+                logger.warning(
+                    "[Pipeline] Final validation still has issues but proceeding",
+                    blog_post_id=blog_post.id,
+                    issues=final_validation["issues"],
+                )
+
+            # Generate OG image if enabled
+            if self.project.enable_automatic_og_image_generation:
+                async_task(
+                    "core.tasks.generate_og_image_for_blog_post",
+                    blog_post.id,
+                    group="Generate OG Image",
+                )
+
+            logger.info(
+                "[Pipeline] Complete pipeline execution successful",
+                blog_post_id=blog_post.id,
+                title_suggestion_id=self.id,
+            )
+
+            return blog_post
+
+        except Exception as error:
+            logger.error(
+                "[Pipeline] Complete pipeline execution failed",
+                blog_post_id=blog_post.id,
+                title_suggestion_id=self.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
 
 class AutoSubmissionSetting(BaseModel):
     project = models.ForeignKey(
@@ -1023,6 +1600,29 @@ class GeneratedBlogPost(BaseModel):
     has_valid_ending = models.BooleanField(default=True)
     placeholders = models.BooleanField(default=False)
     starts_with_header = models.BooleanField(default=False)
+
+    # Pipeline fields
+    pipeline_state = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Tracks the current step and status of the generation pipeline",
+    )
+    generation_structure = models.TextField(
+        blank=True,
+        default="",
+        help_text="Stores the outline/structure from the first pipeline step",
+    )
+    raw_content = models.TextField(
+        blank=True,
+        default="",
+        help_text="Stores content before internal links are added",
+    )
+    pipeline_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Stores timestamps, AI model info, and token usage per step",
+    )
 
     objects = GeneratedBlogPostManager()
 
@@ -1100,6 +1700,109 @@ class GeneratedBlogPost(BaseModel):
             placeholders=self.placeholders,
             starts_with_header=self.starts_with_header,
         )
+
+    def run_detailed_validation(self):
+        """
+        Run validation and return detailed validation report.
+
+        Returns a dict with validation status and detailed issues list.
+        """
+        from core.utils import (
+            blog_post_has_placeholders,
+            blog_post_has_valid_ending,
+            blog_post_starts_with_header,
+            validate_markdown_syntax,
+        )
+
+        issues = []
+
+        if not self.content:
+            issues.append(
+                {
+                    "issue_type": "content_too_short",
+                    "details": "Content is empty",
+                    "location": None,
+                }
+            )
+            is_valid = False
+        else:
+            content = self.content.strip()
+            content_length = len(content)
+
+            # Check content length
+            if content_length < 3000:
+                issues.append(
+                    {
+                        "issue_type": "content_too_short",
+                        "details": f"Content is {content_length} characters, needs at least 3000",
+                        "location": None,
+                    }
+                )
+
+            # Check for valid ending
+            if not blog_post_has_valid_ending(self):
+                issues.append(
+                    {
+                        "issue_type": "invalid_ending",
+                        "details": "Content does not have a proper conclusion or ends abruptly",
+                        "location": "End of content",
+                    }
+                )
+
+            # Check for placeholders
+            if blog_post_has_placeholders(self):
+                issues.append(
+                    {
+                        "issue_type": "has_placeholders",
+                        "details": "Content contains placeholder text that needs to be filled in",  # noqa: E501
+                        "location": None,
+                    }
+                )
+
+            # Check if starts with header
+            if blog_post_starts_with_header(self):
+                issues.append(
+                    {
+                        "issue_type": "starts_with_header",
+                        "details": "Content starts with a header instead of plain text introduction",  # noqa: E501
+                        "location": "Start of content",
+                    }
+                )
+
+            # Check markdown syntax
+            markdown_issues = validate_markdown_syntax(content)
+            for markdown_issue in markdown_issues:
+                issues.append(markdown_issue)
+
+            is_valid = len(issues) == 0
+
+        # Update the boolean fields for backward compatibility
+        self.content_too_short = any(i["issue_type"] == "content_too_short" for i in issues)
+        self.has_valid_ending = not any(i["issue_type"] == "invalid_ending" for i in issues)
+        self.placeholders = any(i["issue_type"] == "has_placeholders" for i in issues)
+        self.starts_with_header = any(i["issue_type"] == "starts_with_header" for i in issues)
+
+        self.save(
+            update_fields=[
+                "content_too_short",
+                "has_valid_ending",
+                "placeholders",
+                "starts_with_header",
+            ]
+        )
+
+        logger.info(
+            "[Detailed Validation] Validation complete",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+            is_valid=is_valid,
+            issues_count=len(issues),
+        )
+
+        return {
+            "is_valid": is_valid,
+            "issues": issues,
+        }
 
     def _build_fix_context(self):
         """Build full context for content editor agent to ensure accurate regeneration."""
@@ -1267,6 +1970,123 @@ class GeneratedBlogPost(BaseModel):
         self.content = result.output
         self.save(update_fields=["content"])
         self.run_validation()
+
+    def initialize_pipeline(self):
+        """Initialize the pipeline state for a new blog post generation."""
+        initial_pipeline_state = {
+            "current_step": "generate_structure",
+            "steps": {
+                "generate_structure": {"status": "pending", "retry_count": 0, "error": None},
+                "generate_content": {"status": "pending", "retry_count": 0, "error": None},
+                "preliminary_validation": {"status": "pending", "retry_count": 0, "error": None},
+                "insert_internal_links": {"status": "pending", "retry_count": 0, "error": None},
+                "final_validation": {"status": "pending", "retry_count": 0, "error": None},
+            },
+        }
+        self.pipeline_state = initial_pipeline_state
+        self.pipeline_metadata = {
+            "started_at": timezone.now().isoformat(),
+            "steps_completed": 0,
+            "total_steps": 5,
+        }
+        self.save(update_fields=["pipeline_state", "pipeline_metadata"])
+
+        logger.info(
+            "[Pipeline] Initialized pipeline",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+            project_name=self.project.name,
+        )
+
+    def update_pipeline_step(self, step_name: str, status: str, error: str = None):
+        """Update the status of a specific pipeline step."""
+        if not self.pipeline_state:
+            self.initialize_pipeline()
+
+        pipeline_state = self.pipeline_state
+        if step_name not in pipeline_state["steps"]:
+            logger.error(
+                "[Pipeline] Invalid step name",
+                step_name=step_name,
+                blog_post_id=self.id,
+            )
+            return
+
+        pipeline_state["steps"][step_name]["status"] = status
+        if error:
+            pipeline_state["steps"][step_name]["error"] = error
+
+        if status == "completed":
+            pipeline_state["steps"][step_name]["completed_at"] = timezone.now().isoformat()
+            self.pipeline_metadata["steps_completed"] = (
+                self.pipeline_metadata.get("steps_completed", 0) + 1
+            )
+
+            step_order = [
+                "generate_structure",
+                "generate_content",
+                "preliminary_validation",
+                "insert_internal_links",
+                "final_validation",
+            ]
+            current_index = step_order.index(step_name)
+            if current_index < len(step_order) - 1:
+                pipeline_state["current_step"] = step_order[current_index + 1]
+            else:
+                pipeline_state["current_step"] = "completed"
+                self.pipeline_metadata["completed_at"] = timezone.now().isoformat()
+
+        elif status == "failed":
+            pipeline_state["steps"][step_name]["retry_count"] = (
+                pipeline_state["steps"][step_name].get("retry_count", 0) + 1
+            )
+            pipeline_state["steps"][step_name]["failed_at"] = timezone.now().isoformat()
+
+        elif status == "in_progress":
+            pipeline_state["current_step"] = step_name
+            pipeline_state["steps"][step_name]["started_at"] = timezone.now().isoformat()
+
+        self.pipeline_state = pipeline_state
+        self.save(update_fields=["pipeline_state", "pipeline_metadata"])
+
+        logger.info(
+            "[Pipeline] Updated step",
+            blog_post_id=self.id,
+            step_name=step_name,
+            status=status,
+            error=error,
+            retry_count=pipeline_state["steps"][step_name].get("retry_count", 0),
+        )
+
+    def get_pipeline_status(self):
+        """Return the current pipeline state for API consumption."""
+        if not self.pipeline_state:
+            return {
+                "current_step": None,
+                "status": "not_started",
+                "steps": {},
+                "progress_percentage": 0,
+            }
+
+        steps_completed = self.pipeline_metadata.get("steps_completed", 0)
+        total_steps = self.pipeline_metadata.get("total_steps", 5)
+        progress_percentage = int((steps_completed / total_steps) * 100)
+
+        return {
+            "current_step": self.pipeline_state.get("current_step"),
+            "status": self.pipeline_state.get("current_step", "pending"),
+            "steps": self.pipeline_state.get("steps", {}),
+            "progress_percentage": progress_percentage,
+            "metadata": self.pipeline_metadata,
+        }
+
+    def can_retry_step(self, step_name: str) -> bool:
+        """Check if a step can be retried (less than 3 attempts)."""
+        if not self.pipeline_state or step_name not in self.pipeline_state["steps"]:
+            return False
+
+        retry_count = self.pipeline_state["steps"][step_name].get("retry_count", 0)
+        return retry_count < 3
 
     def fix_generated_blog_post(self):
         if self.content_too_short is True:
