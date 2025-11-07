@@ -1,4 +1,3 @@
-import calendar
 import json
 import random
 from urllib.parse import unquote
@@ -436,46 +435,6 @@ def track_state_change(
         profile.save(update_fields=["state"])
 
     return f"Tracked state change from {from_state} to {to_state} for profile {profile_id}"
-
-
-def schedule_blog_post_posting():
-    now = timezone.now()
-    projects = Project.objects.filter(enable_automatic_post_submission=True)
-
-    scheduled_posts = 0
-    for project in projects:
-        if not project.has_auto_submission_setting or not project.profile.experimental_features:
-            continue
-
-        if not project.last_posted_blog_post:
-            async_task(
-                "core.tasks.generate_and_post_blog_post", project.id, group="Submit Blog Post"
-            )
-            scheduled_posts += 1
-            continue
-
-        last_post_date = project.last_posted_blog_post.date_posted
-        time_since_last_post_in_seconds = (now - last_post_date).total_seconds()
-
-        days_in_month = calendar.monthrange(now.year, now.month)[1]
-        time_between_posts_in_seconds = int(
-            days_in_month
-            * (24 * 60 * 60)
-            / project.auto_submission_settings.latest("created_at").posts_per_month
-        )
-
-        if time_since_last_post_in_seconds > time_between_posts_in_seconds:
-            logger.info(
-                "[Schedule Blog Post Posting] Scheduling blog post for {project.name}",
-                project_id=project.id,
-                project_name=project.name,
-            )
-            async_task(
-                "core.tasks.generate_and_post_blog_post", project.id, group="Submit Blog Post"
-            )
-            scheduled_posts += 1
-
-    return f"Scheduled {scheduled_posts} blog posts"
 
 
 def generate_and_post_blog_post(project_id: int):
@@ -1075,49 +1034,6 @@ def analyze_sitemap_pages(project_id: int, limit: int = 10):
     return f"""Sitemap page analysis for {project.name}:
     Pages analyzed: {stats["analyzed"]}/{stats["total"]}
     Failed: {stats["failed"]}"""
-
-
-def analyze_project_sitemap_pages_daily():
-    """
-    Daily scheduled task that checks all projects with sitemap URLs
-    and schedules analysis for any unanalyzed pages (10 at a time per project).
-    """
-    projects_with_sitemaps = Project.objects.exclude(sitemap_url="")
-
-    scheduled_count = 0
-
-    for project in projects_with_sitemaps:
-        # Check if there are unanalyzed pages from sitemap
-        unanalyzed_count = ProjectPage.objects.filter(
-            project=project,
-            source=ProjectPageSource.SITEMAP,
-            date_analyzed__isnull=True,
-        ).count()
-
-        if unanalyzed_count > 0:
-            logger.info(
-                "[Daily Sitemap Analysis] Scheduling analysis",
-                project_id=project.id,
-                project_name=project.name,
-                unanalyzed_count=unanalyzed_count,
-            )
-
-            async_task(
-                "core.tasks.analyze_sitemap_pages",
-                project.id,
-                group="Daily Sitemap Analysis",
-            )
-            scheduled_count += 1
-
-    logger.info(
-        "[Daily Sitemap Analysis] Completed scheduling",
-        total_projects_with_sitemaps=projects_with_sitemaps.count(),
-        scheduled_projects=scheduled_count,
-    )
-
-    return f"""Daily sitemap analysis check completed:
-    Projects with sitemaps: {projects_with_sitemaps.count()}
-    Projects scheduled for analysis: {scheduled_count}"""
 
 
 def generate_og_image_for_blog_post(blog_post_id: int):

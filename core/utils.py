@@ -3,6 +3,7 @@ from urllib.request import urlopen
 
 import posthog
 import replicate
+import requests
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.forms.utils import ErrorList
@@ -461,5 +462,50 @@ def download_image_from_url(
             image_url=image_url,
             field_name=field_name,
             instance_id=instance_id,
+        )
+        return None
+
+
+def get_jina_embedding(text: str) -> list[float] | None:
+    """
+    Get embedding from Jina API for the given text.
+
+    Args:
+        text: The text to generate an embedding for
+
+    Returns:
+        A list of floats representing the embedding vector, or None if the request fails
+    """
+    url = "https://api.jina.ai/v1/embeddings"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {settings.JINA_READER_API_KEY}",
+    }
+    data = {"model": "jina-embeddings-v3", "task": "text-matching", "input": [text]}
+
+    try:
+        response = requests.post(url, headers=headers, json=data)
+        response.raise_for_status()
+        result = response.json()
+
+        if result.get("data") and len(result["data"]) > 0:
+            embedding = result["data"][0]["embedding"]
+            logger.info(
+                "[GetJinaEmbedding] Successfully generated embedding",
+                embedding_dimensions=len(embedding),
+            )
+            return embedding
+        else:
+            logger.error(
+                "[GetJinaEmbedding] Unexpected response format from Jina API",
+                result=result,
+            )
+            return None
+
+    except requests.exceptions.RequestException as request_error:
+        logger.error(
+            "[GetJinaEmbedding] Error getting embedding from Jina API",
+            error=str(request_error),
+            exc_info=True,
         )
         return None
