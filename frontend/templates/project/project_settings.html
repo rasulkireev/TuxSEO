@@ -1,372 +1,598 @@
-{% extends "base_project.html" %}
+{% extends "base_app.html" %}
 {% load static %}
 {% load widget_tweaks %}
 
-{% block project_content %}
-<div class="mb-6">
-  <h2 class="text-2xl font-bold text-gray-900">Settings</h2>
-  <p class="mt-2 text-gray-600">Configure your project details and automation preferences.</p>
-</div>
-    <!-- Project Details Section -->
-    <div class="bg-white rounded-md border border-gray-200 shadow-sm" id="project-details">
-      <div data-controller="archived-list" class="archived-list" data-archived-list-name-value="project-details">
-        <button
-          class="flex justify-between items-center px-6 py-4 w-full text-left rounded-t-md transition-colors hover:bg-gray-100 focus:outline-none"
-          data-action="click->archived-list#toggle"
-        >
-          <div>
-            <h2 class="text-xl font-bold tracking-tight text-gray-900">Project Details</h2>
-            <p class="mt-1 text-sm text-gray-600">Configure your project settings and preferences</p>
+{% block content %}
+<div class="py-8 bg-white sm:py-12">
+  <div class="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
+
+    <!-- Project Header -->
+    <div class="mb-8">
+      <div class="flex flex-col gap-4 items-center sm:flex-row sm:justify-between">
+        <!-- Back to Projects Button - Hidden on mobile, visible on desktop -->
+        <div class="hidden sm:block sm:flex-shrink-0">
+          <a
+            href="{% url 'home' %}"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+          >
+            <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            Back to Projects
+          </a>
+        </div>
+
+        <!-- Project Title - Centered -->
+        <div class="flex-1 text-center">
+          <h1 class="text-2xl font-bold text-gray-900 sm:text-3xl">
+            {{ project.name }}
+          </h1>
+          <div class="flex justify-center items-center mt-2">
+            <span class="inline-flex items-center px-2.5 py-0.5 text-xs font-medium text-gray-700 bg-gray-100 rounded-full border">
+              {{ project.get_type_display }}
+            </span>
+            {% if project.url %}
+              <a href="{{ project.url }}" target="_blank" rel="noopener noreferrer"
+                 class="inline-flex items-center ml-3 text-sm text-gray-600 hover:text-gray-900">
+                <svg class="mr-1 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+                Visit Site
+              </a>
+            {% endif %}
           </div>
-          <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-          </svg>
-        </button>
-        <div data-archived-list-target="list" class="p-6 border-t border-gray-200">
-      <div class="p-4 mb-6 bg-gray-50 rounded-md border border-gray-200">
+        </div>
+
+        <!-- Spacer for desktop alignment -->
+        <div class="hidden sm:block sm:flex-shrink-0 sm:w-[140px]"></div>
+
+        <!-- Back to Projects Button for Mobile - Full width below title -->
+        <div class="block w-full sm:hidden">
+          <a
+            href="{% url 'home' %}"
+            class="inline-flex justify-center items-center px-4 py-2 w-full text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+          >
+            <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+            </svg>
+            Back to Projects
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Layout: Sidebar Navigation + Content + TOC -->
+    <div class="flex flex-col gap-6 lg:flex-row lg:items-start" data-controller="toc">
+
+      <!-- Sidebar Navigation -->
+      <aside class="space-y-6 w-full lg:w-64 lg:flex-shrink-0 lg:sticky lg:top-6" style="align-self: flex-start;">
+        {% include "components/project_navigation.html" %}
+
+        <!-- Table of Contents (Desktop) -->
+        <div class="hidden lg:block">
+          <nav class="bg-white rounded-lg border border-gray-200 shadow-sm" data-toc-target="sidebar">
+            <div class="p-4">
+              <h2 class="px-3 mb-2 text-xs font-semibold tracking-wider text-gray-500 uppercase">
+                On This Page
+              </h2>
+              <ul class="space-y-2" data-toc-target="list">
+                <!-- TOC items will be generated here -->
+              </ul>
+            </div>
+          </nav>
+        </div>
+      </aside>
+
+      <!-- Main Content Area -->
+      <main class="relative flex-1 w-full pointer-events-auto lg:min-w-0" data-toc-target="content">
+        <!-- Page Header -->
+        <div class="mb-8">
+          <h1 class="text-3xl font-bold tracking-tight text-gray-900">Settings</h1>
+          <p class="mt-2 text-base text-gray-600">Manage your project configuration and automation settings</p>
+        </div>
+
+<!-- Settings Grid -->
+<div class="space-y-8">
+
+  <!-- Project Details Section -->
+  <section id="project-details" class="bg-white rounded-lg border border-gray-200 shadow-sm">
+    <div class="px-6 py-5 border-b border-gray-200">
+      <h2 class="text-xl font-semibold text-gray-900">Project Details</h2>
+      <p class="mt-1 text-sm text-gray-500">Information about your project that helps generate better content</p>
+    </div>
+
+    <div class="px-6 py-6">
+      <!-- Info Banner -->
+      <div class="p-4 mb-6 bg-blue-50 rounded-lg border border-blue-200">
         <div class="flex gap-3">
           <div class="flex-shrink-0">
-            <div class="flex justify-center items-center w-8 h-8 bg-gray-100 rounded-full">
-              <svg class="w-4 h-4 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-            </div>
+            <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
           </div>
           <div>
-            <h4 class="text-sm font-semibold text-gray-900">Pre-filled Project Details</h4>
-            <p class="mt-1 text-sm text-gray-600">
-              We've pre-filled these details based on our analysis of your website. Review and update as needed for better content quality.
+            <h3 class="text-sm font-medium text-blue-900">Pre-filled Information</h3>
+            <p class="mt-1 text-sm text-blue-700">
+              We've analyzed your website and pre-filled these details. Review and update them to improve content quality.
             </p>
           </div>
         </div>
       </div>
+
       <form
         data-controller="project-details"
         data-project-details-project-id-value="{{ project.id }}"
         data-action="project-details#save"
       >
         {% csrf_token %}
-        <div class="space-y-6">
-          <!-- Project Overview Section -->
-          <div class="space-y-4">
-            <h3 class="text-lg font-semibold text-gray-900">Project Overview</h3>
-            <div class="grid gap-4">
+
+        <div class="space-y-8">
+          <!-- Basic Information -->
+          <div id="basic-information">
+            <h3 class="mb-4 text-base font-semibold text-gray-900">Basic Information</h3>
+            <div class="space-y-6">
               <div>
-                <div class="space-y-2">
-                  <label for="summary" class="block text-sm font-medium text-gray-700">
-                    Summary
-                    <span class="ml-1 text-xs text-gray-500">(Brief description of your project)</span>
-                  </label>
-                  <textarea
-                    id="summary"
-                    name="summary"
-                    data-project-details-target="input"
-                    class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                    rows="4"
-                    placeholder="Describe your project in a few sentences..."
-                  >{{ project.summary }}</textarea>
-                </div>
-                <div class="space-y-2">
-                  <label for="key_features" class="block text-sm font-medium text-gray-700">
-                    Key Features
-                    <span class="ml-1 text-xs text-gray-500">(Main functionalities and benefits)</span>
-                  </label>
-                  <textarea
-                    id="key_features"
-                    name="key_features"
-                    data-project-details-target="input"
-                    class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                    rows="4"
-                    placeholder="List your project's key features..."
-                  >{{ project.key_features }}</textarea>
-                </div>
+                <label for="summary" class="block mb-2 text-sm font-medium text-gray-700">
+                  Project Summary
+                </label>
+                <p class="mb-2 text-xs text-gray-500">A brief description of what your project does</p>
+                <textarea
+                  id="summary"
+                  name="summary"
+                  data-project-details-target="input"
+                  class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  rows="4"
+                  placeholder="e.g., A platform that helps developers build faster..."
+                >{{ project.summary }}</textarea>
               </div>
-              <!-- Target Audience Section -->
-              <div class="pt-6 space-y-6 border-t border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Audience & Usage</h3>
-                <div class="grid gap-6">
-                  <div class="space-y-2">
-                    <label for="target_audience" class="block text-sm font-medium text-gray-700">
-                      Target Audience
-                      <span class="ml-1 text-xs text-gray-500">(Who is this for?)</span>
-                    </label>
-                    <textarea
-                      id="target_audience"
-                      name="target_audience_summary"
-                      data-project-details-target="input"
-                      class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                      rows="3"
-                      placeholder="Describe your target audience..."
-                    >{{ project.target_audience_summary }}</textarea>
-                  </div>
-                  <div class="space-y-2">
-                    <label for="pain_points" class="block text-sm font-medium text-gray-700">
-                      Pain Points Addressed
-                      <span class="ml-1 text-xs text-gray-500">(Problems solved)</span>
-                    </label>
-                    <textarea
-                      id="pain_points"
-                      name="pain_points"
-                      data-project-details-target="input"
-                      class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                      rows="4"
-                      placeholder="What problems does your project solve?"
-                    >{{ project.pain_points }}</textarea>
-                  </div>
-                  <div class="space-y-2">
-                    <label for="product_usage" class="block text-sm font-medium text-gray-700">
-                      Product Usage
-                      <span class="ml-1 text-xs text-gray-500">(How is it used?)</span>
-                    </label>
-                    <textarea
-                      id="product_usage"
-                      name="product_usage"
-                      data-project-details-target="input"
-                      class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                      rows="4"
-                      placeholder="Explain how your product is used..."
-                    >{{ project.product_usage }}</textarea>
-                  </div>
-                </div>
+
+              <div>
+                <label for="key_features" class="block mb-2 text-sm font-medium text-gray-700">
+                  Key Features
+                </label>
+                <p class="mb-2 text-xs text-gray-500">Main functionalities and what makes your project unique</p>
+                <textarea
+                  id="key_features"
+                  name="key_features"
+                  data-project-details-target="input"
+                  class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  rows="4"
+                  placeholder="e.g., Real-time collaboration, AI-powered suggestions..."
+                >{{ project.key_features }}</textarea>
               </div>
-              <!-- Additional Information Section -->
-              <div class="pt-6 space-y-6 border-t border-gray-200">
-                <h3 class="text-lg font-semibold text-gray-900">Additional Information</h3>
-                <div class="grid gap-6">
-                  <div class="space-y-2">
-                    <label for="links" class="block text-sm font-medium text-gray-700">
-                      Links
-                      <span class="ml-1 text-xs text-gray-500">(Related resources)</span>
-                    </label>
-                    <textarea
-                      id="links"
-                      name="links"
-                      data-project-details-target="input"
-                      class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                      rows="3"
-                      placeholder="Add relevant links..."
-                    >{{ project.links }}</textarea>
-                  </div>
-                  <div class="space-y-2">
-                    <label for="blog_theme" class="block text-sm font-medium text-gray-700">
-                      Blog Theme
-                      <span class="ml-1 text-xs text-gray-500">(Content direction)</span>
-                    </label>
-                    <textarea
-                      id="blog_theme"
-                      name="blog_theme"
-                      data-project-details-target="input"
-                      class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                      rows="3"
-                      placeholder="Define your blog's theme..."
-                    >{{ project.blog_theme }}</textarea>
-                  </div>
-                  <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                    <div class="space-y-2">
-                      <label for="founders" class="block text-sm font-medium text-gray-700">
-                        Founders
-                        <span class="ml-1 text-xs text-gray-500">(Team members)</span>
-                      </label>
-                      <textarea
-                        id="founders"
-                        name="founders"
-                        data-project-details-target="input"
-                        class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                        rows="2"
-                        placeholder="List project founders..."
-                      >{{ project.founders }}</textarea>
-                    </div>
-                    <div class="space-y-2">
-                      <label for="language" class="block text-sm font-medium text-gray-700">
-                        Language
-                        <span class="ml-1 text-xs text-gray-500">(Content language)</span>
-                      </label>
-                      <select
-                        id="language"
-                        name="language"
-                        data-project-details-target="input"
-                        class="block w-full rounded-md border-gray-300 shadow-sm transition-colors duration-200 focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
-                      >
-                        {% for value, label in languages %}
-                          <option value="{{ value }}" {% if project.language == value %}selected{% endif %}>{{ label }}</option>
-                        {% endfor %}
-                      </select>
-                    </div>
-                  </div>
+            </div>
+          </div>
+
+          <!-- Audience & Usage -->
+          <div id="audience-usage" class="pt-8 border-t border-gray-200">
+            <h3 class="mb-4 text-base font-semibold text-gray-900">Audience & Usage</h3>
+            <div class="space-y-6">
+              <div>
+                <label for="target_audience" class="block mb-2 text-sm font-medium text-gray-700">
+                  Target Audience
+                </label>
+                <p class="mb-2 text-xs text-gray-500">Who is this product for?</p>
+                <textarea
+                  id="target_audience"
+                  name="target_audience_summary"
+                  data-project-details-target="input"
+                  class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  rows="3"
+                  placeholder="e.g., Software developers, startup founders, product managers..."
+                >{{ project.target_audience_summary }}</textarea>
+              </div>
+
+              <div>
+                <label for="pain_points" class="block mb-2 text-sm font-medium text-gray-700">
+                  Problems Solved
+                </label>
+                <p class="mb-2 text-xs text-gray-500">What pain points does your product address?</p>
+                <textarea
+                  id="pain_points"
+                  name="pain_points"
+                  data-project-details-target="input"
+                  class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  rows="4"
+                  placeholder="e.g., Reduces development time, eliminates manual processes..."
+                >{{ project.pain_points }}</textarea>
+              </div>
+
+              <div>
+                <label for="product_usage" class="block mb-2 text-sm font-medium text-gray-700">
+                  How It's Used
+                </label>
+                <p class="mb-2 text-xs text-gray-500">Describe typical usage scenarios</p>
+                <textarea
+                  id="product_usage"
+                  name="product_usage"
+                  data-project-details-target="input"
+                  class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  rows="4"
+                  placeholder="e.g., Teams use it daily for project planning and execution..."
+                >{{ project.product_usage }}</textarea>
+              </div>
+            </div>
+          </div>
+
+          <!-- Additional Settings -->
+          <div id="additional-settings" class="pt-8 border-t border-gray-200">
+            <h3 class="mb-4 text-base font-semibold text-gray-900">Additional Settings</h3>
+            <div class="space-y-6">
+              <div>
+                <label for="blog_theme" class="block mb-2 text-sm font-medium text-gray-700">
+                  Blog Content Theme
+                </label>
+                <p class="mb-2 text-xs text-gray-500">Overall direction and focus for your blog content</p>
+                <textarea
+                  id="blog_theme"
+                  name="blog_theme"
+                  data-project-details-target="input"
+                  class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  rows="3"
+                  placeholder="e.g., Technical tutorials, industry insights, product updates..."
+                >{{ project.blog_theme }}</textarea>
+              </div>
+
+              <div>
+                <label for="links" class="block mb-2 text-sm font-medium text-gray-700">
+                  Related Links
+                </label>
+                <p class="mb-2 text-xs text-gray-500">Documentation, social media, or other relevant resources</p>
+                <textarea
+                  id="links"
+                  name="links"
+                  data-project-details-target="input"
+                  class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  rows="3"
+                  placeholder="Add relevant links (one per line)..."
+                >{{ project.links }}</textarea>
+              </div>
+
+              <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <div>
+                  <label for="founders" class="block mb-2 text-sm font-medium text-gray-700">
+                    Team / Founders
+                  </label>
+                  <p class="mb-2 text-xs text-gray-500">Key team members to mention in content</p>
+                  <textarea
+                    id="founders"
+                    name="founders"
+                    data-project-details-target="input"
+                    class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                    rows="2"
+                    placeholder="e.g., John Doe, Jane Smith..."
+                  >{{ project.founders }}</textarea>
+                </div>
+
+                <div>
+                  <label for="language" class="block mb-2 text-sm font-medium text-gray-700">
+                    Content Language
+                  </label>
+                  <p class="mb-2 text-xs text-gray-500">Primary language for generated content</p>
+                  <select
+                    id="language"
+                    name="language"
+                    data-project-details-target="input"
+                    class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                  >
+                    {% for value, label in languages %}
+                      <option value="{{ value }}" {% if project.language == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        <!-- Form Footer with Save Button -->
-        <div class="pt-6 border-t border-gray-200">
-          <div class="flex justify-end">
-            <button
-              type="submit"
-              class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-colors duration-200 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-            >
-              <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-              </svg>
-              Save Changes
-            </button>
-          </div>
+
+        <!-- Save Button -->
+        <div class="flex justify-end pt-6 mt-8 border-t border-gray-200">
+          <button
+            type="submit"
+            class="inline-flex items-center px-6 py-2.5 text-sm font-semibold text-white bg-gray-800 rounded-lg shadow-sm transition-all hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+          >
+            <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Save Project Details
+          </button>
         </div>
       </form>
+    </div>
+  </section>
+
+  <!-- OG Image Generation Section -->
+  <section id="og-image-generation" class="bg-white rounded-lg border border-gray-200 shadow-sm">
+    <div class="px-6 py-5 border-b border-gray-200">
+      <div class="flex justify-between items-start">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900">OG Image Generation</h2>
+          <p class="mt-1 text-sm text-gray-500">Automatically generate Open Graph images for your blog posts</p>
+        </div>
+        <!-- Toggle Switch -->
+        <div
+          data-controller="og-image-toggle"
+          data-og-image-toggle-project-id-value="{{ project.id }}"
+          data-og-image-toggle-enabled-value="{{ project.enable_automatic_og_image_generation|lower }}"
+        >
+          <button
+            type="button"
+            data-action="og-image-toggle#toggle"
+            data-og-image-toggle-target="toggle"
+            class="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 outline-offset-2 outline-gray-600 ring-1 ring-inset ring-gray-900/5 transition-colors duration-200 ease-in-out has-[:checked]:bg-gray-600 has-[:focus-visible]:outline has-[:focus-visible]:outline-2"
+            role="switch"
+            aria-checked="{{ project.enable_automatic_og_image_generation|lower }}"
+          >
+            <span
+              data-og-image-toggle-target="switch"
+              class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out group-has-[:checked]:translate-x-5"
+            ></span>
+          </button>
         </div>
       </div>
     </div>
 
-    <!-- Blogging Agent Settings Section -->
-    <div id="blogging-agent-settings" class="mt-8">
-      <div class="bg-white rounded-md border border-gray-200 shadow-sm">
-        <div data-controller="archived-list" class="archived-list" data-archived-list-name-value="blogging-agent">
-          <button
-            class="flex justify-between items-center px-6 py-4 w-full text-left rounded-t-md transition-colors hover:bg-gray-100 focus:outline-none"
-            data-action="click->archived-list#toggle"
-          >
-            <div>
-              <h2 class="text-xl font-bold tracking-tight text-gray-900">Automatic Submission Configuration</h2>
-              <p class="mt-1 text-sm text-gray-600">Configure automatic blog post submission settings</p>
-            </div>
-            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-            </svg>
-          </button>
-          <div data-archived-list-target="list" class="p-6 border-t border-gray-200">
+    <div class="px-6 py-6">
+      <form
+        data-controller="project-details"
+        data-project-details-project-id-value="{{ project.id }}"
+        data-action="project-details#save"
+      >
+        {% csrf_token %}
 
-        <!-- Automatic Post Submission Toggle -->
+        <div class="space-y-6">
+          <!-- Info Banner -->
+          <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div class="flex gap-3">
+              <div class="flex-shrink-0">
+                <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 class="text-sm font-medium text-blue-900">About OG Images</h3>
+                <p class="mt-1 text-sm text-blue-700">
+                  Open Graph images appear when your blog posts are shared on social media platforms like Facebook, Twitter, and LinkedIn. We'll automatically generate eye-catching images based on your post titles and selected style.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Image Style Selection -->
+          <div id="og-image-style">
+            <h3 class="mb-4 text-base font-semibold text-gray-900">Image Style</h3>
+            <div>
+              <label for="og_image_style" class="block mb-2 text-sm font-medium text-gray-700">
+                Visual Style for Generated Images
+              </label>
+              <p class="mb-2 text-xs text-gray-500">Choose the aesthetic that best matches your brand</p>
+              <select
+                id="og_image_style"
+                name="og_image_style"
+                data-project-details-target="input"
+                class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+              >
+                {% for value, label in og_image_styles %}
+                  <option value="{{ value }}" {% if project.og_image_style == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <!-- Style Descriptions -->
+            <div class="p-4 mt-4 bg-gray-50 rounded-lg">
+              <h4 class="mb-3 text-sm font-medium text-gray-900">Style Descriptions</h4>
+              <div class="space-y-2 text-xs text-gray-600">
+                <p><strong>Modern Gradient:</strong> Contemporary gradient backgrounds with clean typography</p>
+                <p><strong>Minimalist Clean:</strong> Simple, elegant designs with plenty of white space</p>
+                <p><strong>Bold Typography:</strong> Eye-catching text-focused designs with strong contrast</p>
+                <p><strong>Tech Abstract:</strong> Geometric patterns and tech-inspired visuals</p>
+                <p><strong>Professional Corporate:</strong> Business-friendly, polished appearance</p>
+                <p><strong>Creative Artistic:</strong> Artistic flair with unique visual elements</p>
+                <p><strong>Dark Mode:</strong> Dark backgrounds with vibrant accent colors</p>
+                <p><strong>Vibrant Colorful:</strong> Bold colors and energetic compositions</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Save Button -->
+        <div class="flex justify-end pt-6 mt-6 border-t border-gray-200">
+          <button
+            type="submit"
+            class="inline-flex items-center px-6 py-2.5 text-sm font-semibold text-white bg-gray-800 rounded-lg shadow-sm transition-all hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+          >
+            <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Save OG Image Settings
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- Automatic Submission Section -->
+  <section id="automatic-submission" class="bg-white rounded-lg border border-gray-200 shadow-sm">
+    <div class="px-6 py-5 border-b border-gray-200">
+      <div class="flex justify-between items-start">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900">Automatic Post Submission</h2>
+          <p class="mt-1 text-sm text-gray-500">Automatically publish generated blog posts to your website</p>
+        </div>
+        <!-- Toggle Switch -->
         <div
           data-controller="auto-submission-toggle"
           data-auto-submission-toggle-project-id-value="{{ project.id }}"
           data-auto-submission-toggle-enabled-value="{{ project.enable_automatic_post_submission|lower }}"
         >
-          <div class="flex justify-between items-center">
-            <p class="text-sm font-medium text-gray-700">
-              Enable Automatic Submission
-            </p>
-            <button
+          <button
             type="button"
             data-action="auto-submission-toggle#toggle"
             data-auto-submission-toggle-target="toggle"
             class="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 outline-offset-2 outline-gray-600 ring-1 ring-inset ring-gray-900/5 transition-colors duration-200 ease-in-out has-[:checked]:bg-gray-600 has-[:focus-visible]:outline has-[:focus-visible]:outline-2"
             role="switch"
             aria-checked="{{ project.enable_automatic_post_submission|lower }}"
-            >
+          >
             <span
-                data-auto-submission-toggle-target="switch"
-                class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out group-has-[:checked]:translate-x-5"
-              ></span>
-            </button>
-          </div>
-        </div>
-
-        <!-- Automatic Submission Form -->
-        <form method="post" class="mt-6 space-y-6">
-          {% csrf_token %}
-          {{ auto_submission_settings_form.non_field_errors | safe }}
-
-          <!-- Datalist for dynamic value suggestions -->
-          <datalist id="body-value-suggestions">
-            <option value="{% templatetag openvariable %} post_title {% templatetag closevariable %}"></option>
-            <option value="{% templatetag openvariable %} description {% templatetag closevariable %}"></option>
-            <option value="{% templatetag openvariable %} slug {% templatetag closevariable %}"></option>
-            <option value="{% templatetag openvariable %} tags {% templatetag closevariable %}"></option>
-            <option value="{% templatetag openvariable %} content {% templatetag closevariable %}"></option>
-            <option value="{% templatetag openvariable %} created_at {% templatetag closevariable %}"></option>
-          </datalist>
-
-          <div class="space-y-4">
-              {% for field in auto_submission_settings_form.visible_fields %}
-                {% if field.name == "body" %}
-                  <div
-                    data-controller="auto-submit-body"
-                    data-auto-submit-body-initial-value="{{ field.value|default:'{}' }}"
-                  >
-                    <label class="block mb-1 text-sm font-medium text-gray-700">Request Body</label>
-                    <p class="mb-1 text-xs text-gray-500">Add key-value pairs for the request body. <span class="font-semibold">Values entered without <code>{% templatetag openvariable %} {% templatetag closevariable %}</code> will be used as-is.</span> To use dynamic values (like <code>title</code> or <code>content</code>), wrap them in <code>{% templatetag openvariable %} {% templatetag closevariable %}</code>-these will be replaced dynamically. When entering a value, available dynamic options will appear in a dropdown list for your convenience.</p>
-                    <div data-auto-submit-body-target="rows" class="space-y-2"></div>
-                    <button type="button" data-action="auto-submit-body#addRow" class="px-3 py-1.5 mt-2 text-xs font-semibold text-gray-700 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100">Add Field</button>
-                    <input type="hidden" name="body" data-auto-submit-body-target="jsonInput">
-                  </div>
-                {% elif field.name == "header" %}
-                  <div
-                    data-controller="auto-submit-header"
-                    data-auto-submit-header-initial-value="{{ field.value|default:'{}' }}"
-                  >
-                    <label class="block mb-1 text-sm font-medium text-gray-700">Request Header</label>
-                    <p class="mb-1 text-xs text-gray-500">Add key-value pairs for the request header. Values can be selected from suggestions or entered manually.</p>
-                    <div data-auto-submit-header-target="rows" class="space-y-2"></div>
-                    <button type="button" data-action="auto-submit-header#addRow" class="px-3 py-1.5 mt-2 text-xs font-semibold text-gray-700 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100">Add Field</button>
-                    <input type="hidden" name="header" data-auto-submit-header-target="jsonInput">
-                  </div>
-                {% elif field.name == "posts_per_month" %}
-                  <div>
-                    {{ field.errors | safe }}
-                    <label for="{{ field.id_for_label }}" class="block mb-1 text-sm font-medium text-gray-700">{{ field.label }}</label>
-                    {% if field.help_text %}
-                      <p class="mb-1 text-xs text-gray-500">{{ field.help_text }}</p>
-                    {% endif %}
-                    {% render_field field class="block relative px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-md border border-gray-300 appearance-none focus:outline-none focus:ring-gray-500 focus:border-gray-500 focus:z-10 sm:text-sm" %}
-                  </div>
-                <!-- {% elif field.name == "preferred_timezone" %}
-                  <div class="flex gap-4">
-                    <div class="flex-1">
-                      {{ field.errors | safe }}
-                      <label for="{{ field.id_for_label }}" class="block mb-1 text-sm font-medium text-gray-700">{{ field.label }}</label>
-                      {% render_field field class="block relative px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-md border border-gray-300 appearance-none focus:outline-none focus:ring-gray-500 focus:border-gray-500 focus:z-10 sm:text-sm" %}
-                      {% if field.help_text %}
-                        <p class="mt-1 text-xs text-gray-500">{{ field.help_text }}</p>
-                      {% endif %}
-                    </div>
-                {% elif field.name == "preferred_time" %}
-                    <div class="flex-1">
-                      {{ field.errors | safe }}
-                      <label for="{{ field.id_for_label }}" class="block mb-1 text-sm font-medium text-gray-700">{{ field.label }}</label>
-                      {% render_field field type="time" class="block relative px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-md border border-gray-300 appearance-none focus:outline-none focus:ring-gray-500 focus:border-gray-500 focus:z-10 sm:text-sm" %}
-                      {% if field.help_text %}
-                        <p class="mt-1 text-xs text-gray-500">{{ field.help_text }}</p>
-                      {% endif %}
-                    </div>
-                  </div> -->
-                {% else %}
-                  <div>
-                    {{ field.errors | safe }}
-                    <label for="{{ field.id_for_label }}" class="block mb-1 text-sm font-medium text-gray-700">{{ field.label }}</label>
-                    {% if field.help_text %}
-                      <p class="mb-1 text-xs text-gray-500">{{ field.help_text }}</p>
-                    {% endif %}
-                    {% render_field field class="block relative px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-md border border-gray-300 appearance-none focus:outline-none focus:ring-gray-500 focus:border-gray-500 focus:z-10 sm:text-sm" %}
-                  </div>
-                {% endif %}
-              {% endfor %}
-          </div>
-
-          <!-- Form Submit Section -->
-          <div class="pt-6 border-t border-gray-200">
-            <div class="flex justify-end space-x-2">
-              <!-- Publish History Link -->
-              <a
-                href="{% url 'publish_history' project.id %}"
-                class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 transition-colors hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
-              >
-                <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                View Publish History
-              </a>
-
-              <button type="submit" class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-800 rounded-md shadow-sm transition-colors duration-200 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2">
-                <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-                Save Automatic Submission
-              </button>
-            </div>
-          </div>
-        </form>
-          </div>
+              data-auto-submission-toggle-target="switch"
+              class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out group-has-[:checked]:translate-x-5"
+            ></span>
+          </button>
         </div>
       </div>
     </div>
-{% endblock project_content %}
+
+    <div class="px-6 py-6">
+      <form method="post" class="space-y-8">
+        {% csrf_token %}
+        {{ auto_submission_settings_form.non_field_errors | safe }}
+
+        <!-- Datalist for dynamic value suggestions -->
+        <datalist id="body-value-suggestions">
+          <option value="{% templatetag openvariable %} post_title {% templatetag closevariable %}"></option>
+          <option value="{% templatetag openvariable %} description {% templatetag closevariable %}"></option>
+          <option value="{% templatetag openvariable %} slug {% templatetag closevariable %}"></option>
+          <option value="{% templatetag openvariable %} tags {% templatetag closevariable %}"></option>
+          <option value="{% templatetag openvariable %} content {% templatetag closevariable %}"></option>
+          <option value="{% templatetag openvariable %} created_at {% templatetag closevariable %}"></option>
+        </datalist>
+
+        <!-- API Configuration -->
+        <div id="api-configuration">
+          <h3 class="mb-4 text-base font-semibold text-gray-900">API Configuration</h3>
+          <div class="space-y-6">
+            {% for field in auto_submission_settings_form.visible_fields %}
+              {% if field.name != "body" and field.name != "header" and field.name != "posts_per_month" %}
+                <div>
+                  {{ field.errors | safe }}
+                  <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
+                    {{ field.label }}
+                  </label>
+                  {% if field.help_text %}
+                    <p class="mb-2 text-xs text-gray-500">{{ field.help_text }}</p>
+                  {% endif %}
+                  {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Request Headers -->
+        <div id="request-headers" class="pt-8 border-t border-gray-200">
+          <h3 class="mb-4 text-base font-semibold text-gray-900">Request Headers</h3>
+          <p class="mb-4 text-sm text-gray-500">Add custom headers for your API requests (e.g., authentication tokens)</p>
+          {% for field in auto_submission_settings_form.visible_fields %}
+            {% if field.name == "header" %}
+              <div
+                data-controller="auto-submit-header"
+                data-auto-submit-header-initial-value="{{ field.value|default:'{}' }}"
+              >
+                <div data-auto-submit-header-target="rows" class="space-y-3"></div>
+                <button
+                  type="button"
+                  data-action="auto-submit-header#addRow"
+                  class="inline-flex items-center px-4 py-2 mt-3 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 transition-colors hover:bg-gray-50"
+                >
+                  <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Header
+                </button>
+                <input type="hidden" name="header" data-auto-submit-header-target="jsonInput">
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <!-- Request Body -->
+        <div id="request-body" class="pt-8 border-t border-gray-200">
+          <h3 class="mb-4 text-base font-semibold text-gray-900">Request Body</h3>
+          <div class="p-4 mb-4 bg-amber-50 rounded-lg border border-amber-200">
+            <div class="flex gap-3">
+              <svg class="flex-shrink-0 w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="text-sm text-amber-800">
+                <p class="font-medium">Dynamic Values</p>
+                <p class="mt-1">Use <code class="px-1 py-0.5 bg-amber-100 rounded">{% templatetag openvariable %} variable_name {% templatetag closevariable %}</code> for dynamic content. Available: <code class="px-1 py-0.5 bg-amber-100 rounded">post_title</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">description</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">slug</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">tags</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">content</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">created_at</code></p>
+              </div>
+            </div>
+          </div>
+          {% for field in auto_submission_settings_form.visible_fields %}
+            {% if field.name == "body" %}
+              <div
+                data-controller="auto-submit-body"
+                data-auto-submit-body-initial-value="{{ field.value|default:'{}' }}"
+              >
+                <div data-auto-submit-body-target="rows" class="space-y-3"></div>
+                <button
+                  type="button"
+                  data-action="auto-submit-body#addRow"
+                  class="inline-flex items-center px-4 py-2 mt-3 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 transition-colors hover:bg-gray-50"
+                >
+                  <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  Add Field
+                </button>
+                <input type="hidden" name="body" data-auto-submit-body-target="jsonInput">
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+
+        <!-- Publishing Schedule -->
+        <div id="publishing-schedule" class="pt-8 border-t border-gray-200">
+          <h3 class="mb-4 text-base font-semibold text-gray-900">Publishing Schedule</h3>
+          <div class="space-y-6">
+            {% for field in auto_submission_settings_form.visible_fields %}
+              {% if field.name == "posts_per_month" %}
+                <div>
+                  {{ field.errors | safe }}
+                  <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
+                    {{ field.label }}
+                  </label>
+                  {% if field.help_text %}
+                    <p class="mb-2 text-xs text-gray-500">{{ field.help_text }}</p>
+                  {% endif %}
+                  {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" %}
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+
+        <!-- Form Actions -->
+        <div class="flex justify-between items-center pt-6 border-t border-gray-200">
+          <a
+            href="{% url 'publish_history' project.id %}"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 transition-colors hover:bg-gray-50"
+          >
+            <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            View Publish History
+          </a>
+
+          <button
+            type="submit"
+            class="inline-flex items-center px-6 py-2.5 text-sm font-semibold text-white bg-gray-800 rounded-lg shadow-sm transition-all hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+          >
+            <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Save Submission Settings
+          </button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+</div>
+      </main>
+
+    </div>
+  </div>
+</div>
+{% endblock content %}

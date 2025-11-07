@@ -16,7 +16,7 @@ export default class extends Controller {
     this.enabledValue = !this.enabledValue;
     this.updateToggleState();
 
-    fetch(`/api/projects/${this.projectIdValue}/toggle-auto-submission`, {
+    fetch(`/api/projects/${this.projectIdValue}/toggle-og-image-generation`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -37,7 +37,7 @@ export default class extends Controller {
         // Revert optimistic update on failure
         this.enabledValue = !this.enabledValue;
         this.updateToggleState();
-        console.error("Error toggling auto-submission:", error);
+        console.error("Error toggling OG image generation:", error);
       });
   }
 

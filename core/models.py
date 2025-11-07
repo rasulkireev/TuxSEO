@@ -35,6 +35,7 @@ from core.choices import (
     EmailType,
     KeywordDataSource,
     Language,
+    OGImageStyle,
     ProfileStates,
     ProjectPageSource,
     ProjectPageType,
@@ -370,6 +371,13 @@ class Project(BaseModel):
     # Agent Settings
     enable_automatic_post_submission = models.BooleanField(default=False)
     enable_automatic_post_generation = models.BooleanField(default=True)
+    enable_automatic_og_image_generation = models.BooleanField(default=True)
+    og_image_style = models.CharField(
+        max_length=50,
+        choices=OGImageStyle.choices,
+        default=OGImageStyle.MODERN_GRADIENT,
+        blank=True,
+    )
 
     # Sitemap
     sitemap_url = models.URLField(max_length=500, blank=True, default="")
@@ -927,7 +935,7 @@ class BlogPostTitleSuggestion(BaseModel):
             model_name="BlogPostTitleSuggestion",
         )
 
-        return GeneratedBlogPost.objects.create_and_validate(
+        blog_post = GeneratedBlogPost.objects.create_and_validate(
             project=self.project,
             title=self,
             description=result.output.description,
@@ -935,6 +943,15 @@ class BlogPostTitleSuggestion(BaseModel):
             tags=result.output.tags,
             content=result.output.content,
         )
+
+        if self.project.enable_automatic_og_image_generation:
+            async_task(
+                "core.tasks.generate_og_image_for_blog_post",
+                blog_post.id,
+                group="Generate OG Image",
+            )
+
+        return blog_post
 
 
 class AutoSubmissionSetting(BaseModel):

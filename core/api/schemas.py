@@ -225,6 +225,12 @@ class ToggleAutoSubmissionOut(Schema):
     message: str = ""
 
 
+class ToggleOGImageGenerationOut(Schema):
+    status: str
+    enabled: bool
+    message: str = ""
+
+
 class FixGeneratedBlogPostIn(Schema):
     id: int
 

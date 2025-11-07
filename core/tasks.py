@@ -19,7 +19,7 @@ from core.models import (
     ProjectKeyword,
     ProjectPage,
 )
-from core.utils import save_keyword
+from core.utils import generate_og_image, save_keyword
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -1118,3 +1118,30 @@ def analyze_project_sitemap_pages_daily():
     return f"""Daily sitemap analysis check completed:
     Projects with sitemaps: {projects_with_sitemaps.count()}
     Projects scheduled for analysis: {scheduled_count}"""
+
+
+def generate_og_image_for_blog_post(blog_post_id: int):
+    """
+    Generate an Open Graph image for a blog post using Replicate flux-schnell model.
+    This task is automatically triggered after blog post generation.
+    Uses the project's og_image_style setting to customize the visual style.
+    """
+    try:
+        generated_post = GeneratedBlogPost.objects.get(id=blog_post_id)
+    except GeneratedBlogPost.DoesNotExist:
+        logger.error(
+            "[GenerateOGImage] Blog post not found",
+            blog_post_id=blog_post_id,
+        )
+        return f"Blog post {blog_post_id} not found"
+
+    if not settings.REPLICATE_API_TOKEN:
+        logger.error(
+            "[GenerateOGImage] Replicate API token not configured",
+            blog_post_id=blog_post_id,
+            project_id=generated_post.project_id,
+        )
+        return "Image generation service is not configured"
+
+    success, message = generate_og_image(generated_post, settings.REPLICATE_API_TOKEN)
+    return message

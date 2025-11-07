@@ -48,13 +48,13 @@ export default class extends Controller {
       link.dataset.section = headingId;
       link.className = `block py-1.5 pl-3 text-sm text-gray-600 border-l-2 border-gray-200 transition-colors hover:text-gray-900 hover:border-gray-400`;
 
+      listItem.appendChild(link);
+      tocItems.push(listItem);
+
       link.addEventListener("click", (event) => {
         event.preventDefault();
         this.scrollToSection(headingId);
       });
-
-      listItem.appendChild(link);
-      tocItems.push(listItem);
     });
 
     this.listTarget.innerHTML = "";

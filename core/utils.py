@@ -1,11 +1,14 @@
 import re
+from urllib.request import urlopen
 
 import posthog
+import replicate
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.forms.utils import ErrorList
 from pydantic_ai import Agent
 
-from core.choices import EmailType, KeywordDataSource, get_default_ai_model
+from core.choices import EmailType, KeywordDataSource, OGImageStyle, get_default_ai_model
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.model_utils import run_agent_synchronously
 from core.models import EmailSent, GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
@@ -280,3 +283,137 @@ def track_email_sent(email_address: str, email_type: EmailType, profile: Profile
             exc_info=True,
         )
         return None
+
+
+def get_og_image_prompt(style: str, category: str) -> str:
+    """
+    Generate a style-specific prompt for OG image generation.
+
+    Args:
+        style: The OG image style from OGImageStyle choices
+        category: The blog post category
+
+    Returns:
+        A prompt string optimized for the selected style
+    """
+    base_format = "1200x630 pixels aspect ratio. NO TEXT, NO WORDS, NO LETTERS."
+
+    style_prompts = {
+        OGImageStyle.MODERN_GRADIENT: f"Modern gradient background for a social media post about {category}. Contemporary smooth color transitions, flowing shapes, clean composition. {base_format}",  # noqa: E501
+        OGImageStyle.MINIMALIST_CLEAN: f"Minimalist clean background for a social media post about {category}. Simple geometric shapes, plenty of white space, subtle colors, elegant and professional. {base_format}",  # noqa: E501
+        OGImageStyle.BOLD_TYPOGRAPHY: f"Bold graphic background for a social media post about {category}. Strong geometric shapes, high contrast, eye-catching composition, modern and dynamic. {base_format}",  # noqa: E501
+        OGImageStyle.TECH_ABSTRACT: f"Tech abstract background for a social media post about {category}. Geometric patterns, grid lines, digital aesthetic, futuristic feel, technology-inspired visuals. {base_format}",  # noqa: E501
+        OGImageStyle.PROFESSIONAL_CORPORATE: f"Professional corporate background for a social media post about {category}. Polished appearance, business-friendly colors, clean lines, sophisticated composition. {base_format}",  # noqa: E501
+        OGImageStyle.CREATIVE_ARTISTIC: f"Creative artistic background for a social media post about {category}. Unique visual elements, artistic flair, expressive composition, vibrant and imaginative. {base_format}",  # noqa: E501
+        OGImageStyle.DARK_MODE: f"Dark mode background for a social media post about {category}. Dark background with vibrant accent colors, modern contrast, sleek and contemporary aesthetic. {base_format}",  # noqa: E501
+        OGImageStyle.VIBRANT_COLORFUL: f"Vibrant colorful background for a social media post about {category}. Bold colors, energetic composition, dynamic visual elements, eye-catching and lively. {base_format}",  # noqa: E501
+    }
+
+    return style_prompts.get(
+        style,
+        f"Abstract modern geometric background for a social media post about {category}. Clean minimalist design with vibrant gradients, smooth shapes, professional aesthetic. {base_format}",  # noqa: E501
+    )
+
+
+def generate_og_image(
+    generated_post: GeneratedBlogPost,
+    replicate_api_token: str,
+) -> tuple[bool, str]:
+    """
+    Generate an Open Graph image for a blog post using Replicate flux-schnell model.
+
+    Args:
+        generated_post: The GeneratedBlogPost instance to generate an image for
+        replicate_api_token: Replicate API token for authentication
+
+    Returns:
+        A tuple of (success: bool, message: str)
+    """
+    if generated_post.image:
+        logger.info(
+            "[GenerateOGImage] Image already exists for blog post",
+            blog_post_id=generated_post.id,
+            project_id=generated_post.project_id,
+        )
+        return True, f"Image already exists for blog post {generated_post.id}"
+
+    try:
+        blog_post_category = (
+            generated_post.title.category if generated_post.title.category else "technology"
+        )
+
+        project_og_style = generated_post.project.og_image_style or OGImageStyle.MODERN_GRADIENT
+        prompt = get_og_image_prompt(project_og_style, blog_post_category)
+
+        logger.info(
+            "[GenerateOGImage] Starting image generation",
+            blog_post_id=generated_post.id,
+            project_id=generated_post.project_id,
+            category=blog_post_category,
+            og_style=project_og_style,
+            prompt=prompt,
+        )
+
+        replicate_client = replicate.Client(api_token=replicate_api_token)
+
+        output = replicate_client.run(
+            "black-forest-labs/flux-schnell",
+            input={
+                "prompt": prompt,
+                "aspect_ratio": "16:9",
+                "output_format": "png",
+                "output_quality": 90,
+            },
+        )
+
+        if not output:
+            logger.error(
+                "[GenerateOGImage] No output from Replicate",
+                blog_post_id=generated_post.id,
+                project_id=generated_post.project_id,
+            )
+            return False, f"Failed to generate image for blog post {generated_post.id}"
+
+        file_output = output[0] if isinstance(output, list) else output
+        image_url = str(file_output)
+
+        logger.info(
+            "[GenerateOGImage] Image generated successfully",
+            blog_post_id=generated_post.id,
+            project_id=generated_post.project_id,
+            image_url=image_url,
+        )
+
+        image_response = urlopen(image_url)
+        image_content = ContentFile(image_response.read())
+
+        filename = f"og-image-{generated_post.id}.png"
+        generated_post.image.save(filename, image_content, save=True)
+
+        logger.info(
+            "[GenerateOGImage] Image saved to blog post",
+            blog_post_id=generated_post.id,
+            project_id=generated_post.project_id,
+            saved_url=generated_post.image.url,
+        )
+
+        return True, f"Successfully generated and saved OG image for blog post {generated_post.id}"
+
+    except replicate.exceptions.ReplicateError as replicate_error:
+        logger.error(
+            "[GenerateOGImage] Replicate API error",
+            error=str(replicate_error),
+            exc_info=True,
+            blog_post_id=generated_post.id,
+            project_id=generated_post.project_id,
+        )
+        return False, f"Replicate API error: {str(replicate_error)}"
+    except Exception as error:
+        logger.error(
+            "[GenerateOGImage] Unexpected error during image generation",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=generated_post.id,
+            project_id=generated_post.project_id,
+        )
+        return False, f"Unexpected error: {str(error)}"

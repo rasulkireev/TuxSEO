@@ -84,6 +84,17 @@ class ProjectStyle(models.TextChoices):
     STEAMPUNK = "Steampunk", "Steampunk"
 
 
+class OGImageStyle(models.TextChoices):
+    MODERN_GRADIENT = "Modern Gradient", "Modern Gradient"
+    MINIMALIST_CLEAN = "Minimalist Clean", "Minimalist Clean"
+    BOLD_TYPOGRAPHY = "Bold Typography", "Bold Typography"
+    TECH_ABSTRACT = "Tech Abstract", "Tech Abstract"
+    PROFESSIONAL_CORPORATE = "Professional Corporate", "Professional Corporate"
+    CREATIVE_ARTISTIC = "Creative Artistic", "Creative Artistic"
+    DARK_MODE = "Dark Mode", "Dark Mode"
+    VIBRANT_COLORFUL = "Vibrant Colorful", "Vibrant Colorful"
+
+
 class ProfileStates(models.TextChoices):
     STRANGER = "stranger"
     SIGNED_UP = "signed_up"

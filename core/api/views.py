@@ -1,9 +1,6 @@
-from urllib.request import urlopen
-
 import replicate
 import requests
 from django.conf import settings
-from django.core.files.base import ContentFile
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -40,6 +37,7 @@ from core.api.schemas import (
     SubmitFeedbackIn,
     SubmitSitemapIn,
     ToggleAutoSubmissionOut,
+    ToggleOGImageGenerationOut,
     ToggleProjectKeywordUseIn,
     ToggleProjectKeywordUseOut,
     ToggleProjectPageAlwaysUseIn,
@@ -64,6 +62,7 @@ from core.models import (
     ProjectKeyword,
     ProjectPage,
 )
+from core.utils import generate_og_image as generate_og_image_util
 from core.utils import get_or_create_project
 from tuxseo.utils import get_tuxseo_logger
 
@@ -400,6 +399,8 @@ def update_project(request: HttpRequest, project_id: int):
     project.blog_theme = request.POST.get("blog_theme", "")
     project.founders = request.POST.get("founders", "")
     project.language = request.POST.get("language", "")
+    project.summary = request.POST.get("summary", "")
+    project.og_image_style = request.POST.get("og_image_style", "")
 
     project.save()
 
@@ -419,6 +420,21 @@ def toggle_auto_submission(request: HttpRequest, project_id: int):
     project.save(update_fields=["enable_automatic_post_submission"])
 
     return {"status": "success", "enabled": project.enable_automatic_post_submission}
+
+
+@api.post(
+    "/projects/{project_id}/toggle-og-image-generation",
+    response=ToggleOGImageGenerationOut,
+    auth=[session_auth],
+)
+def toggle_og_image_generation(request: HttpRequest, project_id: int):
+    profile = request.auth
+    project = get_object_or_404(Project, id=project_id, profile=profile)
+
+    project.enable_automatic_og_image_generation = not project.enable_automatic_og_image_generation
+    project.save(update_fields=["enable_automatic_og_image_generation"])
+
+    return {"status": "success", "enabled": project.enable_automatic_og_image_generation}
 
 
 @api.post("/projects/update-sitemap-url", response=UpdateSitemapUrlOut, auth=[session_auth])
@@ -1101,70 +1117,19 @@ def generate_og_image(request: HttpRequest, data: GenerateOGImageIn):
                 "image_url": generated_post.image.url,
             }
 
-        blog_post_category = (
-            generated_post.title.category if generated_post.title.category else "technology"
-        )
+        success, message = generate_og_image_util(generated_post, settings.REPLICATE_API_TOKEN)
 
-        prompt = f"Abstract modern geometric background for a social media post about {blog_post_category}. Clean minimalist design with vibrant gradients, smooth shapes, professional aesthetic. NO TEXT, NO WORDS, NO LETTERS. Pure abstract visual composition with relevant color palette and modern feel. 1200x630 pixels aspect ratio."  # noqa: E501
-
-        logger.info(
-            "[GenerateOGImage] Starting image generation",
-            blog_post_id=generated_post.id,
-            profile_id=profile.id,
-            prompt=prompt,
-        )
-
-        replicate_client = replicate.Client(api_token=settings.REPLICATE_API_TOKEN)
-
-        output = replicate_client.run(
-            "black-forest-labs/flux-schnell",
-            input={
-                "prompt": prompt,
-                "aspect_ratio": "16:9",
-                "output_format": "png",
-                "output_quality": 90,
-            },
-        )
-
-        if not output:
-            logger.error(
-                "[GenerateOGImage] No output from Replicate",
-                blog_post_id=generated_post.id,
-                profile_id=profile.id,
-            )
+        if success:
+            return {
+                "status": "success",
+                "message": "OG image generated successfully",
+                "image_url": generated_post.image.url,
+            }
+        else:
             return {
                 "status": "error",
                 "message": "Failed to generate image. Please try again.",
             }
-
-        file_output = output[0] if isinstance(output, list) else output
-        image_url = str(file_output)
-
-        logger.info(
-            "[GenerateOGImage] Image generated successfully",
-            blog_post_id=generated_post.id,
-            profile_id=profile.id,
-            image_url=image_url,
-        )
-
-        image_response = urlopen(image_url)
-        image_content = ContentFile(image_response.read())
-
-        filename = f"og-image-{generated_post.id}.png"
-        generated_post.image.save(filename, image_content, save=True)
-
-        logger.info(
-            "[GenerateOGImage] Image saved to blog post",
-            blog_post_id=generated_post.id,
-            profile_id=profile.id,
-            saved_url=generated_post.image.url,
-        )
-
-        return {
-            "status": "success",
-            "message": "OG image generated successfully",
-            "image_url": generated_post.image.url,
-        }
 
     except GeneratedBlogPost.DoesNotExist:
         return {

@@ -20,7 +20,7 @@ from django_q.tasks import async_task
 from djstripe import models as djstripe_models
 from weasyprint import HTML
 
-from core.choices import BlogPostStatus, Language, ProfileStates
+from core.choices import BlogPostStatus, Language, OGImageStyle, ProfileStates
 from core.forms import AutoSubmissionSettingForm, ProfileUpdateForm, ProjectScanForm
 from core.models import (
     AutoSubmissionSetting,
@@ -683,6 +683,7 @@ class ProjectSettingsView(LoginRequiredMixin, DetailView):
             form = AutoSubmissionSettingForm()
         context["auto_submission_settings_form"] = form
         context["languages"] = Language.choices
+        context["og_image_styles"] = OGImageStyle.choices
 
         return context
 
