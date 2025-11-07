@@ -11,11 +11,11 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunSQL(
-            sql='CREATE EXTENSION vector;',
-            reverse_sql='DROP EXTENSION vector;',
+            sql='CREATE EXTENSION IF NOT EXISTS vector;',
+            reverse_sql='DROP EXTENSION IF EXISTS vector;',
         ),
         migrations.RunSQL(
-            sql='CREATE EXTENSION pg_stat_statements;',
-            reverse_sql='DROP EXTENSION pg_stat_statements;',
+            sql='CREATE EXTENSION IF NOT EXISTS pg_stat_statements;',
+            reverse_sql='DROP EXTENSION IF EXISTS pg_stat_statements;',
         ),
     ]
