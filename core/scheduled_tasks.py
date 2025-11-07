@@ -6,7 +6,7 @@ from django.utils import timezone
 from django_q.tasks import async_task
 
 from core.choices import ProjectPageSource
-from core.models import Project, ProjectPage
+from core.models import Competitor, Project, ProjectPage
 from core.utils import get_jina_embedding
 from tuxseo.utils import get_tuxseo_logger
 
@@ -172,6 +172,87 @@ def backfill_project_page_embeddings():
     )
 
     return f"""ProjectPage embedding generation completed:
+    Successfully processed: {processed_count}
+    Failed: {failed_count}
+    Remaining: {remaining_count}"""
+
+
+def backfill_competitor_embeddings():
+    """
+    Scheduled task that finds all Competitor objects with name, description, and summary
+    but no embedding, and generates embeddings for them (batch of 50 at a time).
+    """
+    BATCH_SIZE = 10 if settings.DEBUG else 50
+    competitors_without_embeddings = Competitor.objects.filter(
+        embedding__isnull=True,
+    ).exclude(
+        Q(name__isnull=True)
+        | Q(name="")
+        | Q(description__isnull=True)
+        | Q(description="")
+        | Q(summary__isnull=True)
+        | Q(summary="")
+    )[:BATCH_SIZE]
+
+    processed_count = 0
+    failed_count = 0
+
+    for competitor in competitors_without_embeddings:
+        try:
+            embedding_text = (
+                f"{competitor.name}\n\n{competitor.description}\n\n{competitor.summary}"
+            )
+            embedding = get_jina_embedding(embedding_text)
+
+            if embedding:
+                competitor.embedding = embedding
+                competitor.save(update_fields=["embedding"])
+                processed_count += 1
+                logger.info(
+                    "[Backfill Competitor Embeddings] Successfully generated embedding",
+                    competitor_id=competitor.id,
+                    project_id=competitor.project_id,
+                )
+            else:
+                failed_count += 1
+                logger.warning(
+                    "[Backfill Competitor Embeddings] Failed to generate embedding",
+                    competitor_id=competitor.id,
+                    project_id=competitor.project_id,
+                )
+        except Exception as error:
+            failed_count += 1
+            logger.error(
+                "[Backfill Competitor Embeddings] Error generating embedding",
+                error=str(error),
+                exc_info=True,
+                competitor_id=competitor.id,
+                project_id=competitor.project_id,
+            )
+
+    remaining_count = (
+        Competitor.objects.filter(
+            embedding__isnull=True,
+        )
+        .exclude(
+            Q(name__isnull=True)
+            | Q(name="")
+            | Q(description__isnull=True)
+            | Q(description="")
+            | Q(summary__isnull=True)
+            | Q(summary="")
+        )
+        .count()
+    )
+
+    logger.info(
+        "[Backfill Competitor Embeddings] Batch completed",
+        processed_count=processed_count,
+        failed_count=failed_count,
+        total_remaining=remaining_count,
+    )
+
+    return f"""Competitor embedding generation completed:
     Successfully processed: {processed_count}
     Failed: {failed_count}
     Remaining: {remaining_count}"""
