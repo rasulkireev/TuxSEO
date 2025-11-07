@@ -84,7 +84,7 @@ def schedule_blog_post_posting():
 
         if time_since_last_post_in_seconds > time_between_posts_in_seconds:
             logger.info(
-                "[Schedule Blog Post Posting] Scheduling blog post for {project.name}",
+                "[Schedule Blog Post Posting] Scheduling blog post",
                 project_id=project.id,
                 project_name=project.name,
             )
