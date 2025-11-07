@@ -7,6 +7,7 @@ from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django_q.tasks import async_task
+from pgvector.django import HnswIndex, VectorField
 from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -1306,6 +1307,9 @@ class ProjectPage(BaseModel):
     type_ai_guess = models.CharField(max_length=255)
     summary = models.TextField(blank=True)
 
+    # Embedding for semantic search
+    embedding = VectorField(dimensions=1024, default=None, null=True, blank=True)
+
     # Link usage in blog posts
     always_use = models.BooleanField(
         default=False,
@@ -1317,6 +1321,15 @@ class ProjectPage(BaseModel):
 
     class Meta:
         unique_together = ("project", "url")
+        indexes = [
+            HnswIndex(
+                name="projectpage_embedding_idx",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         """Override save to validate URL before saving."""
@@ -1385,6 +1398,7 @@ class ProjectPage(BaseModel):
         Should be called after get_page_content().
         """
         from core.agents import summarize_page_agent
+        from core.utils import get_jina_embedding
 
         webpage_content = WebPageContent(
             title=self.title,
@@ -1407,14 +1421,42 @@ class ProjectPage(BaseModel):
 
         self.type_ai_guess = analysis_result.output.type_ai_guess
         self.summary = analysis_result.output.summary
-        self.save(
-            update_fields=[
-                "date_analyzed",
-                "type",
-                "type_ai_guess",
-                "summary",
-            ]
-        )
+
+        update_fields = [
+            "date_analyzed",
+            "type",
+            "type_ai_guess",
+            "summary",
+        ]
+
+        if self.title and self.description and self.summary:
+            embedding_text = f"{self.title}\n\n{self.description}\n\n{self.summary}"
+            embedding = get_jina_embedding(embedding_text)
+            if embedding:
+                self.embedding = embedding
+                update_fields.append("embedding")
+                logger.info(
+                    "[ProjectPage.analyze_content] Successfully generated and saved embedding",
+                    project_page_id=self.id,
+                    project_id=self.project_id,
+                )
+            else:
+                logger.warning(
+                    "[ProjectPage.analyze_content] Failed to generate embedding",
+                    project_page_id=self.id,
+                    project_id=self.project_id,
+                )
+        else:
+            logger.info(
+                "[ProjectPage.analyze_content] Skipping embedding generation - missing required fields",  # noqa: E501
+                project_page_id=self.id,
+                project_id=self.project_id,
+                has_title=bool(self.title),
+                has_description=bool(self.description),
+                has_summary=bool(self.summary),
+            )
+
+        self.save(update_fields=update_fields)
 
         return True
 
@@ -1433,6 +1475,9 @@ class Competitor(BaseModel):
     markdown_content = models.TextField(blank=True)
     summary = models.TextField(blank=True)
 
+    # Embedding for semantic search
+    embedding = VectorField(dimensions=1024, default=None, null=True, blank=True)
+
     date_analyzed = models.DateTimeField(null=True, blank=True)
     # how does this competitor compare to the project?
     competitor_analysis = models.TextField(blank=True)
@@ -1448,6 +1493,17 @@ class Competitor(BaseModel):
 
     # VS comparison blog post content
     blog_post = models.TextField(blank=True, default="")
+
+    class Meta:
+        indexes = [
+            HnswIndex(
+                name="competitor_embedding_idx",
+                fields=["embedding"],
+                m=16,
+                ef_construction=64,
+                opclasses=["vector_cosine_ops"],
+            ),
+        ]
 
     def __str__(self):
         return f"{self.name}"
@@ -1487,6 +1543,8 @@ class Competitor(BaseModel):
         return True
 
     def populate_name_description(self, model=None):
+        from core.utils import get_jina_embedding
+
         agent = Agent(
             model or get_default_ai_model(),
             output_type=CompetitorDetails,
@@ -1521,11 +1579,43 @@ class Competitor(BaseModel):
 
         self.name = result.output.name
         self.description = result.output.description
-        self.save(update_fields=["name", "description"])
+
+        update_fields = ["name", "description"]
+
+        if self.name and self.description and self.summary:
+            embedding_text = f"{self.name}\n\n{self.description}\n\n{self.summary}"
+            embedding = get_jina_embedding(embedding_text)
+            if embedding:
+                self.embedding = embedding
+                update_fields.append("embedding")
+                logger.info(
+                    "[Competitor.populate_name_description] Successfully generated and saved embedding",  # noqa: E501
+                    competitor_id=self.id,
+                    project_id=self.project_id,
+                )
+            else:
+                logger.warning(
+                    "[Competitor.populate_name_description] Failed to generate embedding",  # noqa: E501
+                    competitor_id=self.id,
+                    project_id=self.project_id,
+                )
+        else:
+            logger.info(
+                "[Competitor.populate_name_description] Skipping embedding generation - missing required fields",  # noqa: E501
+                competitor_id=self.id,
+                project_id=self.project_id,
+                has_name=bool(self.name),
+                has_description=bool(self.description),
+                has_summary=bool(self.summary),
+            )
+
+        self.save(update_fields=update_fields)
 
         return True
 
     def analyze_competitor(self, model=None):
+        from core.utils import get_jina_embedding
+
         agent = Agent(
             model or get_default_ai_model(),
             output_type=CompetitorAnalysis,
@@ -1598,6 +1688,33 @@ class Competitor(BaseModel):
         self.key_drawbacks = result.output.key_drawbacks
         self.links = result.output.links
         self.date_analyzed = timezone.now()
+
+        if self.name and self.description and self.summary:
+            embedding_text = f"{self.name}\n\n{self.description}\n\n{self.summary}"
+            embedding = get_jina_embedding(embedding_text)
+            if embedding:
+                self.embedding = embedding
+                logger.info(
+                    "[Competitor.analyze_competitor] Successfully generated and saved embedding",
+                    competitor_id=self.id,
+                    project_id=self.project_id,
+                )
+            else:
+                logger.warning(
+                    "[Competitor.analyze_competitor] Failed to generate embedding",
+                    competitor_id=self.id,
+                    project_id=self.project_id,
+                )
+        else:
+            logger.info(
+                "[Competitor.analyze_competitor] Skipping embedding generation - missing required fields",  # noqa: E501
+                competitor_id=self.id,
+                project_id=self.project_id,
+                has_name=bool(self.name),
+                has_description=bool(self.description),
+                has_summary=bool(self.summary),
+            )
+
         self.save()
 
         return True

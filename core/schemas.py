@@ -1,3 +1,5 @@
+# This should essentially be a one-to-one mapping of the models.py models.
+
 from pydantic import BaseModel, Field, field_validator
 
 from core.choices import Language, ProjectPageType, ProjectType

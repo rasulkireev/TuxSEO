@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Table of contents to Project Settings Page (only shows h2 headings)
 - OG Image generation for generated posts
 - Handle link of an image in submit blog post endpoint
+- Vectors to ProjecPages and Competitors
 
 ### Fixed
 - Cloudlfare Turnstyle now actaully does stuff
