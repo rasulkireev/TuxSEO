@@ -1,4 +1,6 @@
+import replicate
 import requests
+from django.conf import settings
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -22,6 +24,8 @@ from core.api.schemas import (
     GenerateCompetitorVsTitleIn,
     GenerateCompetitorVsTitleOut,
     GeneratedContentOut,
+    GenerateOGImageIn,
+    GenerateOGImageOut,
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
@@ -33,6 +37,7 @@ from core.api.schemas import (
     SubmitFeedbackIn,
     SubmitSitemapIn,
     ToggleAutoSubmissionOut,
+    ToggleOGImageGenerationOut,
     ToggleProjectKeywordUseIn,
     ToggleProjectKeywordUseOut,
     ToggleProjectPageAlwaysUseIn,
@@ -57,6 +62,7 @@ from core.models import (
     ProjectKeyword,
     ProjectPage,
 )
+from core.utils import generate_og_image as generate_og_image_util
 from core.utils import get_or_create_project
 from tuxseo.utils import get_tuxseo_logger
 
@@ -393,6 +399,8 @@ def update_project(request: HttpRequest, project_id: int):
     project.blog_theme = request.POST.get("blog_theme", "")
     project.founders = request.POST.get("founders", "")
     project.language = request.POST.get("language", "")
+    project.summary = request.POST.get("summary", "")
+    project.og_image_style = request.POST.get("og_image_style", "")
 
     project.save()
 
@@ -412,6 +420,21 @@ def toggle_auto_submission(request: HttpRequest, project_id: int):
     project.save(update_fields=["enable_automatic_post_submission"])
 
     return {"status": "success", "enabled": project.enable_automatic_post_submission}
+
+
+@api.post(
+    "/projects/{project_id}/toggle-og-image-generation",
+    response=ToggleOGImageGenerationOut,
+    auth=[session_auth],
+)
+def toggle_og_image_generation(request: HttpRequest, project_id: int):
+    profile = request.auth
+    project = get_object_or_404(Project, id=project_id, profile=profile)
+
+    project.enable_automatic_og_image_generation = not project.enable_automatic_og_image_generation
+    project.save(update_fields=["enable_automatic_og_image_generation"])
+
+    return {"status": "success", "enabled": project.enable_automatic_og_image_generation}
 
 
 @api.post("/projects/update-sitemap-url", response=UpdateSitemapUrlOut, auth=[session_auth])
@@ -1055,4 +1078,85 @@ def toggle_project_page_always_use(request: HttpRequest, data: ToggleProjectPage
             "status": "error",
             "always_use": False,
             "message": f"Failed to toggle always use: {str(error)}",
+        }
+
+
+@api.post("/generate-og-image", response=GenerateOGImageOut, auth=[session_auth])
+def generate_og_image(request: HttpRequest, data: GenerateOGImageIn):
+    """
+    Generate an Open Graph image for a blog post using Replicate flux-schnell model.
+    """
+    profile = request.auth
+
+    if not settings.REPLICATE_API_TOKEN:
+        logger.error(
+            "[GenerateOGImage] Replicate API token not configured",
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": "Image generation service is not configured. Please contact support.",
+        }
+
+    try:
+        generated_post = get_object_or_404(
+            GeneratedBlogPost,
+            id=data.blog_post_id,
+            project__profile=profile,
+        )
+
+        if generated_post.image:
+            logger.info(
+                "[GenerateOGImage] Image already exists for blog post",
+                blog_post_id=generated_post.id,
+                profile_id=profile.id,
+            )
+            return {
+                "status": "success",
+                "message": "Image already exists",
+                "image_url": generated_post.image.url,
+            }
+
+        success, message = generate_og_image_util(generated_post, settings.REPLICATE_API_TOKEN)
+
+        if success:
+            return {
+                "status": "success",
+                "message": "OG image generated successfully",
+                "image_url": generated_post.image.url,
+            }
+        else:
+            return {
+                "status": "error",
+                "message": "Failed to generate image. Please try again.",
+            }
+
+    except GeneratedBlogPost.DoesNotExist:
+        return {
+            "status": "error",
+            "message": "Blog post not found",
+        }
+    except replicate.exceptions.ReplicateError as error:
+        logger.error(
+            "[GenerateOGImage] Replicate API error",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=data.blog_post_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": "Failed to generate image. Please try again later.",
+        }
+    except Exception as error:
+        logger.error(
+            "[GenerateOGImage] Unexpected error generating OG image",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=data.blog_post_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": f"An unexpected error occurred: {str(error)}",
         }

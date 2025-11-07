@@ -14,10 +14,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [0.0.8] - 2025-11-04
+## [0.0.8] - 2025-11-07
+### Added
+- Table of contents to Project Settings Page (only shows h2 headings)
+- OG Image generation for generated posts
+
 ### Fixed
 - Cloudlfare Turnstyle now actaully does stuff
 - Competitor table scrolling on mobile
+- Toggle switches on settings page now use consistent dark gray color
 
 ## [0.0.8] - 2025-11-04
 ### Added

@@ -23,6 +23,19 @@ def replace_quotes(value):
     return value.replace('"', "'")
 
 
+@register.filter
+@stringfilter
+def replace(value, arg):
+    """
+    Replace occurrences of old string with new string.
+    Usage: {{ value|replace:"old,new" }}
+    """
+    if "," not in arg:
+        return value
+    old, new = arg.split(",", 1)
+    return value.replace(old, new)
+
+
 @register.simple_tag
 def mjml_configured():
     return bool(settings.MJML_URL)
