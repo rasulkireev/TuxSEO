@@ -9,10 +9,10 @@ from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
 
+TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
 
 class CustomSignUpForm(SignupForm):
-    cf_turnstile_response = forms.CharField(required=False, widget=forms.HiddenInput())
-
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.error_class = DivErrorList
@@ -24,31 +24,22 @@ class CustomSignUpForm(SignupForm):
             turnstile_token = self.data.get("cf-turnstile-response", "")
 
             if not turnstile_token:
-                logger.warning(
-                    "[Turnstile Validation] Missing Turnstile token in signup form"
-                )
-                raise forms.ValidationError(
-                    "Please complete the verification challenge."
-                )
+                logger.warning("[Turnstile Validation] Missing Turnstile token in signup form")
+                raise forms.ValidationError("Please complete the verification challenge.")
 
-            is_valid = self._verify_turnstile_token(turnstile_token)
+            user_ip = self.request.META.get("REMOTE_ADDR", "")
+            is_valid = self._verify_turnstile_token(turnstile_token, user_ip)
 
             if not is_valid:
-                logger.warning(
-                    "[Turnstile Validation] Invalid Turnstile token in signup form"
-                )
-                raise forms.ValidationError(
-                    "Verification failed. Please try again."
-                )
+                logger.warning("[Turnstile Validation] Invalid Turnstile token in signup form")
+                raise forms.ValidationError("Verification failed. Please try again.")
 
         return cleaned_data
 
     def _verify_turnstile_token(self, token):
-        verification_url = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
-
         try:
             response = requests.post(
-                verification_url,
+                TURNSTILE_VERIFY_URL,
                 data={
                     "secret": settings.CLOUDFLARE_TURNSTILE_SECRET_KEY,
                     "response": token,
