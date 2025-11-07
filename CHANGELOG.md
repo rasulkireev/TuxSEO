@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.0.8] - 2025-11-04
+### Fixed
+- Cloudlfare Turnstyle now actaully does stuff
+- Competitor table scrolling on mobile
+
+## [0.0.8] - 2025-11-04
 ### Added
 - Docs section
 
