@@ -417,3 +417,49 @@ def generate_og_image(
             project_id=generated_post.project_id,
         )
         return False, f"Unexpected error: {str(error)}"
+
+
+def download_image_from_url(
+    image_url: str, field_name: str, instance_id: str | int
+) -> ContentFile | None:
+    """
+    Download an image from a URL and return a ContentFile ready to be saved to an ImageField.
+
+    Args:
+        image_url: The URL of the image to download
+        field_name: The name of the field (e.g., 'icon', 'image') for logging and filename
+        instance_id: The ID of the model instance for logging and filename
+
+    Returns:
+        ContentFile containing the image data, or None if download fails
+    """
+    try:
+        logger.info(
+            f"[DownloadImage] Downloading {field_name} from URL",
+            image_url=image_url,
+            field_name=field_name,
+            instance_id=instance_id,
+        )
+
+        image_response = urlopen(image_url)
+        image_content = ContentFile(image_response.read())
+
+        logger.info(
+            f"[DownloadImage] Successfully downloaded {field_name}",
+            image_url=image_url,
+            field_name=field_name,
+            instance_id=instance_id,
+        )
+
+        return image_content
+
+    except Exception as error:
+        logger.error(
+            f"[DownloadImage] Failed to download {field_name} from URL",
+            error=str(error),
+            exc_info=True,
+            image_url=image_url,
+            field_name=field_name,
+            instance_id=instance_id,
+        )
+        return None
