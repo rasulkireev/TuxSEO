@@ -62,8 +62,8 @@ from core.models import (
     ProjectKeyword,
     ProjectPage,
 )
+from core.utils import download_image_from_url, get_or_create_project
 from core.utils import generate_og_image as generate_og_image_util
-from core.utils import get_or_create_project
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -959,15 +959,45 @@ def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int
 @api.post("/blog-posts/submit", response=BlogPostOut, auth=[superuser_api_auth])
 def submit_blog_post(request: HttpRequest, data: BlogPostIn):
     try:
-        BlogPost.objects.create(
+        blog_post = BlogPost.objects.create(
             title=data.title,
             description=data.description,
             slug=data.slug,
             tags=data.tags,
             content=data.content,
             status=data.status,
-            # icon and image are ignored for now (file upload not handled)
         )
+
+        if data.icon:
+            icon_url = data.icon.strip()
+            if icon_url.startswith(("http://", "https://")):
+                icon_content = download_image_from_url(
+                    image_url=icon_url, field_name="icon", instance_id=blog_post.id
+                )
+                if icon_content:
+                    filename = f"blog-post-icon-{blog_post.id}.png"
+                    blog_post.icon.save(filename, icon_content, save=True)
+                    logger.info(
+                        "[Submit Blog Post] Icon downloaded and saved",
+                        blog_post_id=blog_post.id,
+                        icon_url=icon_url,
+                    )
+
+        if data.image:
+            image_url = data.image.strip()
+            if image_url.startswith(("http://", "https://")):
+                image_content = download_image_from_url(
+                    image_url=image_url, field_name="image", instance_id=blog_post.id
+                )
+                if image_content:
+                    filename = f"blog-post-image-{blog_post.id}.png"
+                    blog_post.image.save(filename, image_content, save=True)
+                    logger.info(
+                        "[Submit Blog Post] Image downloaded and saved",
+                        blog_post_id=blog_post.id,
+                        image_url=image_url,
+                    )
+
         return BlogPostOut(status="success", message="Blog post submitted successfully.")
     except Exception as e:
         logger.error(
