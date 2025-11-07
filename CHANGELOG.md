@@ -19,14 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Table of contents to Project Settings Page (only shows h2 headings)
 - OG Image generation for generated posts
 
-### Changed
-- OG image generation prompts now adapt based on selected style
-- Automatic OG image generation is now enabled by default for new projects
-- Toggle switches on settings page now use consistent dark gray color
-
 ### Fixed
 - Cloudlfare Turnstyle now actaully does stuff
 - Competitor table scrolling on mobile
+- Toggle switches on settings page now use consistent dark gray color
 
 ## [0.0.8] - 2025-11-04
 ### Added
