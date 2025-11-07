@@ -484,7 +484,7 @@ def get_jina_embedding(text: str) -> list[float] | None:
     data = {"model": "jina-embeddings-v3", "task": "text-matching", "input": [text]}
 
     try:
-        response = requests.post(url, headers=headers, json=data)
+        response = requests.post(url, headers=headers, json=data, timeout=20)
         response.raise_for_status()
         result = response.json()
 
