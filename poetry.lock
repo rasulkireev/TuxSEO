@@ -4245,6 +4245,24 @@ files = [
 ]
 
 [[package]]
+name = "replicate"
+version = "1.0.7"
+description = "Python client for Replicate"
+optional = false
+python-versions = ">=3.8"
+groups = ["main"]
+files = [
+    {file = "replicate-1.0.7-py3-none-any.whl", hash = "sha256:667c50a9eb83be17de6278ff89483102b3b50f49a2c7fbcaa2e2b14df13816f9"},
+    {file = "replicate-1.0.7.tar.gz", hash = "sha256:d88cb2c37ba39fb370c87fc3291601c67aae64bb918a20a85b5ce399c23ee84c"},
+]
+
+[package.dependencies]
+httpx = ">=0.21.0,<1"
+packaging = "*"
+pydantic = ">1.10.7"
+typing_extensions = ">=4.5.0"
+
+[[package]]
 name = "requests"
 version = "2.32.5"
 description = "Python HTTP for Humans."
@@ -5432,4 +5450,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "5fc1f60e7fa1aa7862feaed4ed9fde3ccda4d8b336649bf8e5cd651a811e2008"
+content-hash = "99effb0eaa59818372a8d250b591153cc9fff1e260a7951f05d6d82156e0efbc"

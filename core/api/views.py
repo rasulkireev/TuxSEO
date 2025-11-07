@@ -1,4 +1,9 @@
+from urllib.request import urlopen
+
+import replicate
 import requests
+from django.conf import settings
+from django.core.files.base import ContentFile
 from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
@@ -22,6 +27,8 @@ from core.api.schemas import (
     GenerateCompetitorVsTitleIn,
     GenerateCompetitorVsTitleOut,
     GeneratedContentOut,
+    GenerateOGImageIn,
+    GenerateOGImageOut,
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
@@ -1055,4 +1062,136 @@ def toggle_project_page_always_use(request: HttpRequest, data: ToggleProjectPage
             "status": "error",
             "always_use": False,
             "message": f"Failed to toggle always use: {str(error)}",
+        }
+
+
+@api.post("/generate-og-image", response=GenerateOGImageOut, auth=[session_auth])
+def generate_og_image(request: HttpRequest, data: GenerateOGImageIn):
+    """
+    Generate an Open Graph image for a blog post using Replicate flux-schnell model.
+    """
+    profile = request.auth
+
+    if not settings.REPLICATE_API_TOKEN:
+        logger.error(
+            "[GenerateOGImage] Replicate API token not configured",
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": "Image generation service is not configured. Please contact support.",
+        }
+
+    try:
+        generated_post = get_object_or_404(
+            GeneratedBlogPost,
+            id=data.blog_post_id,
+            project__profile=profile,
+        )
+
+        if generated_post.image:
+            logger.info(
+                "[GenerateOGImage] Image already exists for blog post",
+                blog_post_id=generated_post.id,
+                profile_id=profile.id,
+            )
+            return {
+                "status": "success",
+                "message": "Image already exists",
+                "image_url": generated_post.image.url,
+            }
+
+        blog_post_category = (
+            generated_post.title.category if generated_post.title.category else "technology"
+        )
+
+        prompt = f"Abstract modern geometric background for a social media post about {blog_post_category}. Clean minimalist design with vibrant gradients, smooth shapes, professional aesthetic. NO TEXT, NO WORDS, NO LETTERS. Pure abstract visual composition with relevant color palette and modern feel. 1200x630 pixels aspect ratio."  # noqa: E501
+
+        logger.info(
+            "[GenerateOGImage] Starting image generation",
+            blog_post_id=generated_post.id,
+            profile_id=profile.id,
+            prompt=prompt,
+        )
+
+        replicate_client = replicate.Client(api_token=settings.REPLICATE_API_TOKEN)
+
+        output = replicate_client.run(
+            "black-forest-labs/flux-schnell",
+            input={
+                "prompt": prompt,
+                "aspect_ratio": "16:9",
+                "output_format": "png",
+                "output_quality": 90,
+            },
+        )
+
+        if not output:
+            logger.error(
+                "[GenerateOGImage] No output from Replicate",
+                blog_post_id=generated_post.id,
+                profile_id=profile.id,
+            )
+            return {
+                "status": "error",
+                "message": "Failed to generate image. Please try again.",
+            }
+
+        file_output = output[0] if isinstance(output, list) else output
+        image_url = str(file_output)
+
+        logger.info(
+            "[GenerateOGImage] Image generated successfully",
+            blog_post_id=generated_post.id,
+            profile_id=profile.id,
+            image_url=image_url,
+        )
+
+        image_response = urlopen(image_url)
+        image_content = ContentFile(image_response.read())
+
+        filename = f"og-image-{generated_post.id}.png"
+        generated_post.image.save(filename, image_content, save=True)
+
+        logger.info(
+            "[GenerateOGImage] Image saved to blog post",
+            blog_post_id=generated_post.id,
+            profile_id=profile.id,
+            saved_url=generated_post.image.url,
+        )
+
+        return {
+            "status": "success",
+            "message": "OG image generated successfully",
+            "image_url": generated_post.image.url,
+        }
+
+    except GeneratedBlogPost.DoesNotExist:
+        return {
+            "status": "error",
+            "message": "Blog post not found",
+        }
+    except replicate.exceptions.ReplicateError as error:
+        logger.error(
+            "[GenerateOGImage] Replicate API error",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=data.blog_post_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": "Failed to generate image. Please try again later.",
+        }
+    except Exception as error:
+        logger.error(
+            "[GenerateOGImage] Unexpected error generating OG image",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=data.blog_post_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": f"An unexpected error occurred: {str(error)}",
         }

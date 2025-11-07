@@ -262,3 +262,13 @@ class ToggleProjectPageAlwaysUseOut(Schema):
     status: str
     always_use: bool
     message: str | None = None
+
+
+class GenerateOGImageIn(Schema):
+    blog_post_id: int
+
+
+class GenerateOGImageOut(Schema):
+    status: str
+    message: str = ""
+    image_url: str = ""

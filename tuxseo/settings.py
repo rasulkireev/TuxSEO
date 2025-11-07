@@ -197,7 +197,7 @@ STATICFILES_DIRS = [
 
 
 folder_name = f"tuxseo-{ENVIRONMENT}"
-aws_s3_endpoint_url = env("AWS_S3_ENDPOINT_URL")
+aws_s3_endpoint_url = env("AWS_S3_ENDPOINT_URL", default="")
 
 MEDIA_URL = f"{aws_s3_endpoint_url}/{folder_name}/"
 MEDIA_ROOT = os.path.join(BASE_DIR, "media/")
@@ -535,3 +535,5 @@ MJML_HTTPSERVERS = [
 
 CLOUDFLARE_TURNSTILE_SITEKEY = env("CLOUDFLARE_TURNSTILE_SITEKEY", default="")
 CLOUDFLARE_TURNSTILE_SECRET_KEY = env("CLOUDFLARE_TURNSTILE_SECRET_KEY", default="")
+
+REPLICATE_API_TOKEN = env("REPLICATE_API_TOKEN", default="")
