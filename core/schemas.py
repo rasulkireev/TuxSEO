@@ -127,6 +127,14 @@ class ProjectPageDetails(BaseModel):
         return v
 
 
+class InspirationContext(BaseModel):
+    """Context for an inspiration source."""
+
+    url: str = Field(description="URL of the inspiration")
+    title: str = Field(description="Title of the inspiration")
+    description: str = Field(description="Description of the inspiration")
+
+
 class TitleSuggestionContext(BaseModel):
     """Context for generating blog post title suggestions."""
 
@@ -143,6 +151,9 @@ class TitleSuggestionContext(BaseModel):
     )
     disliked_suggestions: list[str] | None = Field(
         default_factory=list, description="Titles the user has previously disliked"
+    )
+    inspirations: list[InspirationContext] = Field(
+        default_factory=list, description="Inspiration sources the user wants to emulate"
     )
 
 
@@ -185,6 +196,9 @@ class BlogPostGenerationContext(BaseModel):
     project_keywords: list[str] = []
     project_pages: list[ProjectPageContext] = []
     content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
+    inspirations: list[InspirationContext] = Field(
+        default_factory=list, description="Inspiration sources the user wants to emulate"
+    )
 
 
 class GeneratedBlogPostSchema(BaseModel):

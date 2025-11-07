@@ -631,6 +631,49 @@ class Project(BaseModel):
 
             return "\n".join(feedback_sections)
 
+        @agent.system_prompt
+        def add_inspirations(ctx: RunContext[TitleSuggestionContext]) -> str:
+            if not ctx.deps.inspirations:
+                return ""
+
+            inspiration_sections = []
+            inspiration_sections.append(
+                """
+                IMPORTANT: The user has shared the following blog posts and blogs as inspiration
+                sources they would like to emulate in style, tone, and structure.
+                Use these as reference points when generating titles:
+                """
+            )
+
+            for inspiration in ctx.deps.inspirations:
+                inspiration_sections.append(
+                    f"""
+                    - Title: {inspiration.title}
+                      URL: {inspiration.url}
+                      Description: {inspiration.description or 'No description provided'}
+                    """
+                )
+
+            inspiration_sections.append(
+                """
+                Draw inspiration from these sources' writing style, tone, and structure
+                while creating titles that are unique and appropriate for the current project.
+                """
+            )
+
+            return "\n".join(inspiration_sections)
+
+        from core.schemas import InspirationContext
+
+        inspirations = [
+            InspirationContext(
+                url=insp.url,
+                title=insp.title or insp.url,
+                description=insp.description or "",
+            )
+            for insp in self.inspirations.all()
+        ]
+
         deps = TitleSuggestionContext(
             project_details=self.project_details,
             num_titles=num_titles,
@@ -640,6 +683,7 @@ class Project(BaseModel):
                 suggestion.title for suggestion in self.disliked_title_suggestions
             ],
             neutral_suggestions=[suggestion.title for suggestion in self.neutral_title_suggestions],
+            inspirations=inspirations,
         )
 
         result = run_agent_synchronously(
@@ -874,6 +918,8 @@ class BlogPostTitleSuggestion(BaseModel):
         )
 
     def generate_content(self, content_type=ContentType.SHARING, model=None):
+        from core.agent_system_prompts import add_inspirations
+
         agent = Agent(
             model or get_default_ai_model(),
             output_type=GeneratedBlogPostSchema,
@@ -889,6 +935,7 @@ class BlogPostTitleSuggestion(BaseModel):
         agent.system_prompt(add_todays_date)
         agent.system_prompt(add_language_specification)
         agent.system_prompt(add_target_keywords)
+        agent.system_prompt(add_inspirations)
         agent.system_prompt(valid_markdown_format)
         agent.system_prompt(markdown_lists)
         agent.system_prompt(post_structure)
@@ -911,12 +958,24 @@ class BlogPostTitleSuggestion(BaseModel):
             for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
         ]
 
+        from core.schemas import InspirationContext
+
+        inspirations = [
+            InspirationContext(
+                url=insp.url,
+                title=insp.title or insp.url,
+                description=insp.description or "",
+            )
+            for insp in self.project.inspirations.all()
+        ]
+
         deps = BlogPostGenerationContext(
             project_details=self.project.project_details,
             title_suggestion=self.title_suggestion_schema,
             project_pages=project_pages,
             content_type=content_type,
             project_keywords=project_keywords,
+            inspirations=inspirations,
         )
 
         result = run_agent_synchronously(
@@ -1085,7 +1144,7 @@ class GeneratedBlogPost(BaseModel):
 
     def _build_fix_context(self):
         """Build full context for content editor agent to ensure accurate regeneration."""
-        from core.schemas import BlogPostGenerationContext, ProjectPageContext
+        from core.schemas import BlogPostGenerationContext, InspirationContext, ProjectPageContext
 
         project_pages = [
             ProjectPageContext(
@@ -1102,12 +1161,22 @@ class GeneratedBlogPost(BaseModel):
             for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
         ]
 
+        inspirations = [
+            InspirationContext(
+                url=insp.url,
+                title=insp.title or insp.url,
+                description=insp.description or "",
+            )
+            for insp in self.project.inspirations.all()
+        ]
+
         return BlogPostGenerationContext(
             project_details=self.project.project_details,
             title_suggestion=self.title.title_suggestion_schema,
             project_pages=project_pages,
             content_type=self.title.content_type,
             project_keywords=project_keywords,
+            inspirations=inspirations,
         )
 
     def fix_header_start(self):
@@ -1963,3 +2032,74 @@ class EmailSent(BaseModel):
 
     def __str__(self):
         return f"{self.email_type} to {self.email_address}"
+
+
+class Inspiration(BaseModel):
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name="inspirations",
+        help_text="The project this inspiration belongs to",
+    )
+    url = models.URLField(
+        max_length=500,
+        help_text="URL to the blog post or blog that inspires the user",
+    )
+    title = models.CharField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Title of the inspiration (auto-fetched or user-provided)",
+    )
+    description = models.TextField(
+        blank=True,
+        default="",
+        help_text="Description or notes about why this is inspiring",
+    )
+    date_scraped = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="When the content was scraped from the URL",
+    )
+    markdown_content = models.TextField(
+        blank=True,
+        default="",
+        help_text="Markdown content scraped from the URL",
+    )
+
+    class Meta:
+        verbose_name = "Inspiration"
+        verbose_name_plural = "Inspirations"
+        ordering = ["-created_at"]
+        unique_together = ("project", "url")
+
+    def __str__(self):
+        return f"{self.project.name}: {self.title or self.url}"
+
+    def get_page_content(self):
+        """Fetch page content using Jina Reader API and update the inspiration."""
+        title, description, markdown_content = get_markdown_content(self.url)
+
+        if not markdown_content:
+            logger.error(
+                "[Get Page Content] Failed to get inspiration content",
+                url=self.url,
+                project_id=self.project_id,
+            )
+            return False
+
+        self.date_scraped = timezone.now()
+        self.title = title or self.title
+        self.description = description or self.description
+        self.markdown_content = markdown_content
+
+        self.save(
+            update_fields=[
+                "date_scraped",
+                "title",
+                "description",
+                "markdown_content",
+            ]
+        )
+
+        return True

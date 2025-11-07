@@ -262,3 +262,25 @@ class ToggleProjectPageAlwaysUseOut(Schema):
     status: str
     always_use: bool
     message: str | None = None
+
+
+class AddInspirationIn(Schema):
+    project_id: int
+    url: str
+
+
+class AddInspirationOut(Schema):
+    status: str
+    message: str | None = None
+    inspiration_id: int | None = None
+    title: str | None = None
+    url: str | None = None
+
+
+class DeleteInspirationIn(Schema):
+    inspiration_id: int
+
+
+class DeleteInspirationOut(Schema):
+    status: str
+    message: str | None = None

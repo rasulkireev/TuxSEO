@@ -9,12 +9,16 @@ from ninja import NinjaAPI
 from core.api.auth import session_auth, superuser_api_auth
 from core.api.schemas import (
     AddCompetitorIn,
+    AddInspirationIn,
+    AddInspirationOut,
     AddKeywordIn,
     AddKeywordOut,
     AddPricingPageIn,
     BlogPostIn,
     BlogPostOut,
     CompetitorAnalysisOut,
+    DeleteInspirationIn,
+    DeleteInspirationOut,
     DeleteProjectKeywordIn,
     DeleteProjectKeywordOut,
     FixGeneratedBlogPostIn,
@@ -52,6 +56,7 @@ from core.models import (
     Competitor,
     Feedback,
     GeneratedBlogPost,
+    Inspiration,
     Keyword,
     Project,
     ProjectKeyword,
@@ -1056,3 +1061,84 @@ def toggle_project_page_always_use(request: HttpRequest, data: ToggleProjectPage
             "always_use": False,
             "message": f"Failed to toggle always use: {str(error)}",
         }
+
+
+@api.post("/inspirations/add", response=AddInspirationOut, auth=[session_auth])
+def add_inspiration(request: HttpRequest, data: AddInspirationIn):
+    """Add a new inspiration link to a project."""
+    profile = request.auth
+    project = get_object_or_404(Project, id=data.project_id, profile=profile)
+
+    url_to_add = data.url.strip()
+
+    if not url_to_add:
+        return {"status": "error", "message": "URL cannot be empty"}
+
+    if not url_to_add.startswith(("http://", "https://")):
+        return {"status": "error", "message": "URL must start with http:// or https://"}
+
+    try:
+        if Inspiration.objects.filter(project=project, url=url_to_add).exists():
+            return {"status": "error", "message": "This inspiration already exists for your project"}
+
+        inspiration = Inspiration.objects.create(project=project, url=url_to_add)
+
+        inspiration.get_page_content()
+
+        logger.info(
+            "[Add Inspiration] Successfully added inspiration",
+            inspiration_id=inspiration.id,
+            project_id=project.id,
+            url=url_to_add,
+        )
+
+        return {
+            "status": "success",
+            "inspiration_id": inspiration.id,
+            "title": inspiration.title,
+            "url": inspiration.url,
+            "message": "Inspiration added successfully!",
+        }
+
+    except Exception as e:
+        logger.error(
+            "Failed to add inspiration",
+            error=str(e),
+            exc_info=True,
+            project_id=project.id,
+            url=url_to_add,
+        )
+        return {"status": "error", "message": f"An unexpected error occurred: {str(e)}"}
+
+
+@api.post("/inspirations/delete", response=DeleteInspirationOut, auth=[session_auth])
+def delete_inspiration(request: HttpRequest, data: DeleteInspirationIn):
+    """Delete an inspiration from a project."""
+    profile = request.auth
+
+    try:
+        inspiration = get_object_or_404(
+            Inspiration, id=data.inspiration_id, project__profile=profile
+        )
+
+        inspiration_url = inspiration.url
+        inspiration.delete()
+
+        logger.info(
+            "[Delete Inspiration] Successfully deleted inspiration",
+            inspiration_id=data.inspiration_id,
+            url=inspiration_url,
+            profile_id=profile.id,
+        )
+
+        return {"status": "success", "message": f"Inspiration deleted successfully"}
+
+    except Exception as e:
+        logger.error(
+            "Failed to delete inspiration",
+            error=str(e),
+            exc_info=True,
+            inspiration_id=data.inspiration_id,
+            profile_id=profile.id,
+        )
+        return {"status": "error", "message": f"Failed to delete inspiration: {str(e)}"}

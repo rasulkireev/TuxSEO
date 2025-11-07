@@ -27,6 +27,7 @@ from core.models import (
     BlogPost,
     Competitor,
     GeneratedBlogPost,
+    Inspiration,
     KeywordTrend,
     Profile,
     ProfileStateTransition,
@@ -858,6 +859,25 @@ class ProjectCompetitorsView(LoginRequiredMixin, DetailView):
         )
         context["can_generate_competitor_posts"] = profile.can_generate_competitor_posts
         context["is_on_free_plan"] = profile.is_on_free_plan
+
+        return context
+
+
+class ProjectInspirationsView(LoginRequiredMixin, DetailView):
+    model = Project
+    template_name = "project/project_inspirations.html"
+    context_object_name = "project"
+
+    def get_queryset(self):
+        return Project.objects.filter(profile=self.request.user.profile)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        project = self.object
+
+        inspirations = project.inspirations.order_by("-created_at")
+
+        context["inspirations"] = inspirations
 
         return context
 
