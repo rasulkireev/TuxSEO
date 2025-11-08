@@ -1155,17 +1155,25 @@ def execute_pipeline_step(request: HttpRequest, blog_post_id: int, step_name: st
         # Check if validation step failed
         if step_name in ["preliminary_validation", "final_validation"]:
             if isinstance(result, dict) and not result.get("is_valid"):
-                # Validation failed, return with needs_fix flag
+                # Get the updated pipeline state to check actual status
                 pipeline_state = blog_post.get_pipeline_status()
-                return {
-                    "status": "success",
-                    "message": f"{success_message} - validation failed",
-                    "step_name": step_name,
-                    "pipeline_state": pipeline_state,
-                    "result": result,
-                    "needs_fix": True,
-                    "validation_issues": result.get("validation_issues", []),
-                }
+                actual_step_status = (
+                    pipeline_state.get("steps", {}).get(step_name, {}).get("status")
+                )
+
+                # Only return needs_fix if the step is actually in needs_fix status
+                # If it's "failed", that means we've exceeded fix attempts
+                if actual_step_status == "needs_fix":
+                    return {
+                        "status": "success",
+                        "message": f"{success_message} - validation found issues",
+                        "step_name": step_name,
+                        "pipeline_state": pipeline_state,
+                        "result": result,
+                        "needs_fix": True,
+                        "validation_issues": result.get("validation_issues", []),
+                    }
+                # If status is "failed", let it fall through to normal error handling below
 
         # Get updated pipeline state
         pipeline_state = blog_post.get_pipeline_status()

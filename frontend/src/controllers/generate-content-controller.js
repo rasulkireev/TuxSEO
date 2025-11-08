@@ -212,8 +212,16 @@ export default class extends Controller {
         const backend_step = this._getBackendStepName(frontend_step);
         const step_status = statusData.steps?.[backend_step];
 
+        // Check if step needs to be executed or fixed
         if (!step_status || step_status.status !== "completed") {
-          steps_to_execute.push(frontend_step);
+          // If validation step has "needs_fix" status, trigger fix step instead
+          if (step_status && step_status.status === "needs_fix" &&
+              (frontend_step === "preliminary_validation" || frontend_step === "final_validation")) {
+            steps_to_execute.push(`fix_${frontend_step}`);
+            steps_to_execute.push(frontend_step); // Re-run validation after fix
+          } else {
+            steps_to_execute.push(frontend_step);
+          }
         }
       }
 
@@ -221,13 +229,19 @@ export default class extends Controller {
       for (const step of steps_to_execute) {
         const stepResult = await this._executeStep(step);
 
-        // Check if validation failed and needs fixing
+        // Check if validation failed and needs fixing (for new validation failures)
         if (stepResult && stepResult.needs_fix) {
           const fixStepName = `fix_${step}`;
           await this._executeStep(fixStepName);
 
           // Re-run validation after fixing
-          await this._executeStep(step);
+          const revalidationResult = await this._executeStep(step);
+
+          // If validation still needs fixing after one fix attempt, stop here
+          // User will need to click Continue again to retry
+          if (revalidationResult && revalidationResult.needs_fix) {
+            throw new Error("Validation still has issues after fix. Please review the content and try again.");
+          }
         }
       }
 
@@ -324,9 +338,8 @@ export default class extends Controller {
 
       // Check if validation failed but can be fixed
       if (data.needs_fix) {
-        // Mark validation step as completed (it ran successfully, just found issues)
-        this._updateProgressStep(step_name, "completed", step_display_names[step_name]);
-        // Return data with needs_fix flag so the caller can trigger the fix step
+        // Don't mark as completed - it needs fixing
+        // Just return the data so the caller can trigger the fix step
         return data;
       }
 
@@ -355,30 +368,30 @@ export default class extends Controller {
   _showProgressDialog() {
     const dialog = document.createElement("div");
     dialog.id = "generation-progress-dialog";
-    dialog.className = "fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50";
+    dialog.className = "flex fixed inset-0 z-50 justify-center items-center bg-black bg-opacity-50";
     dialog.innerHTML = `
-      <div class="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4">
-        <h3 class="text-lg font-semibold mb-4">Generating Blog Post</h3>
+      <div class="p-6 mx-4 w-full max-w-md bg-white rounded-lg shadow-xl">
+        <h3 class="mb-4 text-lg font-semibold">Generating Blog Post</h3>
         <div id="progress-steps" class="space-y-3">
-          <div data-step="structure" class="flex items-center gap-3">
-            <div class="step-icon w-6 h-6"></div>
-            <span class="step-text text-sm">Generating Structure</span>
+          <div data-step="structure" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Generating Structure</span>
           </div>
-          <div data-step="content" class="flex items-center gap-3">
-            <div class="step-icon w-6 h-6"></div>
-            <span class="step-text text-sm">Generating Content</span>
+          <div data-step="content" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Generating Content</span>
           </div>
-          <div data-step="preliminary_validation" class="flex items-center gap-3">
-            <div class="step-icon w-6 h-6"></div>
-            <span class="step-text text-sm">Validating Content</span>
+          <div data-step="preliminary_validation" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Validating Content</span>
           </div>
-          <div data-step="internal_links" class="flex items-center gap-3">
-            <div class="step-icon w-6 h-6"></div>
-            <span class="step-text text-sm">Adding Internal Links</span>
+          <div data-step="internal_links" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Adding Internal Links</span>
           </div>
-          <div data-step="final_validation" class="flex items-center gap-3">
-            <div class="step-icon w-6 h-6"></div>
-            <span class="step-text text-sm">Final Validation</span>
+          <div data-step="final_validation" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Final Validation</span>
           </div>
         </div>
       </div>
@@ -408,10 +421,10 @@ export default class extends Controller {
           // Create new step element
           const new_step = document.createElement("div");
           new_step.setAttribute("data-step", step_name);
-          new_step.className = "flex items-center gap-3 ml-6";
+          new_step.className = "flex gap-3 items-center ml-6";
           new_step.innerHTML = `
-            <div class="step-icon w-6 h-6"></div>
-            <span class="step-text text-sm">${display_text}</span>
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">${display_text}</span>
           `;
 
           // Insert after the parent step
@@ -428,26 +441,26 @@ export default class extends Controller {
 
     if (status === "in_progress") {
       icon.innerHTML = `
-        <svg class="animate-spin h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24">
+        <svg class="w-5 h-5 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
           <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
           <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
         </svg>
       `;
-      text.className = "step-text text-sm font-medium text-blue-600";
+      text.className = "text-sm font-medium text-blue-600 step-text";
     } else if (status === "completed") {
       icon.innerHTML = `
-        <svg class="h-5 w-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
         </svg>
       `;
-      text.className = "step-text text-sm text-gray-600 line-through";
+      text.className = "text-sm text-gray-600 line-through step-text";
     } else if (status === "failed") {
       icon.innerHTML = `
-        <svg class="h-5 w-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+        <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
         </svg>
       `;
-      text.className = "step-text text-sm font-medium text-red-600";
+      text.className = "text-sm font-medium text-red-600 step-text";
     }
 
     text.textContent = display_text;

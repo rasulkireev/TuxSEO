@@ -919,16 +919,38 @@ class BlogPostTitleSuggestion(BaseModel):
                 )
             else:
                 issues_text = "; ".join(validation_result.validation_issues)
-                blog_post.update_pipeline_step(
-                    "preliminary_validation",
-                    "failed",
-                    error=f"Content validation failed - {issues_text}",
+
+                # Check if we've already tried to fix this multiple times
+                fix_attempt_count = (
+                    blog_post.pipeline_state.get("steps", {})
+                    .get("preliminary_validation", {})
+                    .get("fix_attempt_count", 0)
                 )
-                logger.warning(
-                    "[Pipeline] Preliminary validation failed",
-                    blog_post_id=blog_post.id,
-                    validation_issues=validation_result.validation_issues,
-                )
+
+                if fix_attempt_count >= 2:
+                    # After 2 fix attempts, mark as failed to prevent infinite loop
+                    blog_post.update_pipeline_step(
+                        "preliminary_validation",
+                        "failed",
+                        error=f"Content validation failed after {fix_attempt_count} fix attempts - {issues_text}",  # noqa: E501
+                    )
+                    logger.error(
+                        "[Pipeline] Preliminary validation failed after multiple fix attempts",
+                        blog_post_id=blog_post.id,
+                        fix_attempt_count=fix_attempt_count,
+                        validation_issues=validation_result.validation_issues,
+                    )
+                else:
+                    blog_post.update_pipeline_step(
+                        "preliminary_validation",
+                        "needs_fix",
+                        error=f"Content validation failed - {issues_text}",
+                    )
+                    logger.warning(
+                        "[Pipeline] Preliminary validation found issues",
+                        blog_post_id=blog_post.id,
+                        validation_issues=validation_result.validation_issues,
+                    )
 
             return {
                 "is_valid": is_valid,
@@ -974,7 +996,9 @@ class BlogPostTitleSuggestion(BaseModel):
 
             result = run_agent_synchronously(
                 agent,
-                context,
+                "Please fix the validation issues in this blog post content.",
+                deps=context,
+                function_name="fix_preliminary_validation",
             )
 
             fixed_content = result.output
@@ -983,6 +1007,10 @@ class BlogPostTitleSuggestion(BaseModel):
             blog_post.save(update_fields=["content"])
 
             blog_post.update_pipeline_step("fix_preliminary_validation", "completed")
+
+            # Reset the preliminary_validation step status to pending so it can be re-run
+            blog_post.update_pipeline_step("preliminary_validation", "pending")
+
             logger.info(
                 "[Pipeline] Fixed preliminary validation issues",
                 blog_post_id=blog_post.id,
@@ -1112,16 +1140,38 @@ class BlogPostTitleSuggestion(BaseModel):
                 )
             else:
                 issues_text = "; ".join(validation_result.validation_issues)
-                blog_post.update_pipeline_step(
-                    "final_validation",
-                    "failed",
-                    error=f"Content validation failed - {issues_text}",
+
+                # Check if we've already tried to fix this multiple times
+                fix_attempt_count = (
+                    blog_post.pipeline_state.get("steps", {})
+                    .get("final_validation", {})
+                    .get("fix_attempt_count", 0)
                 )
-                logger.warning(
-                    "[Pipeline] Final validation failed",
-                    blog_post_id=blog_post.id,
-                    validation_issues=validation_result.validation_issues,
-                )
+
+                if fix_attempt_count >= 2:
+                    # After 2 fix attempts, mark as failed to prevent infinite loop
+                    blog_post.update_pipeline_step(
+                        "final_validation",
+                        "failed",
+                        error=f"Content validation failed after {fix_attempt_count} fix attempts - {issues_text}",  # noqa: E501
+                    )
+                    logger.error(
+                        "[Pipeline] Final validation failed after multiple fix attempts",
+                        blog_post_id=blog_post.id,
+                        fix_attempt_count=fix_attempt_count,
+                        validation_issues=validation_result.validation_issues,
+                    )
+                else:
+                    blog_post.update_pipeline_step(
+                        "final_validation",
+                        "needs_fix",
+                        error=f"Content validation failed - {issues_text}",
+                    )
+                    logger.warning(
+                        "[Pipeline] Final validation found issues",
+                        blog_post_id=blog_post.id,
+                        validation_issues=validation_result.validation_issues,
+                    )
 
             return {
                 "is_valid": is_valid,
@@ -1167,7 +1217,9 @@ class BlogPostTitleSuggestion(BaseModel):
 
             result = run_agent_synchronously(
                 agent,
-                context,
+                "Please fix the validation issues in this blog post content.",
+                deps=context,
+                function_name="fix_final_validation",
             )
 
             fixed_content = result.output
@@ -1176,6 +1228,10 @@ class BlogPostTitleSuggestion(BaseModel):
             blog_post.save(update_fields=["content"])
 
             blog_post.update_pipeline_step("fix_final_validation", "completed")
+
+            # Reset the final_validation step status to pending so it can be re-run
+            blog_post.update_pipeline_step("final_validation", "pending")
+
             logger.info(
                 "[Pipeline] Fixed final validation issues",
                 blog_post_id=blog_post.id,
@@ -1518,32 +1574,45 @@ class GeneratedBlogPost(BaseModel):
         pipeline_state["steps"][step_name]["status"] = status
         if error:
             pipeline_state["steps"][step_name]["error"] = error
+        elif status == "pending":
+            # Clear error when resetting to pending
+            pipeline_state["steps"][step_name]["error"] = None
 
         if status == "completed":
             pipeline_state["steps"][step_name]["completed_at"] = timezone.now().isoformat()
-            self.pipeline_metadata["steps_completed"] = (
-                self.pipeline_metadata.get("steps_completed", 0) + 1
-            )
 
-            step_order = [
-                "generate_structure",
-                "generate_content",
-                "preliminary_validation",
-                "insert_internal_links",
-                "final_validation",
-            ]
-            current_index = step_order.index(step_name)
-            if current_index < len(step_order) - 1:
-                pipeline_state["current_step"] = step_order[current_index + 1]
-            else:
-                pipeline_state["current_step"] = "completed"
-                self.pipeline_metadata["completed_at"] = timezone.now().isoformat()
+            # Only update steps_completed and current_step for main pipeline steps, not fix steps
+            if not step_name.startswith("fix_"):
+                self.pipeline_metadata["steps_completed"] = (
+                    self.pipeline_metadata.get("steps_completed", 0) + 1
+                )
+
+                step_order = [
+                    "generate_structure",
+                    "generate_content",
+                    "preliminary_validation",
+                    "insert_internal_links",
+                    "final_validation",
+                ]
+                current_index = step_order.index(step_name)
+                if current_index < len(step_order) - 1:
+                    pipeline_state["current_step"] = step_order[current_index + 1]
+                else:
+                    pipeline_state["current_step"] = "completed"
+                    self.pipeline_metadata["completed_at"] = timezone.now().isoformat()
 
         elif status == "failed":
             pipeline_state["steps"][step_name]["retry_count"] = (
                 pipeline_state["steps"][step_name].get("retry_count", 0) + 1
             )
             pipeline_state["steps"][step_name]["failed_at"] = timezone.now().isoformat()
+
+        elif status == "needs_fix":
+            pipeline_state["steps"][step_name]["needs_fix_at"] = timezone.now().isoformat()
+            # Track how many times we've tried to fix this validation issue
+            pipeline_state["steps"][step_name]["fix_attempt_count"] = (
+                pipeline_state["steps"][step_name].get("fix_attempt_count", 0) + 1
+            )
 
         elif status == "in_progress":
             pipeline_state["current_step"] = step_name
