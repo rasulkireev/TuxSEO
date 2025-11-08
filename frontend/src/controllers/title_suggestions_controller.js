@@ -10,56 +10,10 @@ export default class extends Controller {
   static targets = ["suggestionsList", "suggestionsContainer", "activeSuggestionsList"];
 
   connect() {
-    // Get the last selected tab from localStorage, default to "SHARING" if none exists
-    this.currentTabValue = localStorage.getItem("selectedTab") || "SHARING";
-
-    // Update initial tab UI
-    const tabs = this.element.querySelectorAll("[data-action='title-suggestions#switchTab']");
-    tabs.forEach(t => {
-      if (t.dataset.tab === this.currentTabValue) {
-        t.classList.add("text-gray-900", "border-b-2", "border-gray-900");
-        t.classList.remove("text-gray-500", "hover:text-gray-700", "border-transparent", "hover:border-gray-300");
-      } else {
-        t.classList.remove("text-gray-900", "border-b-2", "border-gray-900");
-        t.classList.add("text-gray-500", "hover:text-gray-700", "border-b-2", "border-transparent", "hover:border-gray-300");
-      }
-    });
-
-    // Filter suggestions based on initial tab
-    this.filterSuggestions();
+    // Always use SEO content type
+    this.currentTabValue = "SEO";
   }
 
-  switchTab(event) {
-    const selectedTab = event.currentTarget.dataset.tab;
-    this.currentTabValue = selectedTab;
-    localStorage.setItem("selectedTab", selectedTab);
-
-    // Update tab UI
-    const tabs = this.element.querySelectorAll("[data-action='title-suggestions#switchTab']");
-    tabs.forEach(t => {
-      if (t.dataset.tab === selectedTab) {
-        t.classList.add("text-gray-900", "border-b-2", "border-gray-900");
-        t.classList.remove("text-gray-500", "hover:text-gray-700", "border-transparent", "hover:border-gray-300");
-      } else {
-        t.classList.remove("text-gray-900", "border-b-2", "border-gray-900");
-        t.classList.add("text-gray-500", "hover:text-gray-700", "border-b-2", "border-transparent", "hover:border-gray-300");
-      }
-    });
-
-    this.filterSuggestions();
-  }
-
-  filterSuggestions() {
-    const suggestions = this.suggestionsListTarget.querySelectorAll("[data-suggestion-type]");
-
-    suggestions.forEach(suggestion => {
-      if (suggestion.dataset.suggestionType === this.currentTabValue) {
-        suggestion.classList.remove("hidden");
-      } else {
-        suggestion.classList.add("hidden");
-      }
-    });
-  }
 
 
 

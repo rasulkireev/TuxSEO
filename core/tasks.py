@@ -1,5 +1,4 @@
 import json
-import random
 from urllib.parse import unquote
 
 import posthog
@@ -8,7 +7,7 @@ from django.conf import settings
 from django.utils import timezone
 from django_q.tasks import async_task
 
-from core.choices import ContentType, ProjectPageSource
+from core.choices import ProjectPageSource
 from core.models import (
     BlogPostTitleSuggestion,
     Competitor,
@@ -327,8 +326,7 @@ def generate_blog_post_suggestions(project_id: int):
     if profile.reached_title_generation_limit:
         return "Title generation limit reached for free plan"
 
-    project.generate_title_suggestions(content_type=ContentType.SHARING, num_titles=3)
-    project.generate_title_suggestions(content_type=ContentType.SEO, num_titles=3)
+    project.generate_title_suggestions(num_titles=3)
     return "Blog post suggestions generated"
 
 
@@ -484,8 +482,7 @@ def generate_and_post_blog_post(project_id: int):
             project_id=project_id,
             project_name=project.name,
         )
-        content_type = random.choice([choice[0] for choice in ContentType.choices])
-        suggestions = project.generate_title_suggestions(content_type=content_type, num_titles=1)
+        suggestions = project.generate_title_suggestions(num_titles=1)
         # Use the new pipeline for generation
         blog_post_to_post = suggestions[0].execute_complete_pipeline()
 

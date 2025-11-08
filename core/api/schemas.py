@@ -48,7 +48,7 @@ class ProjectScanOut(Schema):
 
 class GenerateTitleSuggestionsIn(Schema):
     project_id: int
-    content_type: str = ContentType.SHARING
+    content_type: str = ContentType.SEO
     user_prompt: str = ""
     num_titles: int = 3
 
@@ -74,16 +74,6 @@ class GenerateTitleSuggestionsOut(Schema):
     suggestions_html: list[str] = []  # Rendered HTML for each suggestion
     status: str
     message: str = ""
-
-
-class GeneratedContentOut(Schema):
-    status: str = "success"
-    message: str | None = None
-    content: str | None = None
-    slug: str | None = None
-    tags: str | None = None
-    description: str | None = None
-    id: int | None = None
 
 
 class UpdateTitleScoreIn(Schema):
@@ -129,16 +119,6 @@ class CompetitorAnalysisOut(Schema):
     key_features: str | None = None
     key_benefits: str | None = None
     key_drawbacks: str | None = None
-
-
-class GenerateCompetitorVsTitleIn(Schema):
-    competitor_id: int
-
-
-class GenerateCompetitorVsTitleOut(Schema):
-    status: str
-    message: str = ""
-    competitor_id: int | None = None
 
 
 class SubmitFeedbackIn(Schema):
@@ -229,15 +209,6 @@ class ToggleOGImageGenerationOut(Schema):
     status: str
     enabled: bool
     message: str = ""
-
-
-class FixGeneratedBlogPostIn(Schema):
-    id: int
-
-
-class FixGeneratedBlogPostOut(Schema):
-    status: str
-    message: str
 
 
 class GetKeywordDetailsOut(Schema):

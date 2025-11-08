@@ -76,7 +76,16 @@ export default class extends Controller {
 
       // Execute each step of the pipeline
       for (const step of this.pipelineSteps) {
-        await this._executeStep(step);
+        const stepResult = await this._executeStep(step);
+
+        // Check if validation failed and needs fixing
+        if (stepResult && stepResult.needs_fix) {
+          const fixStepName = `fix_${step}`;
+          await this._executeStep(fixStepName);
+
+          // Re-run validation after fixing
+          await this._executeStep(step);
+        }
       }
 
       // Hide progress dialog
@@ -210,7 +219,16 @@ export default class extends Controller {
 
       // Execute remaining steps
       for (const step of steps_to_execute) {
-        await this._executeStep(step);
+        const stepResult = await this._executeStep(step);
+
+        // Check if validation failed and needs fixing
+        if (stepResult && stepResult.needs_fix) {
+          const fixStepName = `fix_${step}`;
+          await this._executeStep(fixStepName);
+
+          // Re-run validation after fixing
+          await this._executeStep(step);
+        }
       }
 
       // Hide progress dialog
@@ -269,8 +287,10 @@ export default class extends Controller {
       "structure": "Generating Structure",
       "content": "Generating Content",
       "preliminary_validation": "Validating Content",
+      "fix_preliminary_validation": "Fixing Validation Issues",
       "internal_links": "Adding Internal Links",
-      "final_validation": "Final Validation"
+      "final_validation": "Final Validation",
+      "fix_final_validation": "Fixing Validation Issues"
     };
 
     // Map frontend step names to backend internal step names
@@ -278,8 +298,10 @@ export default class extends Controller {
       "structure": "generate_structure",
       "content": "generate_content",
       "preliminary_validation": "preliminary_validation",
+      "fix_preliminary_validation": "fix_preliminary_validation",
       "internal_links": "insert_internal_links",
-      "final_validation": "final_validation"
+      "final_validation": "final_validation",
+      "fix_final_validation": "fix_final_validation"
     };
 
     // Update progress dialog to show current step
@@ -300,6 +322,14 @@ export default class extends Controller {
 
       const data = await response.json();
 
+      // Check if validation failed but can be fixed
+      if (data.needs_fix) {
+        // Mark validation step as completed (it ran successfully, just found issues)
+        this._updateProgressStep(step_name, "completed", step_display_names[step_name]);
+        // Return data with needs_fix flag so the caller can trigger the fix step
+        return data;
+      }
+
       // Get the backend step name to check status
       const backend_step_name = backend_step_names[step_name];
       const step_status = data.pipeline_state?.steps?.[backend_step_name];
@@ -312,6 +342,9 @@ export default class extends Controller {
 
       // Update progress dialog to show step completed
       this._updateProgressStep(step_name, "completed", step_display_names[step_name]);
+
+      // Return the result data for validation checks
+      return data;
 
     } catch (error) {
       this._updateProgressStep(step_name, "failed", step_display_names[step_name]);
@@ -361,7 +394,33 @@ export default class extends Controller {
   }
 
   _updateProgressStep(step_name, status, display_text) {
-    const step_element = document.querySelector(`[data-step="${step_name}"]`);
+    let step_element = document.querySelector(`[data-step="${step_name}"]`);
+
+    // If step doesn't exist in dialog, create it dynamically (for fix steps)
+    if (!step_element && step_name.startsWith("fix_")) {
+      const progress_steps_container = document.getElementById("progress-steps");
+      if (progress_steps_container) {
+        // Determine the position to insert the fix step
+        const parent_step_name = step_name.replace("fix_", "");
+        const parent_step_element = document.querySelector(`[data-step="${parent_step_name}"]`);
+
+        if (parent_step_element) {
+          // Create new step element
+          const new_step = document.createElement("div");
+          new_step.setAttribute("data-step", step_name);
+          new_step.className = "flex items-center gap-3 ml-6";
+          new_step.innerHTML = `
+            <div class="step-icon w-6 h-6"></div>
+            <span class="step-text text-sm">${display_text}</span>
+          `;
+
+          // Insert after the parent step
+          parent_step_element.insertAdjacentElement("afterend", new_step);
+          step_element = new_step;
+        }
+      }
+    }
+
     if (!step_element) return;
 
     const icon = step_element.querySelector(".step-icon");
@@ -403,8 +462,10 @@ export default class extends Controller {
       "structure": "Generating Structure",
       "content": "Generating Content",
       "preliminary_validation": "Validating Content",
+      "fix_preliminary_validation": "Fixing Validation Issues",
       "internal_links": "Adding Internal Links",
-      "final_validation": "Final Validation"
+      "final_validation": "Final Validation",
+      "fix_final_validation": "Fixing Validation Issues"
     };
     return display_names[step_name] || step_name;
   }
@@ -414,8 +475,10 @@ export default class extends Controller {
       "structure": "generate_structure",
       "content": "generate_content",
       "preliminary_validation": "preliminary_validation",
+      "fix_preliminary_validation": "fix_preliminary_validation",
       "internal_links": "insert_internal_links",
-      "final_validation": "final_validation"
+      "final_validation": "final_validation",
+      "fix_final_validation": "fix_final_validation"
     };
     return backend_names[frontend_step_name] || frontend_step_name;
   }

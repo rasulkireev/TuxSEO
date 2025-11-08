@@ -25,7 +25,7 @@ export default class extends Controller {
     this.stepNames = [
       { key: "structure", label: "Generate Structure" },
       { key: "content", label: "Generate Content" },
-      { key: "preliminary_validation", label: "Preliminary Validation" },
+      { key: "preliminary_validation", label: "Validate Content" },
       { key: "internal_links", label: "Insert Internal Links" },
       { key: "final_validation", label: "Final Validation" },
     ];

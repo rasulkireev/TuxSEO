@@ -160,3 +160,20 @@ def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
         f"Description: {ctx.deps.description}"
         f"Content: {ctx.deps.markdown_content}"
     )
+
+
+def inline_link_formatting() -> str:
+    return """
+        LINK FORMATTING:
+        Insert links INLINE with natural anchor text in markdown format.
+
+        CORRECT examples:
+        - "...you can learn more about this feature [here](https://example.com)..."
+        - "...we recommend you [give it a try](https://example.com) to see the benefits..."
+        - "...check out our [pricing page](https://example.com) for more details..."
+
+        INCORRECT examples (DO NOT use these formats):
+        - "...learn more here: https://example.com..."
+        - "...give it a try: https://example.com..."
+        - "...pricing page: https://example.com..."
+    """

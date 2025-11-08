@@ -2,7 +2,6 @@ from django.db import models
 
 
 class ContentType(models.TextChoices):
-    SHARING = "SHARING", "Sharing"
     SEO = "SEO", "SEO"
 
 

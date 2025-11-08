@@ -1,4 +1,3 @@
-import re
 from urllib.request import urlopen
 
 import posthog
@@ -7,11 +6,8 @@ import requests
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.forms.utils import ErrorList
-from pydantic_ai import Agent
 
-from core.choices import EmailType, KeywordDataSource, OGImageStyle, get_default_ai_model
-from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
-from core.model_utils import run_agent_synchronously
+from core.choices import EmailType, KeywordDataSource, OGImageStyle
 from core.models import EmailSent, GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
 from tuxseo.utils import get_tuxseo_logger
 
@@ -118,37 +114,6 @@ def save_keyword(keyword_text: str, project: Project):
     ProjectKeyword.objects.get_or_create(project=project, keyword=keyword_obj)
 
 
-def blog_post_has_placeholders(blog_post: GeneratedBlogPost) -> bool:
-    content = blog_post.content or ""
-    content_lower = content.lower()
-
-    for pattern in PLACEHOLDER_PATTERNS:
-        if pattern in content_lower:
-            logger.warning(
-                "[Blog Post Has Placeholders] Placeholder found",
-                pattern=pattern,
-                blog_post_id=blog_post.id,
-            )
-            return True
-
-    for pattern in PLACEHOLDER_BRACKET_PATTERNS:
-        matches = re.findall(pattern, content_lower)
-        if matches:
-            logger.warning(
-                "[Blog Post Has Placeholders] Bracket Placeholder found",
-                pattern=pattern,
-                blog_post_id=blog_post.id,
-            )
-            return True
-
-    logger.info(
-        "[Blog Post Has Placeholders] No placeholders found",
-        blog_post_id=blog_post.id,
-    )
-
-    return False
-
-
 def get_project_keywords_dict(project: Project) -> dict:
     """
     Build a dictionary of project keywords for quick lookup.
@@ -170,93 +135,6 @@ def get_project_keywords_dict(project: Project) -> dict:
             "project_keyword_id": project_keyword.id,
         }
     return project_keywords
-
-
-def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
-    content = blog_post.content
-    content = content.strip()
-
-    agent = Agent(
-        get_default_ai_model(),
-        output_type=bool,
-        system_prompt="""
-        You are an expert content editor analyzing blog post endings. Your task is to determine
-        whether the provided text represents a complete, proper conclusion to a blog post.
-
-        A valid blog post ending should:
-        - Complete the final thought or sentence
-        - Provide closure to the topic being discussed
-        - Feel like a natural conclusion (not abruptly cut off)
-        - May include calls-to-action, summaries, or closing remarks
-
-        An invalid ending would be:
-        - Cut off mid-sentence
-        - Ending abruptly without proper conclusion
-        - Incomplete thoughts or paragraphs
-        - Missing expected closing elements for the content type
-
-        Analyze the text carefully and provide your assessment. Return True if the ending is valid, False if not.
-        """,  # noqa: E501
-        retries=2,
-        model_settings={"temperature": 0.1},  # Lower temperature for more consistent analysis
-    )
-
-    try:
-        result = run_agent_synchronously(
-            agent,
-            f"Please analyze this blog post and determine if it has a complete ending:\n\n{content}",  # noqa: E501
-            function_name="blog_post_has_valid_ending",
-        )
-
-        ending_is_valid = result.output
-
-        if ending_is_valid:
-            logger.info(
-                "[Blog Post Has Valid Ending] Valid ending",
-                result=ending_is_valid,
-                blog_post_id=blog_post.id,
-            )
-        else:
-            logger.warning(
-                "[Blog Post Has Valid Ending] Invalid ending",
-                result=ending_is_valid,
-                blog_post_id=blog_post.id,
-            )
-
-        return ending_is_valid
-
-    except Exception as e:
-        logger.error(
-            "[Blog Post Has Valid Ending] AI analysis failed",
-            error=str(e),
-            exc_info=True,
-            content_length=len(content),
-        )
-        return False
-
-
-def blog_post_starts_with_header(blog_post: GeneratedBlogPost) -> bool:
-    content = blog_post.content or ""
-    content = content.strip()
-
-    if not content:
-        return False
-
-    header_or_asterisk_pattern = r"^(#{1,6}\s+|\*)"
-    starts_with_header_or_asterisk = bool(re.match(header_or_asterisk_pattern, content))
-
-    if starts_with_header_or_asterisk:
-        logger.warning(
-            "[Blog Post Starts With Header] Content starts with header or asterisk",
-            blog_post_id=blog_post.id,
-        )
-    else:
-        logger.info(
-            "[Blog Post Starts With Header] Content starts with regular text",
-            blog_post_id=blog_post.id,
-        )
-
-    return starts_with_header_or_asterisk
 
 
 def track_email_sent(email_address: str, email_type: EmailType, profile: Profile = None):
@@ -509,58 +387,6 @@ def get_jina_embedding(text: str) -> list[float] | None:
             exc_info=True,
         )
         return None
-
-
-def validate_markdown_syntax(content: str) -> list[dict]:
-    """
-    Check for broken markdown syntax.
-
-    Returns a list of issues found.
-    """
-    issues = []
-
-    # Check for unclosed brackets in links
-    for line_num, line in enumerate(content.split("\n"), 1):
-        # Check for unclosed square brackets
-        if line.count("[") != line.count("]"):
-            issues.append(
-                {
-                    "type": "broken_markdown",
-                    "details": f"Unmatched square brackets on line {line_num}",
-                    "location": f"Line {line_num}",
-                }
-            )
-
-        # Check for unclosed parentheses in what looks like links
-        if "[" in line and "]" in line:
-            bracket_pos = line.find("]")
-            if bracket_pos < len(line) - 1 and line[bracket_pos + 1] == "(":
-                paren_count = 0
-                for char in line[bracket_pos + 1 :]:
-                    if char == "(":
-                        paren_count += 1
-                    elif char == ")":
-                        paren_count -= 1
-                if paren_count != 0:
-                    issues.append(
-                        {
-                            "type": "broken_markdown",
-                            "details": f"Unmatched parentheses in link on line {line_num}",
-                            "location": f"Line {line_num}",
-                        }
-                    )
-
-        # Check for malformed headings (# without space)
-        if line.startswith("#") and len(line) > 1 and line[1] != " " and line[1] != "#":
-            issues.append(
-                {
-                    "type": "broken_markdown",
-                    "details": f"Malformed heading (missing space after #) on line {line_num}",
-                    "location": f"Line {line_num}",
-                }
-            )
-
-    return issues
 
 
 def find_internal_link_opportunities(

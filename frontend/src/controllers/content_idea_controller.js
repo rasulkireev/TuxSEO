@@ -12,9 +12,8 @@ export default class extends Controller {
   }
 
   getCurrentTab() {
-    // Find the active tab button
-    const activeTab = document.querySelector('[data-action="title-suggestions#switchTab"].text-gray-900');
-    return activeTab ? activeTab.dataset.tab : "SHARING"; // Default to SHARING if no tab is active
+    // Always return SEO
+    return "SEO";
   }
 
   async generate() {

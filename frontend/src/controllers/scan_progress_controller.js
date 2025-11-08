@@ -84,7 +84,7 @@ export default class extends Controller {
     return scanData;
   }
 
-  async generateSuggestions(projectId, contentType="SHARING") {
+  async generateSuggestions(projectId, contentType="SEO") {
     const suggestionsResponse = await fetch('/api/generate-title-suggestions', {
       method: 'POST',
       headers: {

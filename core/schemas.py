@@ -59,6 +59,9 @@ class ProjectDetails(BaseModel):
         So, if the business is local, please specify the country or region. Otherwise, use 'Global'.
     """  # noqa: E501
     )
+    is_on_free_plan: bool = Field(
+        default=False, description="Whether the project owner is on a free subscription plan"
+    )
 
     @field_validator("type")
     @classmethod
@@ -186,7 +189,7 @@ class BlogPostGenerationContext(BaseModel):
     title_suggestion: TitleSuggestion
     project_keywords: list[str] = []
     project_pages: list[ProjectPageContext] = []
-    content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
+    content_type: str = Field(description="Type of content to generate (SEO)")
 
 
 class GeneratedBlogPostSchema(BaseModel):
@@ -254,13 +257,6 @@ class CompetitorAnalysis(BaseModel):
     )
 
 
-class CompetitorVsTitleContext(BaseModel):
-    """Context for generating competitor comparison blog post titles."""
-
-    project_details: ProjectDetails
-    competitor_details: CompetitorDetails
-
-
 class CompetitorVsPostContext(BaseModel):
     """Context for generating competitor comparison blog post content."""
 
@@ -322,36 +318,20 @@ class InternalLinkContext(BaseModel):
     )
 
 
-class ContentValidationIssue(BaseModel):
-    """A single validation issue found in the content."""
+class ContentValidationResult(BaseModel):
+    """Result of content validation with validation status and reasons."""
 
-    issue_type: str = Field(
-        description="Type of issue: content_too_short, has_placeholders, invalid_ending, starts_with_header, broken_markdown"  # noqa: E501
-    )
-    details: str = Field(description="Detailed description of the issue")
-    location: str | None = Field(
-        default=None, description="Location in content where issue was found (optional)"
-    )
-
-
-class ContentValidationReport(BaseModel):
-    """Validation report for blog post content."""
-
-    is_valid: bool = Field(description="Whether the content passes all validation checks")
-    issues: list[ContentValidationIssue] = Field(
-        default_factory=list, description="List of validation issues found"
-    )
-    suggestions: list[str] = Field(
-        default_factory=list, description="Suggestions for improving the content"
+    is_valid: bool = Field(description="Whether the content is complete and ready for publication")
+    validation_issues: list[str] = Field(
+        default_factory=list,
+        description="List of specific issues found in the content that need to be fixed",
     )
 
 
 class ContentFixContext(BaseModel):
     """Context for fixing content validation issues."""
 
-    content: str = Field(description="The blog post content that needs fixing")
-    validation_report: ContentValidationReport = Field(
-        description="The validation report with issues to fix"
+    content: str = Field(description="The original blog post content that has validation issues")
+    validation_issues: list[str] = Field(
+        description="List of specific validation issues that need to be addressed"
     )
-    project_details: ProjectDetails
-    title_suggestion: TitleSuggestion
