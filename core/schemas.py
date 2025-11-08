@@ -59,6 +59,9 @@ class ProjectDetails(BaseModel):
         So, if the business is local, please specify the country or region. Otherwise, use 'Global'.
     """  # noqa: E501
     )
+    is_on_free_plan: bool = Field(
+        default=False, description="Whether the project owner is on a free subscription plan"
+    )
 
     @field_validator("type")
     @classmethod
@@ -186,7 +189,7 @@ class BlogPostGenerationContext(BaseModel):
     title_suggestion: TitleSuggestion
     project_keywords: list[str] = []
     project_pages: list[ProjectPageContext] = []
-    content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
+    content_type: str = Field(description="Type of content to generate (SEO)")
 
 
 class GeneratedBlogPostSchema(BaseModel):
@@ -254,13 +257,6 @@ class CompetitorAnalysis(BaseModel):
     )
 
 
-class CompetitorVsTitleContext(BaseModel):
-    """Context for generating competitor comparison blog post titles."""
-
-    project_details: ProjectDetails
-    competitor_details: CompetitorDetails
-
-
 class CompetitorVsPostContext(BaseModel):
     """Context for generating competitor comparison blog post content."""
 
@@ -274,4 +270,80 @@ class CompetitorVsPostContext(BaseModel):
     language: str
     project_pages: list[ProjectPageContext] = Field(
         default_factory=list, description="List of project pages available for linking"
+    )
+
+
+class BlogPostSection(BaseModel):
+    """A single section in the blog post structure."""
+
+    heading: str = Field(description="H2 or H3 heading for this section")
+    level: int = Field(description="Heading level (2 for H2, 3 for H3)")
+    description: str = Field(
+        description="Brief description of what this section should cover (2-3 sentences)"
+    )
+    target_word_count: int = Field(
+        description="Approximate number of words this section should contain"
+    )
+    key_points: list[str] = Field(
+        description="List of 3-5 key points that should be covered in this section"
+    )
+
+
+class BlogPostStructure(BaseModel):
+    """Complete structure outline for a blog post."""
+
+    introduction_guidance: str = Field(
+        description="Guidance for writing the introduction (what to cover, tone, hook)"
+    )
+    sections: list[BlogPostSection] = Field(
+        description="Ordered list of sections that make up the blog post body"
+    )
+    conclusion_guidance: str = Field(
+        description="Guidance for writing the conclusion (key takeaways, CTA, final thoughts)"
+    )
+    estimated_total_word_count: int = Field(
+        description="Estimated total word count for the entire blog post"
+    )
+    seo_focus: list[str] = Field(
+        description="Primary keywords and topics to emphasize throughout the post"
+    )
+
+
+class InternalLinkContext(BaseModel):
+    """Context for inserting internal links into blog post content."""
+
+    content: str = Field(description="The blog post content in markdown format")
+    available_pages: list[ProjectPageContext] = Field(
+        description="List of project pages available for linking"
+    )
+
+
+class ContentValidationContext(BaseModel):
+    """Context for validating blog post content."""
+
+    content: str = Field(description="The blog post content to validate")
+    title: str = Field(description="The blog post title")
+    description: str = Field(description="The blog post description/summary")
+    target_keywords: list[str] = Field(
+        default_factory=list,
+        description="Target keywords the post should focus on",
+    )
+
+
+class ContentValidationResult(BaseModel):
+    """Result of content validation with validation status and reasons."""
+
+    is_valid: bool = Field(description="Whether the content is complete and ready for publication")
+    validation_issues: list[str] = Field(
+        default_factory=list,
+        description="List of specific issues found in the content that need to be fixed",
+    )
+
+
+class ContentFixContext(BaseModel):
+    """Context for fixing content validation issues."""
+
+    content: str = Field(description="The original blog post content that has validation issues")
+    validation_issues: list[str] = Field(
+        description="List of specific validation issues that need to be addressed"
     )

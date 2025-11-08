@@ -137,26 +137,6 @@
     <div class="mb-6">
       <h3 class="mb-4 text-lg font-semibold text-gray-900">Your Blog Post Ideas</h3>
 
-      <!-- Content Type Tabs -->
-      <div class="border-b border-gray-200">
-        <nav class="flex -mb-px space-x-8">
-          <button
-            data-action="title-suggestions#switchTab"
-            data-tab="SHARING"
-            class="px-1 py-2 text-sm font-medium text-gray-900 border-b-2 border-gray-900 focus:outline-none"
-            aria-current="page"
-          >
-            Eye Catching
-          </button>
-          <button
-            data-action="title-suggestions#switchTab"
-            data-tab="SEO"
-            class="px-1 py-2 text-sm font-medium text-gray-500 border-b-2 border-transparent hover:text-gray-700 hover:border-gray-300 focus:outline-none"
-          >
-            SEO Optimized
-          </button>
-        </nav>
-      </div>
     </div>
 
     <!-- Suggestions Lists -->
@@ -176,26 +156,6 @@
           </button>
           <div data-archived-list-target="list" class="p-4 border-t border-gray-200" data-title-suggestions-target="activeSuggestionsList">
             {% for suggestion in active_suggestions %}
-              {% include "components/blog_post_suggestion_card.html" with suggestion=suggestion %}
-            {% endfor %}
-          </div>
-        </div>
-      </div>
-
-      <!-- Posted Suggestions -->
-      <div data-controller="archived-list" class="archived-list" data-archived-list-name-value="posted">
-        <div class="bg-gray-50 rounded-lg border border-gray-200">
-          <button
-            class="flex justify-between items-center px-6 py-4 w-full text-left rounded-t-lg transition-colors hover:bg-gray-100 focus:outline-none"
-            data-action="click->archived-list#toggle"
-          >
-            <h4 class="text-base font-medium text-gray-900">Published Posts</h4>
-            <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-            </svg>
-          </button>
-          <div data-archived-list-target="list" class="hidden p-4 border-t border-gray-200">
-            {% for suggestion in posted_suggestions %}
               {% include "components/blog_post_suggestion_card.html" with suggestion=suggestion %}
             {% endfor %}
           </div>

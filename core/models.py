@@ -1,3 +1,4 @@
+import json
 from decimal import Decimal, InvalidOperation
 
 import requests
@@ -9,27 +10,9 @@ from django.utils import timezone
 from django_q.tasks import async_task
 from pgvector.django import HnswIndex, VectorField
 from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
-from core.agent_system_prompts import (
-    add_todays_date,
-    filler_content,
-    markdown_lists,
-    post_structure,
-    valid_markdown_format,
-)
-from core.agents import (
-    add_language_specification,
-    add_project_details,
-    add_project_pages,
-    add_target_keywords,
-    add_title_details,
-    content_editor_agent,
-)
 from core.base_models import BaseModel
 from core.choices import (
-    AIModel,
     BlogPostStatus,
     Category,
     ContentType,
@@ -49,10 +32,6 @@ from core.model_utils import (
     get_markdown_content,
     run_agent_synchronously,
 )
-from core.prompts import (
-    GENERATE_CONTENT_SYSTEM_PROMPTS,
-    TITLE_SUGGESTION_SYSTEM_PROMPTS,
-)
 from core.schemas import (
     BlogPostGenerationContext,
     CompetitorAnalysis,
@@ -63,7 +42,6 @@ from core.schemas import (
     ProjectPageContext,
     TitleSuggestion,
     TitleSuggestionContext,
-    TitleSuggestions,
     WebPageContent,
 )
 from tuxseo.utils import get_tuxseo_logger
@@ -425,6 +403,7 @@ class Project(BaseModel):
             language=self.language,
             proposed_keywords=self.proposed_keywords,
             location=self.location,
+            is_on_free_plan=self.profile.is_on_free_plan,
         )
 
     @property
@@ -497,10 +476,10 @@ class Project(BaseModel):
         Analyze the page content using PydanticAI and update project details.
         Should be called after get_page_content().
         """
-        from core.agents import analyze_project_agent
+        from core.agents.analyze_project_agent import agent
 
         result = run_agent_synchronously(
-            analyze_project_agent,
+            agent,
             "Analyze this web page content and extract the key information.",
             deps=WebPageContent(
                 title=self.title,
@@ -534,111 +513,11 @@ class Project(BaseModel):
 
         return True
 
-    def generate_title_suggestions(  # noqa: C901
-        self, content_type=ContentType.SHARING, num_titles=3, user_prompt="", model=None
-    ):
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=TitleSuggestions,
-            deps_type=TitleSuggestionContext,
-            system_prompt=TITLE_SUGGESTION_SYSTEM_PROMPTS[content_type],
-            retries=2,
-            model_settings={"temperature": 0.9},
-        )
+    def generate_title_suggestions(self, num_titles=3, user_prompt="", model=None):
+        from core.agents.title_suggestions_agent import agent as title_suggestions_agent
 
-        agent.system_prompt(add_todays_date)
-
-        @agent.system_prompt
-        def add_project_details(ctx: RunContext[TitleSuggestionContext]) -> str:
-            project = ctx.deps.project_details
-            return f"""
-                Project Details:
-                - Project Name: {project.name}
-                - Project Type: {project.type}
-                - Project Summary: {project.summary}
-                - Blog Theme: {project.blog_theme}
-                - Founders: {project.founders}
-                - Key Features: {project.key_features}
-                - Target Audience: {project.target_audience_summary}
-                - Pain Points: {project.pain_points}
-                - Product Usage: {project.product_usage}
-            """
-
-        @agent.system_prompt
-        def add_number_of_titles_to_generate(ctx: RunContext[TitleSuggestionContext]) -> str:
-            return f"""IMPORTANT: Generate only {ctx.deps.num_titles} titles."""
-
-        @agent.system_prompt
-        def add_language_specification(ctx: RunContext[TitleSuggestionContext]) -> str:
-            project = ctx.deps.project_details
-            return f"""
-                IMPORTANT: Generate all titles in {project.language} language.
-                Make sure the titles are grammatically correct and culturally
-                appropriate for {project.language}-speaking audiences.
-            """
-
-        @agent.system_prompt
-        def add_user_prompt(ctx: RunContext[TitleSuggestionContext]) -> str:
-            if not ctx.deps.user_prompt:
-                return ""
-
-            return f"""
-                IMPORTANT USER REQUEST: The user has specifically requested the following:
-                "{ctx.deps.user_prompt}"
-
-                This is a high-priority requirement. Make sure to incorporate this guidance
-                when generating titles while still maintaining SEO best practices and readability.
-            """
-
-        @agent.system_prompt
-        def add_feedback_history(ctx: RunContext[TitleSuggestionContext]) -> str:
-            # Build the feedback sections only if they exist
-            feedback_sections = []
-
-            if ctx.deps.neutral_suggestions:
-                neutral = "\n".join(f"- {title}" for title in ctx.deps.neutral_suggestions)
-                feedback_sections.append(
-                    f"""
-                    Title Suggestions that users have not yet liked or disliked:
-                    {neutral}
-                """
-                )
-
-            if ctx.deps.liked_suggestions:
-                liked = "\n".join(f"- {title}" for title in ctx.deps.liked_suggestions)
-                feedback_sections.append(
-                    f"""
-                    Liked Title Suggestions:
-                    {liked}
-                """
-                )
-
-            if ctx.deps.disliked_suggestions:
-                disliked = "\n".join(f"- {title}" for title in ctx.deps.disliked_suggestions)
-                feedback_sections.append(
-                    f"""
-                    Disliked Title Suggestions:
-                    {disliked}
-                """
-                )
-
-            # Add guidance only if we have any feedback
-            if feedback_sections:
-                feedback_sections.append(
-                    """
-                    Use this feedback to guide your title generation.
-                    Create titles that are thematically similar to the "Liked" titles,
-                    and avoid any stylistic or thematic patterns from the "Disliked" titles.
-
-                    IMPORTANT!
-                    You must generate completely new and unique titles.
-                    Do not repeat or create minor variations of any titles listed above in the
-                    "Previously Generated", "Liked", or "Disliked" sections.
-                    Your primary goal is originality.
-                    """
-                )
-
-            return "\n".join(feedback_sections)
+        if model:
+            title_suggestions_agent.model = model
 
         deps = TitleSuggestionContext(
             project_details=self.project_details,
@@ -652,7 +531,7 @@ class Project(BaseModel):
         )
 
         result = run_agent_synchronously(
-            agent,
+            title_suggestions_agent,
             "Please generate blog post title suggestions based on the project details.",
             deps=deps,
             function_name="generate_title_suggestions",
@@ -667,7 +546,7 @@ class Project(BaseModel):
                     title=title.title,
                     description=title.description,
                     category=title.category,
-                    content_type=content_type,
+                    content_type=ContentType.SEO,
                     target_keywords=title.target_keywords,
                     prompt=user_prompt,
                     suggested_meta_description=title.suggested_meta_description,
@@ -712,77 +591,7 @@ class Project(BaseModel):
         return result.output
 
     def find_competitors(self):
-        model = OpenAIChatModel(
-            AIModel.PERPLEXITY_SONAR,
-            provider=OpenAIProvider(
-                base_url="https://api.perplexity.ai",
-                api_key=settings.PERPLEXITY_API_KEY,
-            ),
-        )
-        agent = Agent(
-            model,
-            deps_type=ProjectDetails,
-            output_type=str,
-            system_prompt="""
-                You are a helpful assistant that helps me find competitors for my project.
-            """,
-            retries=2,
-        )
-
-        @agent.system_prompt
-        def add_project_details(ctx: RunContext[ProjectDetails]) -> str:
-            project = ctx.deps
-            return f"""I'm working on a project which has the following attributes:
-                Name:
-                {project.name}
-
-                Summary:
-                {project.summary}
-
-                Key Features:
-                {project.key_features}
-
-                Target Audience:
-                {project.target_audience_summary}
-
-                Pain Points Addressed:
-                {project.pain_points}
-
-                Language: {project.language}
-            """
-
-        @agent.system_prompt
-        def required_data() -> str:
-            return "Make sure that each competitor has a name, url, and description."
-
-        @agent.system_prompt
-        def number_of_competitors(ctx: RunContext[ProjectDetails]) -> str:
-            # Check if user is on free plan through the project's profile
-            profile = self.profile
-            if profile.is_on_free_plan:
-                return "Give me a list of exactly 3 competitors."
-            return "Give me a list of at least 20 competitors."
-
-        @agent.system_prompt
-        def language_specification(ctx: RunContext[ProjectDetails]) -> str:
-            project = ctx.deps
-            return f"""
-                IMPORTANT: Be mindful that competitors are likely to speak in
-                {project.language} language.
-            """
-
-        @agent.system_prompt
-        def location_specification(ctx: RunContext[ProjectDetails]) -> str:
-            project = ctx.deps
-            if project.location != "Global":
-                return f"""
-                    IMPORTANT: Only return competitors whose target audience is in
-                    {project.location}.
-                """
-            else:
-                return """
-                    IMPORTANT: Return competitors from all over the world.
-                """
+        from core.agents.competitor_finder_agent import agent
 
         result = run_agent_synchronously(
             agent,
@@ -847,7 +656,7 @@ class BlogPostTitleSuggestion(BaseModel):
 
     title = models.CharField(max_length=255)
     content_type = models.CharField(
-        max_length=20, choices=ContentType.choices, default=ContentType.SHARING
+        max_length=20, choices=ContentType.choices, default=ContentType.SEO
     )
     category = models.CharField(
         max_length=50, choices=Category.choices, default=Category.GENERAL_AUDIENCE
@@ -882,77 +691,660 @@ class BlogPostTitleSuggestion(BaseModel):
             suggested_meta_description=self.suggested_meta_description,
         )
 
-    def generate_content(self, content_type=ContentType.SHARING, model=None):
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=GeneratedBlogPostSchema,
-            deps_type=BlogPostGenerationContext,
-            system_prompt=GENERATE_CONTENT_SYSTEM_PROMPTS[content_type],
-            retries=2,
-            model_settings={"max_tokens": 65500, "temperature": 0.8},
-        )
+    def start_generation_pipeline(self):
+        """
+        Initialize a new blog post generation pipeline.
 
-        agent.system_prompt(add_project_details)
-        agent.system_prompt(add_project_pages)
-        agent.system_prompt(add_title_details)
-        agent.system_prompt(add_todays_date)
-        agent.system_prompt(add_language_specification)
-        agent.system_prompt(add_target_keywords)
-        agent.system_prompt(valid_markdown_format)
-        agent.system_prompt(markdown_lists)
-        agent.system_prompt(post_structure)
-        agent.system_prompt(filler_content)
-
-        # Get all analyzed project pages (from AI and sitemap sources)
-        project_pages = [
-            ProjectPageContext(
-                url=page.url,
-                title=page.title,
-                description=page.description,
-                summary=page.summary,
-                always_use=page.always_use,
-            )
-            for page in self.project.project_pages.filter(date_analyzed__isnull=False)
-        ]
-
-        project_keywords = [
-            pk.keyword.keyword_text
-            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
-        ]
-
-        deps = BlogPostGenerationContext(
-            project_details=self.project.project_details,
-            title_suggestion=self.title_suggestion_schema,
-            project_pages=project_pages,
-            content_type=content_type,
-            project_keywords=project_keywords,
-        )
-
-        result = run_agent_synchronously(
-            agent,
-            "Please generate an article based on the project details and title suggestions.",
-            deps=deps,
-            function_name="generate_content",
-            model_name="BlogPostTitleSuggestion",
-        )
-
-        blog_post = GeneratedBlogPost.objects.create_and_validate(
+        Creates a GeneratedBlogPost with initialized pipeline state.
+        Returns the blog post object ready for pipeline execution.
+        """
+        blog_post = GeneratedBlogPost.objects.create(
             project=self.project,
             title=self,
-            description=result.output.description,
-            slug=result.output.slug,
-            tags=result.output.tags,
-            content=result.output.content,
+            description="",
+            slug="",
+            tags="",
+            content="",
         )
 
-        if self.project.enable_automatic_og_image_generation:
-            async_task(
-                "core.tasks.generate_og_image_for_blog_post",
-                blog_post.id,
-                group="Generate OG Image",
-            )
+        blog_post.initialize_pipeline()
+
+        logger.info(
+            "[Pipeline] Started generation pipeline",
+            blog_post_id=blog_post.id,
+            project_id=self.project_id,
+            title_suggestion_id=self.id,
+            title=self.title,
+        )
 
         return blog_post
+
+    def generate_structure(self, blog_post):
+        """
+        Step 1: Generate the blog post structure/outline.
+
+        Args:
+            blog_post: The GeneratedBlogPost object to update
+
+        Returns:
+            The structure as a JSON-serializable dict
+        """
+        from core.agents.blog_structure_agent import agent
+
+        blog_post.update_pipeline_step("generate_structure", "in_progress")
+
+        try:
+            project_pages = [
+                ProjectPageContext(
+                    url=page.url,
+                    title=page.title,
+                    description=page.description,
+                    summary=page.summary,
+                    always_use=page.always_use,
+                )
+                for page in self.project.project_pages.filter(date_analyzed__isnull=False)
+            ]
+
+            project_keywords = [
+                pk.keyword.keyword_text
+                for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
+            ]
+
+            deps = BlogPostGenerationContext(
+                project_details=self.project.project_details,
+                title_suggestion=self.title_suggestion_schema,
+                project_pages=project_pages,
+                content_type=self.content_type,
+                project_keywords=project_keywords,
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                "Please create a comprehensive structure outline for this blog post.",
+                deps=deps,
+                function_name="generate_structure",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Convert structure to dict for JSON storage
+            structure_dict = result.output.model_dump()
+
+            # Save structure to blog post
+            blog_post.generation_structure = json.dumps(structure_dict, indent=2)
+            blog_post.save(update_fields=["generation_structure"])
+
+            blog_post.update_pipeline_step("generate_structure", "completed")
+
+            logger.info(
+                "[Pipeline] Structure generation completed",
+                blog_post_id=blog_post.id,
+                sections_count=len(structure_dict.get("sections", [])),
+            )
+
+            return structure_dict
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "generate_structure",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Structure generation failed",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def generate_content_from_structure(self, blog_post):
+        """
+        Step 2: Generate the full blog post content based on the structure.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with structure already generated
+
+        Returns:
+            The generated content as a string
+        """
+        from core.agents.seo_content_generator_agent import (
+            agent,
+            create_structure_guidance_prompt,
+        )
+
+        blog_post.update_pipeline_step("generate_content", "in_progress")
+
+        try:
+            # Load the structure
+            structure_dict = json.loads(blog_post.generation_structure)
+
+            # Add structure-specific system prompt to agent
+            structure_prompt = create_structure_guidance_prompt(structure_dict)
+            agent.system_prompt(structure_prompt)
+
+            project_pages = [
+                ProjectPageContext(
+                    url=page.url,
+                    title=page.title,
+                    description=page.description,
+                    summary=page.summary,
+                    always_use=page.always_use,
+                )
+                for page in self.project.project_pages.filter(date_analyzed__isnull=False)
+            ]
+
+            project_keywords = [
+                pk.keyword.keyword_text
+                for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
+            ]
+
+            deps = BlogPostGenerationContext(
+                project_details=self.project.project_details,
+                title_suggestion=self.title_suggestion_schema,
+                project_pages=project_pages,
+                content_type=self.content_type,
+                project_keywords=project_keywords,
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                "Please generate the full blog post content following the provided structure outline.",  # noqa: E501
+                deps=deps,
+                function_name="generate_content_from_structure",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Update blog post with generated content
+            blog_post.description = result.output.description
+            blog_post.slug = result.output.slug
+            blog_post.tags = result.output.tags
+            blog_post.raw_content = result.output.content
+            blog_post.content = result.output.content
+            blog_post.save(update_fields=["description", "slug", "tags", "raw_content", "content"])
+
+            blog_post.update_pipeline_step("generate_content", "completed")
+
+            logger.info(
+                "[Pipeline] Content generation completed",
+                blog_post_id=blog_post.id,
+                content_length=len(result.output.content),
+            )
+
+            return result.output.content
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "generate_content",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Content generation failed",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def run_preliminary_validation(self, blog_post):
+        """
+        Step 3: Run preliminary validation on the generated content using AI.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with content
+
+        Returns:
+            bool: True if validation passed, False otherwise
+        """
+        from core.agents.content_validation_agent import agent
+        from core.model_utils import run_agent_synchronously
+        from core.schemas import ContentValidationContext
+
+        blog_post.update_pipeline_step("preliminary_validation", "in_progress")
+
+        try:
+            validation_context = ContentValidationContext(
+                content=blog_post.content,
+                title=blog_post.title.title,
+                description=blog_post.title.description,
+                target_keywords=blog_post.title.target_keywords or [],
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                validation_context,
+                function_name="run_preliminary_validation",
+            )
+
+            validation_result = result.output
+            is_valid = validation_result.is_valid
+
+            if is_valid:
+                blog_post.update_pipeline_step("preliminary_validation", "completed")
+                logger.info(
+                    "[Pipeline] Preliminary validation passed",
+                    blog_post_id=blog_post.id,
+                )
+            else:
+                issues_text = "; ".join(validation_result.validation_issues)
+
+                # Check if we've already tried to fix this multiple times
+                fix_attempt_count = (
+                    blog_post.pipeline_state.get("steps", {})
+                    .get("preliminary_validation", {})
+                    .get("fix_attempt_count", 0)
+                )
+
+                if fix_attempt_count >= 2:
+                    # After 2 fix attempts, mark as failed to prevent infinite loop
+                    blog_post.update_pipeline_step(
+                        "preliminary_validation",
+                        "failed",
+                        error=f"Content validation failed after {fix_attempt_count} fix attempts - {issues_text}",  # noqa: E501
+                    )
+                    logger.error(
+                        "[Pipeline] Preliminary validation failed after multiple fix attempts",
+                        blog_post_id=blog_post.id,
+                        fix_attempt_count=fix_attempt_count,
+                        validation_issues=validation_result.validation_issues,
+                    )
+                else:
+                    blog_post.update_pipeline_step(
+                        "preliminary_validation",
+                        "needs_fix",
+                        error=f"Content validation failed - {issues_text}",
+                    )
+                    logger.warning(
+                        "[Pipeline] Preliminary validation found issues",
+                        blog_post_id=blog_post.id,
+                        validation_issues=validation_result.validation_issues,
+                    )
+
+            return {
+                "is_valid": is_valid,
+                "validation_issues": validation_result.validation_issues if not is_valid else [],
+            }
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "preliminary_validation",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Preliminary validation error",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def fix_preliminary_validation(self, blog_post, validation_issues):
+        """
+        Fix content issues identified during preliminary validation.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with content
+            validation_issues: List of validation issues to fix
+
+        Returns:
+            Fixed content
+        """
+        from core.agents.fix_validation_issue_agent import agent
+        from core.model_utils import run_agent_synchronously
+        from core.schemas import ContentFixContext
+
+        blog_post.update_pipeline_step("fix_preliminary_validation", "in_progress")
+
+        try:
+            context = ContentFixContext(
+                content=blog_post.content,
+                validation_issues=validation_issues,
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                "Please fix the validation issues in this blog post content.",
+                deps=context,
+                function_name="fix_preliminary_validation",
+            )
+
+            fixed_content = result.output
+
+            blog_post.content = fixed_content
+            blog_post.save(update_fields=["content"])
+
+            blog_post.update_pipeline_step("fix_preliminary_validation", "completed")
+
+            # Reset the preliminary_validation step status to pending so it can be re-run
+            blog_post.update_pipeline_step("preliminary_validation", "pending")
+
+            logger.info(
+                "[Pipeline] Fixed preliminary validation issues",
+                blog_post_id=blog_post.id,
+            )
+
+            return fixed_content
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "fix_preliminary_validation",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Error fixing preliminary validation issues",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def insert_internal_links(self, blog_post):
+        """
+        Step 4: Insert internal links into the content.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with validated content
+
+        Returns:
+            Content with internal links inserted
+        """
+        from core.agents.internal_links_agent import agent
+        from core.schemas import InternalLinkContext
+
+        blog_post.update_pipeline_step("insert_internal_links", "in_progress")
+
+        try:
+            project_pages = [
+                ProjectPageContext(
+                    url=page.url,
+                    title=page.title,
+                    description=page.description,
+                    summary=page.summary,
+                    always_use=page.always_use,
+                )
+                for page in self.project.project_pages.filter(date_analyzed__isnull=False)
+            ]
+
+            if not project_pages:
+                logger.info(
+                    "[Pipeline] No project pages available for internal links, skipping",
+                    blog_post_id=blog_post.id,
+                )
+                blog_post.update_pipeline_step("insert_internal_links", "completed")
+                return blog_post.content
+
+            deps = InternalLinkContext(
+                content=blog_post.content,
+                available_pages=project_pages,
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                "Please insert relevant internal links into this content.",
+                deps=deps,
+                function_name="insert_internal_links",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Update blog post with content that has internal links
+            blog_post.content = result.output
+            blog_post.save(update_fields=["content"])
+
+            blog_post.update_pipeline_step("insert_internal_links", "completed")
+
+            logger.info(
+                "[Pipeline] Internal links insertion completed",
+                blog_post_id=blog_post.id,
+            )
+
+            return result.output
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "insert_internal_links",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Internal links insertion failed",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def run_final_validation(self, blog_post):
+        """
+        Step 5: Run final validation on the complete content with internal links using AI.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with final content
+
+        Returns:
+            bool: True if validation passed, False otherwise
+        """
+        from core.agents.content_validation_agent import agent
+        from core.model_utils import run_agent_synchronously
+        from core.schemas import ContentValidationContext
+
+        blog_post.update_pipeline_step("final_validation", "in_progress")
+
+        try:
+            validation_context = ContentValidationContext(
+                content=blog_post.content,
+                title=blog_post.title.title,
+                description=blog_post.title.description,
+                target_keywords=blog_post.title.target_keywords or [],
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                validation_context,
+                function_name="run_final_validation",
+            )
+
+            validation_result = result.output
+            is_valid = validation_result.is_valid
+
+            if is_valid:
+                blog_post.update_pipeline_step("final_validation", "completed")
+                logger.info(
+                    "[Pipeline] Final validation passed - blog post ready",
+                    blog_post_id=blog_post.id,
+                )
+            else:
+                issues_text = "; ".join(validation_result.validation_issues)
+
+                # Check if we've already tried to fix this multiple times
+                fix_attempt_count = (
+                    blog_post.pipeline_state.get("steps", {})
+                    .get("final_validation", {})
+                    .get("fix_attempt_count", 0)
+                )
+
+                if fix_attempt_count >= 2:
+                    # After 2 fix attempts, mark as failed to prevent infinite loop
+                    blog_post.update_pipeline_step(
+                        "final_validation",
+                        "failed",
+                        error=f"Content validation failed after {fix_attempt_count} fix attempts - {issues_text}",  # noqa: E501
+                    )
+                    logger.error(
+                        "[Pipeline] Final validation failed after multiple fix attempts",
+                        blog_post_id=blog_post.id,
+                        fix_attempt_count=fix_attempt_count,
+                        validation_issues=validation_result.validation_issues,
+                    )
+                else:
+                    blog_post.update_pipeline_step(
+                        "final_validation",
+                        "needs_fix",
+                        error=f"Content validation failed - {issues_text}",
+                    )
+                    logger.warning(
+                        "[Pipeline] Final validation found issues",
+                        blog_post_id=blog_post.id,
+                        validation_issues=validation_result.validation_issues,
+                    )
+
+            return {
+                "is_valid": is_valid,
+                "validation_issues": validation_result.validation_issues if not is_valid else [],
+            }
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "final_validation",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Final validation error",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def fix_final_validation(self, blog_post, validation_issues):
+        """
+        Fix content issues identified during final validation.
+
+        Args:
+            blog_post: The GeneratedBlogPost object with content
+            validation_issues: List of validation issues to fix
+
+        Returns:
+            Fixed content
+        """
+        from core.agents.fix_validation_issue_agent import agent
+        from core.model_utils import run_agent_synchronously
+        from core.schemas import ContentFixContext
+
+        blog_post.update_pipeline_step("fix_final_validation", "in_progress")
+
+        try:
+            context = ContentFixContext(
+                content=blog_post.content,
+                validation_issues=validation_issues,
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                "Please fix the validation issues in this blog post content.",
+                deps=context,
+                function_name="fix_final_validation",
+            )
+
+            fixed_content = result.output
+
+            blog_post.content = fixed_content
+            blog_post.save(update_fields=["content"])
+
+            blog_post.update_pipeline_step("fix_final_validation", "completed")
+
+            # Reset the final_validation step status to pending so it can be re-run
+            blog_post.update_pipeline_step("final_validation", "pending")
+
+            logger.info(
+                "[Pipeline] Fixed final validation issues",
+                blog_post_id=blog_post.id,
+            )
+
+            return fixed_content
+
+        except Exception as error:
+            blog_post.update_pipeline_step(
+                "fix_final_validation",
+                "failed",
+                error=str(error),
+            )
+            logger.error(
+                "[Pipeline] Error fixing final validation issues",
+                blog_post_id=blog_post.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
+
+    def execute_complete_pipeline(self):
+        """
+        Execute the complete blog post generation pipeline sequentially.
+
+        This method runs all steps without UI updates, suitable for scheduled tasks.
+        Returns the final GeneratedBlogPost or raises an exception on failure.
+        """
+        logger.info(
+            "[Pipeline] Starting complete pipeline execution",
+            title_suggestion_id=self.id,
+            project_id=self.project_id,
+            title=self.title,
+        )
+
+        blog_post = self.start_generation_pipeline()
+
+        try:
+            # Step 1: Generate structure
+            self.generate_structure(blog_post)
+
+            # Step 2: Generate content
+            self.generate_content_from_structure(blog_post)
+
+            # Step 3: Preliminary validation
+            validation_result = self.run_preliminary_validation(blog_post)
+            if not validation_result["is_valid"]:
+                logger.warning(
+                    "[Pipeline] Preliminary validation failed, attempting to fix",
+                    blog_post_id=blog_post.id,
+                )
+                self.fix_preliminary_validation(blog_post, validation_result["validation_issues"])
+
+            # Step 4: Insert internal links
+            self.insert_internal_links(blog_post)
+
+            # Step 5: Final validation
+            validation_result = self.run_final_validation(blog_post)
+            if not validation_result["is_valid"]:
+                logger.warning(
+                    "[Pipeline] Final validation failed, attempting to fix",
+                    blog_post_id=blog_post.id,
+                )
+                self.fix_final_validation(blog_post, validation_result["validation_issues"])
+                # Re-run final validation after fixing
+                validation_result = self.run_final_validation(blog_post)
+                if not validation_result["is_valid"]:
+                    logger.error(
+                        "[Pipeline] Final validation still failed after fix",
+                        blog_post_id=blog_post.id,
+                    )
+
+            # Generate OG image if enabled
+            if self.project.enable_automatic_og_image_generation:
+                async_task(
+                    "core.tasks.generate_og_image_for_blog_post",
+                    blog_post.id,
+                    group="Generate OG Image",
+                )
+
+            logger.info(
+                "[Pipeline] Complete pipeline execution successful",
+                blog_post_id=blog_post.id,
+                title_suggestion_id=self.id,
+            )
+
+            return blog_post
+
+        except Exception as error:
+            logger.error(
+                "[Pipeline] Complete pipeline execution failed",
+                blog_post_id=blog_post.id,
+                title_suggestion_id=self.id,
+                error=str(error),
+                exc_info=True,
+            )
+            raise
 
 
 class AutoSubmissionSetting(BaseModel):
@@ -1018,11 +1410,28 @@ class GeneratedBlogPost(BaseModel):
     posted = models.BooleanField(default=False)
     date_posted = models.DateTimeField(null=True, blank=True)
 
-    # Validation Issues - Innocent until proven guilty
-    content_too_short = models.BooleanField(default=False)
-    has_valid_ending = models.BooleanField(default=True)
-    placeholders = models.BooleanField(default=False)
-    starts_with_header = models.BooleanField(default=False)
+    # Pipeline fields
+    pipeline_state = models.JSONField(
+        null=True,
+        blank=True,
+        default=None,
+        help_text="Tracks the current step and status of the generation pipeline",
+    )
+    generation_structure = models.TextField(
+        blank=True,
+        default="",
+        help_text="Stores the outline/structure from the first pipeline step",
+    )
+    raw_content = models.TextField(
+        blank=True,
+        default="",
+        help_text="Stores content before internal links are added",
+    )
+    pipeline_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Stores timestamps, AI model info, and token usage per step",
+    )
 
     objects = GeneratedBlogPostManager()
 
@@ -1034,15 +1443,6 @@ class GeneratedBlogPost(BaseModel):
         return self.title.title
 
     @property
-    def blog_post_content_is_valid(self):
-        return (
-            self.content_too_short is False
-            and self.has_valid_ending is True
-            and self.placeholders is False
-            and self.starts_with_header is False
-        )
-
-    @property
     def generated_blog_post_schema(self):
         return GeneratedBlogPostSchema(
             description=self.description,
@@ -1051,59 +1451,20 @@ class GeneratedBlogPost(BaseModel):
             content=self.content,
         )
 
-    def run_validation(self):
-        """Run validation and update fields in a single query."""
-        from core.utils import (
-            blog_post_has_placeholders,
-            blog_post_has_valid_ending,
-            blog_post_starts_with_header,
-        )
-
-        base_logger_info = {
-            "blog_post_id": self.id,
-            "project_id": self.project_id,
-            "project_name": self.project.name,
-            "profile_id": self.project.profile.id,
-            "profile_email": self.project.profile.user.email,
-        }
-
-        logger.info("[Validation] Running validation", **base_logger_info)
-
+    @property
+    def is_ready_to_view(self):
+        """Check if the blog post has passed final validation and is ready to view."""
         if not self.content:
-            self.content_too_short = True
-            self.has_valid_ending = False
-            self.placeholders = False
-            self.starts_with_header = False
-
-        else:
-            content = self.content.strip()
-            self.content_too_short = len(content) < 3000
-            self.has_valid_ending = blog_post_has_valid_ending(self)
-            self.placeholders = blog_post_has_placeholders(self)
-            self.starts_with_header = blog_post_starts_with_header(self)
-
-        self.save(
-            update_fields=[
-                "content_too_short",
-                "has_valid_ending",
-                "placeholders",
-                "starts_with_header",
-            ]
+            return False
+        if not self.pipeline_state:
+            return True
+        final_validation_status = (
+            self.pipeline_state.get("steps", {}).get("final_validation", {}).get("status")
         )
-
-        logger.info(
-            "[Validation] Blog post validation complete",
-            **base_logger_info,
-            blog_post_title=self.title.title,
-            content_too_short=self.content_too_short,
-            has_valid_ending=self.has_valid_ending,
-            placeholders=self.placeholders,
-            starts_with_header=self.starts_with_header,
-        )
+        return final_validation_status == "completed"
 
     def _build_fix_context(self):
         """Build full context for content editor agent to ensure accurate regeneration."""
-        from core.schemas import BlogPostGenerationContext, ProjectPageContext
 
         project_pages = [
             ProjectPageContext(
@@ -1127,30 +1488,6 @@ class GeneratedBlogPost(BaseModel):
             content_type=self.title.content_type,
             project_keywords=project_keywords,
         )
-
-    def fix_header_start(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        result = run_agent_synchronously(
-            content_editor_agent,
-            """
-            This blog post starts with a header (like # or ##) instead of regular text.
-
-            Please remove it such that the content starts with regular text, usually an introduction.
-            """,  # noqa: E501
-            deps=context,
-            function_name="fix_header_start",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-        return True
 
     def submit_blog_post_to_endpoint(self):
         from core.utils import replace_placeholders
@@ -1203,83 +1540,141 @@ class GeneratedBlogPost(BaseModel):
             )
             return False
 
-    def fix_content_length(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
+    def initialize_pipeline(self):
+        """Initialize the pipeline state for a new blog post generation."""
+        initial_pipeline_state = {
+            "current_step": "generate_structure",
+            "steps": {
+                "generate_structure": {"status": "pending", "retry_count": 0, "error": None},
+                "generate_content": {"status": "pending", "retry_count": 0, "error": None},
+                "preliminary_validation": {"status": "pending", "retry_count": 0, "error": None},
+                "fix_preliminary_validation": {
+                    "status": "pending",
+                    "retry_count": 0,
+                    "error": None,
+                },
+                "insert_internal_links": {"status": "pending", "retry_count": 0, "error": None},
+                "final_validation": {"status": "pending", "retry_count": 0, "error": None},
+                "fix_final_validation": {"status": "pending", "retry_count": 0, "error": None},
+            },
+        }
+        self.pipeline_state = initial_pipeline_state
+        self.pipeline_metadata = {
+            "started_at": timezone.now().isoformat(),
+            "steps_completed": 0,
+            "total_steps": 5,
+        }
+        self.save(update_fields=["pipeline_state", "pipeline_metadata"])
 
-        context = self._build_fix_context()
-
-        result = run_agent_synchronously(
-            content_editor_agent,
-            """
-            This blog post is too short.
-            I think something went wrong during generation.
-            Please regenerate.
-          """,
-            deps=context,
-            function_name="fix_content_length",
-            model_name="GeneratedBlogPost",
+        logger.info(
+            "[Pipeline] Initialized pipeline",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+            project_name=self.project.name,
         )
 
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
+    def update_pipeline_step(self, step_name: str, status: str, error: str = None):
+        """Update the status of a specific pipeline step."""
+        if not self.pipeline_state:
+            self.initialize_pipeline()
 
-    def fix_valid_ending(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
+        pipeline_state = self.pipeline_state
+        if step_name not in pipeline_state["steps"]:
+            logger.error(
+                "[Pipeline] Invalid step name",
+                step_name=step_name,
+                blog_post_id=self.id,
+            )
+            return
 
-        context = self._build_fix_context()
+        pipeline_state["steps"][step_name]["status"] = status
+        if error:
+            pipeline_state["steps"][step_name]["error"] = error
+        elif status == "pending":
+            # Clear error when resetting to pending
+            pipeline_state["steps"][step_name]["error"] = None
 
-        result = run_agent_synchronously(
-            content_editor_agent,
-            """
-            This blog post does not end on an ending that makes sense.
-            Most likely generation failed at some point and returned half completed content.
-            Please regenerate the blog post.
-            """,
-            deps=context,
-            function_name="fix_valid_ending",
-            model_name="GeneratedBlogPost",
+        if status == "completed":
+            pipeline_state["steps"][step_name]["completed_at"] = timezone.now().isoformat()
+
+            # Only update steps_completed and current_step for main pipeline steps, not fix steps
+            if not step_name.startswith("fix_"):
+                self.pipeline_metadata["steps_completed"] = (
+                    self.pipeline_metadata.get("steps_completed", 0) + 1
+                )
+
+                step_order = [
+                    "generate_structure",
+                    "generate_content",
+                    "preliminary_validation",
+                    "insert_internal_links",
+                    "final_validation",
+                ]
+                current_index = step_order.index(step_name)
+                if current_index < len(step_order) - 1:
+                    pipeline_state["current_step"] = step_order[current_index + 1]
+                else:
+                    pipeline_state["current_step"] = "completed"
+                    self.pipeline_metadata["completed_at"] = timezone.now().isoformat()
+
+        elif status == "failed":
+            pipeline_state["steps"][step_name]["retry_count"] = (
+                pipeline_state["steps"][step_name].get("retry_count", 0) + 1
+            )
+            pipeline_state["steps"][step_name]["failed_at"] = timezone.now().isoformat()
+
+        elif status == "needs_fix":
+            pipeline_state["steps"][step_name]["needs_fix_at"] = timezone.now().isoformat()
+            # Track how many times we've tried to fix this validation issue
+            pipeline_state["steps"][step_name]["fix_attempt_count"] = (
+                pipeline_state["steps"][step_name].get("fix_attempt_count", 0) + 1
+            )
+
+        elif status == "in_progress":
+            pipeline_state["current_step"] = step_name
+            pipeline_state["steps"][step_name]["started_at"] = timezone.now().isoformat()
+
+        self.pipeline_state = pipeline_state
+        self.save(update_fields=["pipeline_state", "pipeline_metadata"])
+
+        logger.info(
+            "[Pipeline] Updated step",
+            blog_post_id=self.id,
+            step_name=step_name,
+            status=status,
+            error=error,
+            retry_count=pipeline_state["steps"][step_name].get("retry_count", 0),
         )
 
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
+    def get_pipeline_status(self):
+        """Return the current pipeline state for API consumption."""
+        if not self.pipeline_state:
+            return {
+                "current_step": None,
+                "status": "not_started",
+                "steps": {},
+                "progress_percentage": 0,
+            }
 
-    def fix_placeholders(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
+        steps_completed = self.pipeline_metadata.get("steps_completed", 0)
+        total_steps = self.pipeline_metadata.get("total_steps", 5)
+        progress_percentage = int((steps_completed / total_steps) * 100)
 
-        context = self._build_fix_context()
+        return {
+            "current_step": self.pipeline_state.get("current_step"),
+            "status": self.pipeline_state.get("current_step", "pending"),
+            "steps": self.pipeline_state.get("steps", {}),
+            "progress_percentage": progress_percentage,
+            "metadata": self.pipeline_metadata,
+        }
 
-        result = run_agent_synchronously(
-            content_editor_agent,
-            """
-            The content contains placeholders.
-            Please regenerate the blog post without placeholders.
-            """,
-            deps=context,
-            function_name="fix_placeholders",
-            model_name="GeneratedBlogPost",
-        )
+    def can_retry_step(self, step_name: str) -> bool:
+        """Check if a step can be retried (less than 3 attempts)."""
+        if not self.pipeline_state or step_name not in self.pipeline_state["steps"]:
+            return False
 
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_generated_blog_post(self):
-        if self.content_too_short is True:
-            self.fix_content_length()
-
-        if self.has_valid_ending is False:
-            self.fix_valid_ending()
-
-        if self.placeholders is True:
-            self.fix_placeholders()
-
-        if self.starts_with_header is True:
-            self.fix_header_start()
+        retry_count = self.pipeline_state["steps"][step_name].get("retry_count", 0)
+        return retry_count < 3
 
 
 class ProjectPage(BaseModel):
@@ -1397,7 +1792,7 @@ class ProjectPage(BaseModel):
         Analyze the page content using Claude via PydanticAI and update project details.
         Should be called after get_page_content().
         """
-        from core.agents import summarize_page_agent
+        from core.agents.summarize_page_agent import agent
         from core.utils import get_jina_embedding
 
         webpage_content = WebPageContent(
@@ -1407,7 +1802,7 @@ class ProjectPage(BaseModel):
         )
 
         analysis_result = run_agent_synchronously(
-            summarize_page_agent,
+            agent,
             "Please analyze this web page.",
             deps=webpage_content,
             function_name="analyze_content",
@@ -1724,8 +2119,8 @@ class Competitor(BaseModel):
         Generate comparison blog post content using Perplexity Sonar.
         This method uses Perplexity's web search capabilities to research both products.
         """
-        from core.agents import competitor_vs_blog_post_agent
-        from core.schemas import CompetitorVsPostContext, ProjectPageContext
+        from core.agents.competitor_vs_blog_post_agent import agent
+        from core.schemas import CompetitorVsPostContext
 
         title = f"{self.project.name} vs. {self.name}: Which is Better?"
 
@@ -1756,7 +2151,7 @@ class Competitor(BaseModel):
         prompt = "Write a comprehensive comparison blog post. Return ONLY the markdown content for the blog post, nothing else."  # noqa: E501
 
         result = run_agent_synchronously(
-            competitor_vs_blog_post_agent,
+            agent,
             prompt,
             deps=context,
             function_name="generate_vs_blog_post",

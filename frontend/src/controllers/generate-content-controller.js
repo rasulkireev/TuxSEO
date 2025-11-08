@@ -5,6 +5,7 @@ export default class extends Controller {
     url: String,
     suggestionId: Number,
     projectId: Number,
+    blogPostId: Number,
     hasProSubscription: Boolean,
     hasAutoSubmissionSetting: Boolean,
     pricingUrl: String,
@@ -53,39 +54,47 @@ export default class extends Controller {
         </button>
       `;
 
-      // Update status to show generating state
-      if (this.hasStatusTarget) {
-        this.statusTarget.innerHTML = `
-          <div class="flex gap-1.5 items-center">
-            <div class="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
-            <span class="text-sm font-medium text-amber-700">Generating...</span>
-          </div>
-        `;
-      }
+      // Show progress dialog
+      this._showProgressDialog();
 
-      const response = await fetch(`/api/generate-blog-content/${this.suggestionIdValue}`, {
+      // Start the pipeline
+      const startResponse = await fetch(`/api/generate-blog-content-pipeline/${this.suggestionIdValue}/start`, {
         method: "POST",
         headers: {
-          "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value
+          "X-CSRFToken": this._getCsrfToken()
         }
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Generation failed");
+      if (!startResponse.ok) {
+        const error = await startResponse.json();
+        throw new Error(error.message || "Failed to start generation");
       }
 
-      const data = await response.json();
+      const startData = await startResponse.json();
+      this.blogPostId = startData.blog_post_id;
+      this.pipelineSteps = ["structure", "content", "preliminary_validation", "internal_links", "final_validation"];
 
-      // Check if the response indicates an error
-      if (data.status === "error") {
-        throw new Error(data.message || "Generation failed");
+      // Execute each step of the pipeline
+      for (const step of this.pipelineSteps) {
+        const stepResult = await this._executeStep(step);
+
+        // Check if validation failed and needs fixing
+        if (stepResult && stepResult.needs_fix) {
+          const fixStepName = `fix_${step}`;
+          await this._executeStep(fixStepName);
+
+          // Re-run validation after fixing
+          await this._executeStep(step);
+        }
       }
+
+      // Hide progress dialog
+      this._hideProgressDialog();
 
       // Update button to "View Post"
       this.buttonContainerTarget.innerHTML = `
         <a
-          href="/project/${this.projectIdValue}/post/${data.id}/"
+          href="/project/${this.projectIdValue}/post/${this.blogPostId}/"
           class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
           <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
@@ -106,10 +115,14 @@ export default class extends Controller {
       }
 
       // Handle the post button
-      this._appendPostButton(this.postButtonContainerTarget, data.id);
+      this._appendPostButton(this.postButtonContainerTarget, this.blogPostId);
+
+      showMessage("Blog post generated successfully!", 'success');
 
     } catch (error) {
+      this._hideProgressDialog();
       showMessage(error.message || "Failed to generate content. Please try again later.", 'error');
+
       // Reset the button to original state
       this.buttonContainerTarget.innerHTML = `
         <button
@@ -132,6 +145,355 @@ export default class extends Controller {
         `;
       }
     }
+  }
+
+  async continue(event) {
+    event.preventDefault();
+
+    // Get the blog post ID from the button's data attribute
+    const blog_post_id = event.currentTarget.dataset.generateContentBlogPostIdValue;
+    this.blogPostId = parseInt(blog_post_id);
+
+    try {
+      // Update button to show loading state
+      this.buttonContainerTarget.innerHTML = `
+        <button
+          disabled
+          class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md border border-blue-600 opacity-75 cursor-not-allowed">
+          <svg class="mr-2 w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          Continuing...
+        </button>
+      `;
+
+      // Show progress dialog
+      this._showProgressDialog();
+
+      // Get current pipeline status
+      const statusResponse = await fetch(`/api/generate-blog-content-pipeline/${this.blogPostId}/status`, {
+        method: "GET",
+        headers: {
+          "X-CSRFToken": this._getCsrfToken()
+        }
+      });
+
+      if (!statusResponse.ok) {
+        throw new Error("Failed to get pipeline status");
+      }
+
+      const statusData = await statusResponse.json();
+
+      // Map backend step names to frontend step names
+      const step_name_map = {
+        "generate_structure": "structure",
+        "generate_content": "content",
+        "preliminary_validation": "preliminary_validation",
+        "insert_internal_links": "internal_links",
+        "final_validation": "final_validation"
+      };
+
+      // Update progress dialog with current state
+      if (statusData.steps) {
+        for (const [backend_step_name, step_info] of Object.entries(statusData.steps)) {
+          const frontend_step_name = step_name_map[backend_step_name];
+          if (frontend_step_name && step_info.status === "completed") {
+            this._updateProgressStep(frontend_step_name, "completed", this._getStepDisplayName(frontend_step_name));
+          }
+        }
+      }
+
+      // Determine which steps need to be executed
+      this.pipelineSteps = ["structure", "content", "preliminary_validation", "internal_links", "final_validation"];
+      const steps_to_execute = [];
+
+      for (const frontend_step of this.pipelineSteps) {
+        const backend_step = this._getBackendStepName(frontend_step);
+        const step_status = statusData.steps?.[backend_step];
+
+        // Check if step needs to be executed or fixed
+        if (!step_status || step_status.status !== "completed") {
+          // If validation step has "needs_fix" status, trigger fix step instead
+          if (step_status && step_status.status === "needs_fix" &&
+              (frontend_step === "preliminary_validation" || frontend_step === "final_validation")) {
+            steps_to_execute.push(`fix_${frontend_step}`);
+            steps_to_execute.push(frontend_step); // Re-run validation after fix
+          } else {
+            steps_to_execute.push(frontend_step);
+          }
+        }
+      }
+
+      // Execute remaining steps
+      for (const step of steps_to_execute) {
+        const stepResult = await this._executeStep(step);
+
+        // Check if validation failed and needs fixing (for new validation failures)
+        if (stepResult && stepResult.needs_fix) {
+          const fixStepName = `fix_${step}`;
+          await this._executeStep(fixStepName);
+
+          // Re-run validation after fixing
+          const revalidationResult = await this._executeStep(step);
+
+          // If validation still needs fixing after one fix attempt, stop here
+          // User will need to click Continue again to retry
+          if (revalidationResult && revalidationResult.needs_fix) {
+            throw new Error("Validation still has issues after fix. Please review the content and try again.");
+          }
+        }
+      }
+
+      // Hide progress dialog
+      this._hideProgressDialog();
+
+      // Update button to "View Post"
+      this.buttonContainerTarget.innerHTML = `
+        <a
+          href="/project/${this.projectIdValue}/post/${this.blogPostId}/"
+          class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
+          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+          </svg>
+          View Post
+        </a>
+      `;
+
+      // Update status to show completed state
+      if (this.hasStatusTarget) {
+        this.statusTarget.innerHTML = `
+          <div class="flex gap-1.5 items-center">
+            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+            <span class="text-sm font-medium text-green-700">Generated</span>
+          </div>
+        `;
+      }
+
+      // Handle the post button
+      this._appendPostButton(this.postButtonContainerTarget, this.blogPostId);
+
+      showMessage("Blog post generation completed!", 'success');
+
+    } catch (error) {
+      this._hideProgressDialog();
+      showMessage(error.message || "Failed to continue generation. Please try again later.", 'error');
+
+      // Reset the button to Continue state
+      this.buttonContainerTarget.innerHTML = `
+        <button
+          data-action="generate-content#continue"
+          data-generate-content-blog-post-id-value="${this.blogPostId}"
+          class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md border border-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+          Continue
+        </button>
+      `;
+    }
+  }
+
+  async _executeStep(step_name) {
+    const step_display_names = {
+      "structure": "Generating Structure",
+      "content": "Generating Content",
+      "preliminary_validation": "Validating Content",
+      "fix_preliminary_validation": "Fixing Validation Issues",
+      "internal_links": "Adding Internal Links",
+      "final_validation": "Final Validation",
+      "fix_final_validation": "Fixing Validation Issues"
+    };
+
+    // Map frontend step names to backend internal step names
+    const backend_step_names = {
+      "structure": "generate_structure",
+      "content": "generate_content",
+      "preliminary_validation": "preliminary_validation",
+      "fix_preliminary_validation": "fix_preliminary_validation",
+      "internal_links": "insert_internal_links",
+      "final_validation": "final_validation",
+      "fix_final_validation": "fix_final_validation"
+    };
+
+    // Update progress dialog to show current step
+    this._updateProgressStep(step_name, "in_progress", step_display_names[step_name]);
+
+    try {
+      const response = await fetch(`/api/generate-blog-content-pipeline/${this.blogPostId}/step/${step_name}`, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": this._getCsrfToken()
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || `Failed to execute ${step_name}`);
+      }
+
+      const data = await response.json();
+
+      // Check if validation failed but can be fixed
+      if (data.needs_fix) {
+        // Don't mark as completed - it needs fixing
+        // Just return the data so the caller can trigger the fix step
+        return data;
+      }
+
+      // Get the backend step name to check status
+      const backend_step_name = backend_step_names[step_name];
+      const step_status = data.pipeline_state?.steps?.[backend_step_name];
+
+      // Check if step failed and needs retry
+      if (step_status && step_status.status === "failed") {
+        this._updateProgressStep(step_name, "failed", `${step_display_names[step_name]} Failed`);
+        throw new Error(step_status.error || `Step ${step_name} failed`);
+      }
+
+      // Update progress dialog to show step completed
+      this._updateProgressStep(step_name, "completed", step_display_names[step_name]);
+
+      // Return the result data for validation checks
+      return data;
+
+    } catch (error) {
+      this._updateProgressStep(step_name, "failed", step_display_names[step_name]);
+      throw error;
+    }
+  }
+
+  _showProgressDialog() {
+    const dialog = document.createElement("div");
+    dialog.id = "generation-progress-dialog";
+    dialog.className = "flex fixed inset-0 z-50 justify-center items-center bg-black bg-opacity-50";
+    dialog.innerHTML = `
+      <div class="p-6 mx-4 w-full max-w-md bg-white rounded-lg shadow-xl">
+        <h3 class="mb-4 text-lg font-semibold">Generating Blog Post</h3>
+        <div id="progress-steps" class="space-y-3">
+          <div data-step="structure" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Generating Structure</span>
+          </div>
+          <div data-step="content" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Generating Content</span>
+          </div>
+          <div data-step="preliminary_validation" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Validating Content</span>
+          </div>
+          <div data-step="internal_links" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Adding Internal Links</span>
+          </div>
+          <div data-step="final_validation" class="flex gap-3 items-center">
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">Final Validation</span>
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dialog);
+  }
+
+  _hideProgressDialog() {
+    const dialog = document.getElementById("generation-progress-dialog");
+    if (dialog) {
+      dialog.remove();
+    }
+  }
+
+  _updateProgressStep(step_name, status, display_text) {
+    let step_element = document.querySelector(`[data-step="${step_name}"]`);
+
+    // If step doesn't exist in dialog, create it dynamically (for fix steps)
+    if (!step_element && step_name.startsWith("fix_")) {
+      const progress_steps_container = document.getElementById("progress-steps");
+      if (progress_steps_container) {
+        // Determine the position to insert the fix step
+        const parent_step_name = step_name.replace("fix_", "");
+        const parent_step_element = document.querySelector(`[data-step="${parent_step_name}"]`);
+
+        if (parent_step_element) {
+          // Create new step element
+          const new_step = document.createElement("div");
+          new_step.setAttribute("data-step", step_name);
+          new_step.className = "flex gap-3 items-center ml-6";
+          new_step.innerHTML = `
+            <div class="w-6 h-6 step-icon"></div>
+            <span class="text-sm step-text">${display_text}</span>
+          `;
+
+          // Insert after the parent step
+          parent_step_element.insertAdjacentElement("afterend", new_step);
+          step_element = new_step;
+        }
+      }
+    }
+
+    if (!step_element) return;
+
+    const icon = step_element.querySelector(".step-icon");
+    const text = step_element.querySelector(".step-text");
+
+    if (status === "in_progress") {
+      icon.innerHTML = `
+        <svg class="w-5 h-5 text-blue-600 animate-spin" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+      `;
+      text.className = "text-sm font-medium text-blue-600 step-text";
+    } else if (status === "completed") {
+      icon.innerHTML = `
+        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        </svg>
+      `;
+      text.className = "text-sm text-gray-600 line-through step-text";
+    } else if (status === "failed") {
+      icon.innerHTML = `
+        <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+        </svg>
+      `;
+      text.className = "text-sm font-medium text-red-600 step-text";
+    }
+
+    text.textContent = display_text;
+  }
+
+  _getCsrfToken() {
+    return document.querySelector("[name=csrfmiddlewaretoken]").value;
+  }
+
+  _getStepDisplayName(step_name) {
+    const display_names = {
+      "structure": "Generating Structure",
+      "content": "Generating Content",
+      "preliminary_validation": "Validating Content",
+      "fix_preliminary_validation": "Fixing Validation Issues",
+      "internal_links": "Adding Internal Links",
+      "final_validation": "Final Validation",
+      "fix_final_validation": "Fixing Validation Issues"
+    };
+    return display_names[step_name] || step_name;
+  }
+
+  _getBackendStepName(frontend_step_name) {
+    const backend_names = {
+      "structure": "generate_structure",
+      "content": "generate_content",
+      "preliminary_validation": "preliminary_validation",
+      "fix_preliminary_validation": "fix_preliminary_validation",
+      "internal_links": "insert_internal_links",
+      "final_validation": "final_validation",
+      "fix_final_validation": "fix_final_validation"
+    };
+    return backend_names[frontend_step_name] || frontend_step_name;
   }
 
   _appendPostButton(container, generatedPostId) {

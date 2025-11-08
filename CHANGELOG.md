@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.0.8] - 2025-11-07
 ### Added
+- Completely redesign of how content gets generated.
+
+## [0.0.8] - 2025-11-07
+### Added
 - Table of contents to Project Settings Page (only shows h2 headings)
 - OG Image generation for generated posts
 - Handle link of an image in submit blog post endpoint
