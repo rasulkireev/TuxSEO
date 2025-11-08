@@ -898,13 +898,21 @@ class BlogPostTitleSuggestion(BaseModel):
         """
         from core.agents.content_validation_agent import agent
         from core.model_utils import run_agent_synchronously
+        from core.schemas import ContentValidationContext
 
         blog_post.update_pipeline_step("preliminary_validation", "in_progress")
 
         try:
+            validation_context = ContentValidationContext(
+                content=blog_post.content,
+                title=blog_post.title.title,
+                description=blog_post.title.description,
+                target_keywords=blog_post.title.target_keywords or [],
+            )
+
             result = run_agent_synchronously(
                 agent,
-                blog_post.content,
+                validation_context,
                 function_name="run_preliminary_validation",
             )
 
@@ -1119,13 +1127,21 @@ class BlogPostTitleSuggestion(BaseModel):
         """
         from core.agents.content_validation_agent import agent
         from core.model_utils import run_agent_synchronously
+        from core.schemas import ContentValidationContext
 
         blog_post.update_pipeline_step("final_validation", "in_progress")
 
         try:
+            validation_context = ContentValidationContext(
+                content=blog_post.content,
+                title=blog_post.title.title,
+                description=blog_post.title.description,
+                target_keywords=blog_post.title.target_keywords or [],
+            )
+
             result = run_agent_synchronously(
                 agent,
-                blog_post.content,
+                validation_context,
                 function_name="run_final_validation",
             )
 

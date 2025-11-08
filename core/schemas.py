@@ -318,6 +318,18 @@ class InternalLinkContext(BaseModel):
     )
 
 
+class ContentValidationContext(BaseModel):
+    """Context for validating blog post content."""
+
+    content: str = Field(description="The blog post content to validate")
+    title: str = Field(description="The blog post title")
+    description: str = Field(description="The blog post description/summary")
+    target_keywords: list[str] = Field(
+        default_factory=list,
+        description="Target keywords the post should focus on",
+    )
+
+
 class ContentValidationResult(BaseModel):
     """Result of content validation with validation status and reasons."""
 
