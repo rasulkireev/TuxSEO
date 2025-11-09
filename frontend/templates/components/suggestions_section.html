@@ -1,0 +1,20 @@
+<!-- Suggestions Section Component -->
+<!-- Pass in: section_title, list_name, suggestions, collapsed (boolean) -->
+<div data-controller="archived-list" class="archived-list" data-archived-list-name-value="{{ list_name }}">
+  <div class="bg-gray-50 rounded-lg border border-gray-200">
+    <button
+      class="flex justify-between items-center px-6 py-4 w-full text-left rounded-t-lg transition-colors hover:bg-gray-100 focus:outline-none"
+      data-action="click->archived-list#toggle"
+    >
+      <h4 class="text-base font-medium text-gray-900">{{ section_title }}</h4>
+      <svg class="w-5 h-5 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+      </svg>
+    </button>
+    <div data-archived-list-target="list" class="{% if collapsed %}hidden {% endif %}p-4 border-t border-gray-200" {% if list_name == "active" %}data-title-suggestions-target="activeSuggestionsList"{% endif %}>
+      {% for suggestion in suggestions %}
+        {% include "components/blog_post_suggestion_card.html" with suggestion=suggestion %}
+      {% endfor %}
+    </div>
+  </div>
+</div>

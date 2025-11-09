@@ -1,7 +1,7 @@
 from pydantic_ai import Agent, RunContext
 
+from core.agents.schemas import CompetitorDetails, WebPageContent
 from core.choices import get_default_ai_model
-from core.schemas import CompetitorDetails, WebPageContent
 
 
 def create_populate_competitor_details_agent(model=None):

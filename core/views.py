@@ -20,7 +20,7 @@ from django_q.tasks import async_task
 from djstripe import models as djstripe_models
 from weasyprint import HTML
 
-from core.choices import BlogPostStatus, Language, OGImageStyle, ProfileStates
+from core.choices import BlogPostStatus, ContentType, Language, OGImageStyle, ProfileStates
 from core.forms import AutoSubmissionSettingForm, ProfileUpdateForm, ProjectScanForm
 from core.models import (
     AutoSubmissionSetting,
@@ -596,13 +596,12 @@ class BlogPostView(DetailView):
     context_object_name = "blog_post"
 
 
-class ProjectDetailView(LoginRequiredMixin, DetailView):
+class ProjectEyeCatchingPostsView(LoginRequiredMixin, DetailView):
     model = Project
-    template_name = "project/project_detail.html"
+    template_name = "project/project_eye_catching_posts.html"
     context_object_name = "project"
 
     def get_queryset(self):
-        # Ensure users can only see their own projects
         return Project.objects.filter(profile=self.request.user.profile)
 
     def get_context_data(self, **kwargs):
@@ -610,23 +609,16 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         project = self.object
         profile = self.request.user.profile
 
-        # Use a single query with annotation to count posted blog posts
-        all_suggestions = project.blog_post_title_suggestions.annotate(
-            posted_count=Count("generated_blog_posts", filter=Q(generated_blog_posts__posted=True))
+        all_suggestions = project.blog_post_title_suggestions.filter(
+            content_type=ContentType.SHARING
         ).prefetch_related("generated_blog_posts")
 
-        # Get all project keywords with their usage status for quick lookup
         project_keywords = project.get_keywords()
 
-        # Categorize suggestions based on the annotated posted_count
-        posted_suggestions = []
         archived_suggestions = []
         active_suggestions = []
 
         for suggestion in all_suggestions:
-            has_posted = suggestion.posted_count > 0
-
-            # Add keyword usage info to each suggestion
             suggestion.keywords_with_usage = []
             if suggestion.target_keywords:
                 for keyword_text in suggestion.target_keywords:
@@ -643,21 +635,75 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
                         }
                     )
 
-            if has_posted:
-                posted_suggestions.append(suggestion)
-            elif suggestion.archived:
+            if suggestion.archived:
                 archived_suggestions.append(suggestion)
             else:
                 active_suggestions.append(suggestion)
 
-        context["posted_suggestions"] = posted_suggestions
         context["archived_suggestions"] = archived_suggestions
         context["active_suggestions"] = active_suggestions
-
         context["has_pro_subscription"] = profile.is_on_pro_plan
         context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
             project=project
         ).exists()
+        context["content_type"] = "SHARING"
+        context["content_type_display"] = "Eye Catching"
+
+        return context
+
+
+class ProjectSEOPostsView(LoginRequiredMixin, DetailView):
+    model = Project
+    template_name = "project/project_seo_posts.html"
+    context_object_name = "project"
+
+    def get_queryset(self):
+        return Project.objects.filter(profile=self.request.user.profile)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        project = self.object
+        profile = self.request.user.profile
+
+        all_suggestions = project.blog_post_title_suggestions.filter(
+            content_type=ContentType.SEO
+        ).prefetch_related("generated_blog_posts")
+
+        project_keywords = project.get_keywords()
+
+        archived_suggestions = []
+        active_suggestions = []
+
+        for suggestion in all_suggestions:
+            suggestion.keywords_with_usage = []
+            if suggestion.target_keywords:
+                for keyword_text in suggestion.target_keywords:
+                    keyword_info = project_keywords.get(
+                        keyword_text.lower(),
+                        {"keyword": None, "in_use": False, "project_keyword_id": None},
+                    )
+                    suggestion.keywords_with_usage.append(
+                        {
+                            "text": keyword_text,
+                            "keyword": keyword_info["keyword"],
+                            "in_use": keyword_info["in_use"],
+                            "project_keyword_id": keyword_info["project_keyword_id"],
+                        }
+                    )
+
+            if suggestion.archived:
+                archived_suggestions.append(suggestion)
+            else:
+                active_suggestions.append(suggestion)
+
+        context["archived_suggestions"] = archived_suggestions
+        context["active_suggestions"] = active_suggestions
+        context["has_pro_subscription"] = profile.is_on_pro_plan
+        context["has_auto_submission_setting"] = AutoSubmissionSetting.objects.filter(
+            project=project
+        ).exists()
+        context["content_type"] = "SEO"
+        context["content_type_display"] = "SEO Optimized"
 
         return context
 

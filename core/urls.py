@@ -16,7 +16,16 @@ urlpatterns = [
     path("blog/<slug:slug>", views.BlogPostView.as_view(), name="blog_post"),
     # app
     path("api/", api.urls),
-    path("project/<int:pk>/", views.ProjectDetailView.as_view(), name="project_detail"),
+    path(
+        "project/<int:pk>/posts/eye-catching/",
+        views.ProjectEyeCatchingPostsView.as_view(),
+        name="project_eye_catching_posts",
+    ),
+    path(
+        "project/<int:pk>/posts/seo-optimized/",
+        views.ProjectSEOPostsView.as_view(),
+        name="project_seo_posts",
+    ),
     path(
         "project/<int:pk>/settings/", views.ProjectSettingsView.as_view(), name="project_settings"
     ),

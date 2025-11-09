@@ -15,8 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 ## [0.0.8] - 2025-11-09
+### Added
+- `deleted_at` field for the BaseModel to support soft_deletion where necessary.
+- Add soft_delete method on BaseModel
+
 ### Changed
 - Rafctor of agents and utils.
+- Post cateogries now have separate pages.
 
 ## [0.0.8] - 2025-11-07
 ### Added

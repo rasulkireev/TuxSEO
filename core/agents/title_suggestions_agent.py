@@ -1,9 +1,9 @@
 from pydantic_ai import Agent, RunContext
 
+from core.agents.schemas import TitleSuggestionContext, TitleSuggestions
 from core.agents.system_prompts import add_todays_date
 from core.choices import ContentType, get_default_ai_model
 from core.prompts import TITLE_SUGGESTION_SYSTEM_PROMPTS
-from core.schemas import TitleSuggestionContext, TitleSuggestions
 
 
 def create_title_suggestions_agent(content_type=ContentType.SHARING, model=None):  # noqa: C901

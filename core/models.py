@@ -28,6 +28,17 @@ from core.agents import (
     create_title_suggestions_agent,
     create_validate_blog_post_ending_agent,
 )
+from core.agents.schemas import (
+    BlogPostGenerationContext,
+    CompetitorAnalysisContext,
+    CompetitorDetails,
+    GeneratedBlogPostSchema,
+    ProjectDetails,
+    ProjectPageContext,
+    TitleSuggestion,
+    TitleSuggestionContext,
+    WebPageContent,
+)
 from core.base_models import BaseModel
 from core.choices import (
     BlogPostStatus,
@@ -44,17 +55,6 @@ from core.choices import (
     ProjectType,
 )
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
-from core.schemas import (
-    BlogPostGenerationContext,
-    CompetitorAnalysisContext,
-    CompetitorDetails,
-    GeneratedBlogPostSchema,
-    ProjectDetails,
-    ProjectPageContext,
-    TitleSuggestion,
-    TitleSuggestionContext,
-    WebPageContent,
-)
 from core.utils import (
     generate_random_key,
     get_jina_embedding,
@@ -776,7 +776,7 @@ class BlogPostTitleSuggestion(BaseModel):
 
         result = run_agent_synchronously(
             agent,
-            "Please generate an article based on the project details and title suggestions.",
+            "Generate an article based on the project details and title suggestions.",
             deps=deps,
             function_name="generate_content",
             model_name="BlogPostTitleSuggestion",
@@ -1048,7 +1048,7 @@ class GeneratedBlogPost(BaseModel):
 
     def _build_fix_context(self):
         """Build full context for content editor agent to ensure accurate regeneration."""
-        from core.schemas import BlogPostGenerationContext, ProjectPageContext
+        from core.agents.schemas import BlogPostGenerationContext, ProjectPageContext
 
         project_pages = [
             ProjectPageContext(
@@ -1717,7 +1717,7 @@ class Competitor(BaseModel):
         Generate comparison blog post content using Perplexity Sonar.
         This method uses Perplexity's web search capabilities to research both products.
         """
-        from core.schemas import CompetitorVsPostContext, ProjectPageContext
+        from core.agents.schemas import CompetitorVsPostContext, ProjectPageContext
 
         agent = create_competitor_vs_blog_post_agent()
 

@@ -1,8 +1,8 @@
 from pydantic_ai import Agent
 
+from core.agents.schemas import ProjectDetails, WebPageContent
 from core.agents.system_prompts import add_webpage_content
 from core.choices import get_default_ai_model
-from core.schemas import ProjectDetails, WebPageContent
 
 
 def create_analyze_project_agent(model=None):

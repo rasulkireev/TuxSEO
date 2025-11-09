@@ -1,0 +1,44 @@
+{% extends "base_project.html" %}
+{% load static %}
+
+{% block meta %}
+<title>TuxSEO - {{ project.name }} - Eye Catching Posts</title>
+<meta name="description" content="{{ project.summary }}" />
+{% endblock meta %}
+
+{% block project_content %}
+<div data-controller="title-suggestions content-idea"
+     data-title-suggestions-project-id-value="{{ project.id }}"
+     data-content-idea-project-id-value="{{ project.id }}"
+     data-content-idea-content-type-value="SHARING">
+
+  <div class="mb-6">
+    <h2 class="text-2xl font-bold text-gray-900">Eye Catching Posts</h2>
+    <p class="mt-2 text-gray-600">
+      Create engaging, shareable blog post ideas designed to capture attention and drive social engagement
+    </p>
+  </div>
+
+  <!-- Content Generator -->
+  {% include "components/content_generator.html" with description="Create engaging blog post ideas for your project" content_type="SHARING" %}
+
+  <!-- Blog Posts Section -->
+  <div data-title-suggestions-target="suggestionsContainer">
+    <div class="mb-6">
+      <h3 class="mb-4 text-lg font-semibold text-gray-900">Your Eye Catching Post Ideas</h3>
+    </div>
+
+    <!-- Suggestions Lists -->
+    <div class="space-y-6" data-title-suggestions-target="suggestionsList">
+
+      <!-- Active Suggestions -->
+      {% include "components/suggestions_section.html" with section_title="Active Ideas" list_name="active" suggestions=active_suggestions collapsed=False %}
+
+      <!-- Archived Suggestions -->
+      {% include "components/suggestions_section.html" with section_title="Archived Ideas" list_name="archived" suggestions=archived_suggestions collapsed=True %}
+
+    </div>
+  </div>
+
+</div>
+{% endblock project_content %}

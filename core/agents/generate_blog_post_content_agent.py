@@ -1,5 +1,6 @@
 from pydantic_ai import Agent
 
+from core.agents.schemas import BlogPostGenerationContext, GeneratedBlogPostSchema
 from core.agents.system_prompts import (
     add_language_specification,
     add_project_details,
@@ -14,7 +15,6 @@ from core.agents.system_prompts import (
 )
 from core.choices import ContentType, get_default_ai_model
 from core.prompts import GENERATE_CONTENT_SYSTEM_PROMPTS
-from core.schemas import BlogPostGenerationContext, GeneratedBlogPostSchema
 
 
 def create_generate_blog_post_content_agent(
