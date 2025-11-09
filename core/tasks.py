@@ -8,17 +8,17 @@ from django.conf import settings
 from django.utils import timezone
 from django_q.tasks import async_task
 
-from core.choices import ContentType, ProjectPageSource
+from core.choices import ContentType, EmailType, ProjectPageSource
 from core.models import (
     BlogPostTitleSuggestion,
     Competitor,
+    EmailSent,
     GeneratedBlogPost,
     Profile,
     Project,
     ProjectKeyword,
     ProjectPage,
 )
-from core.utils import generate_og_image, save_keyword
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -290,7 +290,7 @@ def process_project_keywords(project_id: int):
 
     for keyword_str in keyword_strings:
         try:
-            save_keyword(keyword_str, project)
+            project.save_keyword(keyword_str)
             processed_count += 1
         except Exception as e:
             failed_count += 1
@@ -534,6 +534,7 @@ def generate_and_post_blog_post(project_id: int):
 
 def save_title_suggestion_keywords(title_suggestion_id: int):
     title_suggestion = BlogPostTitleSuggestion.objects.get(id=title_suggestion_id)
+    project = title_suggestion.project
 
     if not title_suggestion.target_keywords or not title_suggestion.project:
         logger.warning(
@@ -547,7 +548,7 @@ def save_title_suggestion_keywords(title_suggestion_id: int):
     saved_keywords_count = 0
     for keyword_text in title_suggestion.target_keywords:
         if keyword_text and keyword_text.strip():
-            save_keyword(keyword_text.strip(), title_suggestion.project)
+            project.save_keyword(keyword_text.strip())
             saved_keywords_count += 1
 
     logger.info(
@@ -640,7 +641,7 @@ def get_and_save_related_keywords(
                 for keyword_text in related_keywords:
                     if keyword_text and keyword_text.strip():
                         try:
-                            save_keyword(keyword_text.strip(), project)
+                            project.save_keyword(keyword_text.strip())
                             stats["related_saved"] += 1
                         except Exception as e:
                             logger.error(
@@ -770,7 +771,7 @@ def get_and_save_pasf_keywords(
                 for keyword_text in pasf_keywords:
                     if keyword_text and keyword_text.strip():
                         try:
-                            save_keyword(keyword_text.strip(), project)
+                            project.save_keyword(keyword_text.strip())
                             stats["pasf_saved"] += 1
                         except Exception as e:
                             logger.error(
@@ -1059,5 +1060,32 @@ def generate_og_image_for_blog_post(blog_post_id: int):
         )
         return "Image generation service is not configured"
 
-    success, message = generate_og_image(generated_post, settings.REPLICATE_API_TOKEN)
+    success, message = generated_post.generate_og_image()
     return message
+
+
+def track_email_sent(email_address: str, email_type: EmailType, profile: Profile = None):
+    """
+    Track sent emails by creating EmailSent records.
+    """
+    try:
+        email_sent = EmailSent.objects.create(
+            email_address=email_address, email_type=email_type, profile=profile
+        )
+        logger.info(
+            "[Track Email Sent] Email tracked successfully",
+            email_address=email_address,
+            email_type=email_type,
+            profile_id=profile.id if profile else None,
+            email_sent_id=email_sent.id,
+        )
+        return email_sent
+    except Exception as e:
+        logger.error(
+            "[Track Email Sent] Failed to track email",
+            email_address=email_address,
+            email_type=email_type,
+            error=str(e),
+            exc_info=True,
+        )
+        return None

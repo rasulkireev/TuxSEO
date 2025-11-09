@@ -62,8 +62,7 @@ from core.models import (
     ProjectKeyword,
     ProjectPage,
 )
-from core.utils import download_image_from_url, get_or_create_project
-from core.utils import generate_og_image as generate_og_image_util
+from core.utils import download_image_from_url
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -154,7 +153,7 @@ def create_project(request: HttpRequest, data: ProjectScanIn):
             "message": message,
         }
 
-    project = get_or_create_project(profile.id, data.url, source=data.source)
+    project = profile.get_or_create_project(url=data.url, source=data.source)
 
     try:
         got_content = project.get_page_content()
@@ -1147,7 +1146,7 @@ def generate_og_image(request: HttpRequest, data: GenerateOGImageIn):
                 "image_url": generated_post.image.url,
             }
 
-        success, message = generate_og_image_util(generated_post, settings.REPLICATE_API_TOKEN)
+        success, _ = generated_post.generate_og_image()
 
         if success:
             return {

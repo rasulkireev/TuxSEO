@@ -4,9 +4,9 @@ import uuid
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
+from django_q.tasks import async_task
 
 from core.choices import EmailType
-from core.utils import track_email_sent
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -47,10 +47,12 @@ class CustomAccountAdapter(DefaultAccountAdapter):
 
         try:
             result = super().send_confirmation_mail(request, emailconfirmation, signup)
-            track_email_sent(
+            async_task(
+                "core.tasks.track_email_sent",
                 email_address=emailconfirmation.email_address.email,
                 email_type=email_type,
                 profile=profile,
+                group="Track Email Sent",
             )
             return result
         except Exception as error:

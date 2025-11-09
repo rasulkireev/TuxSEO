@@ -36,7 +36,6 @@ from core.tasks import (
     track_event,
     try_create_posthog_alias,
 )
-from core.utils import get_project_keywords_dict
 from tuxseo.utils import get_tuxseo_logger
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -617,7 +616,7 @@ class ProjectDetailView(LoginRequiredMixin, DetailView):
         ).prefetch_related("generated_blog_posts")
 
         # Get all project keywords with their usage status for quick lookup
-        project_keywords = get_project_keywords_dict(project)
+        project_keywords = project.get_keywords()
 
         # Categorize suggestions based on the annotated posted_count
         posted_suggestions = []
@@ -888,7 +887,7 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
         # Add keyword usage info to the title suggestion
         if generated_post.title:
             # Get all project keywords with their usage status for quick lookup
-            project_keywords = get_project_keywords_dict(project)
+            project_keywords = project.get_keywords()
 
             # Add keyword usage info to the suggestion
             generated_post.title.keywords_with_usage = []
