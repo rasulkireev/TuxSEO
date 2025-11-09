@@ -3,8 +3,8 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from core.agents.schemas import ProjectDetails
 from core.choices import AIModel
-from core.schemas import ProjectDetails
 
 
 def create_find_competitors_agent(is_on_free_plan: bool):

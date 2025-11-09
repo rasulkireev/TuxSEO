@@ -1,7 +1,7 @@
 from pydantic_ai import Agent, RunContext
 
+from core.agents.schemas import CompetitorDetails
 from core.choices import get_default_ai_model
-from core.schemas import CompetitorDetails
 
 
 def create_extract_competitors_data_agent(model=None):

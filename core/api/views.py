@@ -248,7 +248,26 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
 
     # Render HTML for each suggestion using the Django template
     suggestions_html = []
+    project_keywords = project.get_keywords()
+
     for suggestion in suggestions:
+        # Add keyword usage info to each suggestion
+        suggestion.keywords_with_usage = []
+        if suggestion.target_keywords:
+            for keyword_text in suggestion.target_keywords:
+                keyword_info = project_keywords.get(
+                    keyword_text.lower(),
+                    {"keyword": None, "in_use": False, "project_keyword_id": None},
+                )
+                suggestion.keywords_with_usage.append(
+                    {
+                        "text": keyword_text,
+                        "keyword": keyword_info["keyword"],
+                        "in_use": keyword_info["in_use"],
+                        "project_keyword_id": keyword_info["project_keyword_id"],
+                    }
+                )
+
         context = {
             "suggestion": suggestion,
             "has_pro_subscription": profile.is_on_pro_plan,
@@ -293,6 +312,24 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
             return {"status": "error", "message": "No suggestions were generated"}
 
         suggestion = suggestions[0]
+
+        # Add keyword usage info to the suggestion
+        project_keywords = project.get_keywords()
+        suggestion.keywords_with_usage = []
+        if suggestion.target_keywords:
+            for keyword_text in suggestion.target_keywords:
+                keyword_info = project_keywords.get(
+                    keyword_text.lower(),
+                    {"keyword": None, "in_use": False, "project_keyword_id": None},
+                )
+                suggestion.keywords_with_usage.append(
+                    {
+                        "text": keyword_text,
+                        "keyword": keyword_info["keyword"],
+                        "in_use": keyword_info["in_use"],
+                        "project_keyword_id": keyword_info["project_keyword_id"],
+                    }
+                )
 
         # Render HTML for the suggestion using the Django template
         context = {

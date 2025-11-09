@@ -1,8 +1,8 @@
 from django.utils import timezone
 from pydantic_ai import Agent, RunContext
 
+from core.agents.schemas import CompetitorAnalysis, CompetitorAnalysisContext
 from core.choices import get_default_ai_model
-from core.schemas import CompetitorAnalysis, CompetitorAnalysisContext
 
 
 def create_analyze_competitor_agent(model=None):

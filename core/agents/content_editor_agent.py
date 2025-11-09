@@ -1,5 +1,6 @@
 from pydantic_ai import Agent
 
+from core.agents.schemas import BlogPostGenerationContext
 from core.agents.system_prompts import (
     add_language_specification,
     add_project_details,
@@ -8,7 +9,6 @@ from core.agents.system_prompts import (
     add_title_details,
 )
 from core.choices import get_default_ai_model
-from core.schemas import BlogPostGenerationContext
 
 
 def create_content_editor_agent(model=None):

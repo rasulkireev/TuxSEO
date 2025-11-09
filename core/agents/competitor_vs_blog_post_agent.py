@@ -3,9 +3,9 @@ from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from core.agents.schemas import CompetitorVsPostContext
 from core.agents.system_prompts import add_project_pages, markdown_lists
 from core.choices import AIModel
-from core.schemas import CompetitorVsPostContext
 
 
 def create_competitor_vs_blog_post_agent(model=None):

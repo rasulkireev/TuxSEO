@@ -4,17 +4,12 @@ import { showMessage } from "../utils/messages";
 export default class extends Controller {
   static targets = ["form", "input"];
   static values = {
-    projectId: Number
+    projectId: Number,
+    contentType: String
   };
 
   toggleForm() {
     this.formTarget.classList.toggle("hidden");
-  }
-
-  getCurrentTab() {
-    // Find the active tab button
-    const activeTab = document.querySelector('[data-action="title-suggestions#switchTab"].text-gray-900');
-    return activeTab ? activeTab.dataset.tab : "SHARING"; // Default to SHARING if no tab is active
   }
 
   async generate() {
@@ -22,7 +17,7 @@ export default class extends Controller {
     if (!idea) return;
 
     const button = this.element.querySelector('[data-action="content-idea#generate"]');
-    const contentType = this.getCurrentTab();
+    const contentType = this.contentTypeValue || "SHARING";
 
     try {
       // Show loading state
@@ -70,11 +65,16 @@ export default class extends Controller {
         .classList.remove("hidden");
 
     } catch (error) {
-      showMessage(error.message || "Failed to generate suggestion. Please try again later.", 'error');
+      showMessage(error.message || "Failed to generate suggestion. Please try again later.", "error");
     } finally {
       // Restore button state
       button.disabled = false;
-      button.innerHTML = "Generate";
+      button.innerHTML = `
+        <svg class="mr-2 w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+        </svg>
+        Generate Blog Post Idea
+      `;
     }
   }
 

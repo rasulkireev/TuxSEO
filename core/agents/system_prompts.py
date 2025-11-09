@@ -1,7 +1,7 @@
 from django.utils import timezone
 from pydantic_ai import RunContext
 
-from core.schemas import BlogPostGenerationContext, WebPageContent
+from core.agents.schemas import BlogPostGenerationContext, WebPageContent
 
 
 def add_todays_date() -> str:
