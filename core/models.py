@@ -1,35 +1,35 @@
+import re
 from decimal import Decimal, InvalidOperation
+from urllib.request import urlopen
 
+import posthog
+import replicate
 import requests
 from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django_q.tasks import async_task
 from pgvector.django import HnswIndex, VectorField
-from pydantic_ai import Agent, RunContext
-from pydantic_ai.models.openai import OpenAIChatModel
-from pydantic_ai.providers.openai import OpenAIProvider
 
-from core.agent_system_prompts import (
-    add_todays_date,
-    filler_content,
-    markdown_lists,
-    post_structure,
-    valid_markdown_format,
-)
 from core.agents import (
-    add_language_specification,
-    add_project_details,
-    add_project_pages,
-    add_target_keywords,
-    add_title_details,
-    content_editor_agent,
+    create_analyze_competitor_agent,
+    create_analyze_project_agent,
+    create_competitor_vs_blog_post_agent,
+    create_content_editor_agent,
+    create_extract_competitors_data_agent,
+    create_extract_links_agent,
+    create_find_competitors_agent,
+    create_generate_blog_post_content_agent,
+    create_populate_competitor_details_agent,
+    create_summarize_page_agent,
+    create_title_suggestions_agent,
+    create_validate_blog_post_ending_agent,
 )
 from core.base_models import BaseModel
 from core.choices import (
-    AIModel,
     BlogPostStatus,
     Category,
     ContentType,
@@ -42,20 +42,10 @@ from core.choices import (
     ProjectPageType,
     ProjectStyle,
     ProjectType,
-    get_default_ai_model,
 )
-from core.model_utils import (
-    generate_random_key,
-    get_markdown_content,
-    run_agent_synchronously,
-)
-from core.prompts import (
-    GENERATE_CONTENT_SYSTEM_PROMPTS,
-    TITLE_SUGGESTION_SYSTEM_PROMPTS,
-)
+from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.schemas import (
     BlogPostGenerationContext,
-    CompetitorAnalysis,
     CompetitorAnalysisContext,
     CompetitorDetails,
     GeneratedBlogPostSchema,
@@ -63,8 +53,14 @@ from core.schemas import (
     ProjectPageContext,
     TitleSuggestion,
     TitleSuggestionContext,
-    TitleSuggestions,
     WebPageContent,
+)
+from core.utils import (
+    generate_random_key,
+    get_jina_embedding,
+    get_markdown_content,
+    get_og_image_prompt,
+    run_agent_synchronously,
 )
 from tuxseo.utils import get_tuxseo_logger
 
@@ -327,6 +323,31 @@ class Profile(BaseModel):
     def can_generate_competitor_posts(self):
         return not self.reached_competitor_posts_limit
 
+    def get_or_create_project(self, url: str, source: str = None) -> "Project":
+        project, created = Project.objects.get_or_create(profile=self, url=url)
+
+        project_metadata = {
+            "source": source,
+            "profile_id": self.id,
+            "profile_email": self.user.email,
+            "project_id": project.id,
+            "project_name": project.name,
+            "project_url": url,
+        }
+
+        if created:
+            if settings.POSTHOG_API_KEY:
+                posthog.capture(
+                    self.user.email,
+                    event="project_created",
+                    properties=project_metadata,
+                )
+            logger.info("[Get or Create Project] Project created", **project_metadata)
+        else:
+            logger.info("[Get or Create Project] Got existing project", **project_metadata)
+
+        return project
+
 
 class ProfileStateTransition(BaseModel):
     profile = models.ForeignKey(
@@ -497,10 +518,10 @@ class Project(BaseModel):
         Analyze the page content using PydanticAI and update project details.
         Should be called after get_page_content().
         """
-        from core.agents import analyze_project_agent
+        agent = create_analyze_project_agent()
 
         result = run_agent_synchronously(
-            analyze_project_agent,
+            agent,
             "Analyze this web page content and extract the key information.",
             deps=WebPageContent(
                 title=self.title,
@@ -534,111 +555,10 @@ class Project(BaseModel):
 
         return True
 
-    def generate_title_suggestions(  # noqa: C901
+    def generate_title_suggestions(
         self, content_type=ContentType.SHARING, num_titles=3, user_prompt="", model=None
     ):
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=TitleSuggestions,
-            deps_type=TitleSuggestionContext,
-            system_prompt=TITLE_SUGGESTION_SYSTEM_PROMPTS[content_type],
-            retries=2,
-            model_settings={"temperature": 0.9},
-        )
-
-        agent.system_prompt(add_todays_date)
-
-        @agent.system_prompt
-        def add_project_details(ctx: RunContext[TitleSuggestionContext]) -> str:
-            project = ctx.deps.project_details
-            return f"""
-                Project Details:
-                - Project Name: {project.name}
-                - Project Type: {project.type}
-                - Project Summary: {project.summary}
-                - Blog Theme: {project.blog_theme}
-                - Founders: {project.founders}
-                - Key Features: {project.key_features}
-                - Target Audience: {project.target_audience_summary}
-                - Pain Points: {project.pain_points}
-                - Product Usage: {project.product_usage}
-            """
-
-        @agent.system_prompt
-        def add_number_of_titles_to_generate(ctx: RunContext[TitleSuggestionContext]) -> str:
-            return f"""IMPORTANT: Generate only {ctx.deps.num_titles} titles."""
-
-        @agent.system_prompt
-        def add_language_specification(ctx: RunContext[TitleSuggestionContext]) -> str:
-            project = ctx.deps.project_details
-            return f"""
-                IMPORTANT: Generate all titles in {project.language} language.
-                Make sure the titles are grammatically correct and culturally
-                appropriate for {project.language}-speaking audiences.
-            """
-
-        @agent.system_prompt
-        def add_user_prompt(ctx: RunContext[TitleSuggestionContext]) -> str:
-            if not ctx.deps.user_prompt:
-                return ""
-
-            return f"""
-                IMPORTANT USER REQUEST: The user has specifically requested the following:
-                "{ctx.deps.user_prompt}"
-
-                This is a high-priority requirement. Make sure to incorporate this guidance
-                when generating titles while still maintaining SEO best practices and readability.
-            """
-
-        @agent.system_prompt
-        def add_feedback_history(ctx: RunContext[TitleSuggestionContext]) -> str:
-            # Build the feedback sections only if they exist
-            feedback_sections = []
-
-            if ctx.deps.neutral_suggestions:
-                neutral = "\n".join(f"- {title}" for title in ctx.deps.neutral_suggestions)
-                feedback_sections.append(
-                    f"""
-                    Title Suggestions that users have not yet liked or disliked:
-                    {neutral}
-                """
-                )
-
-            if ctx.deps.liked_suggestions:
-                liked = "\n".join(f"- {title}" for title in ctx.deps.liked_suggestions)
-                feedback_sections.append(
-                    f"""
-                    Liked Title Suggestions:
-                    {liked}
-                """
-                )
-
-            if ctx.deps.disliked_suggestions:
-                disliked = "\n".join(f"- {title}" for title in ctx.deps.disliked_suggestions)
-                feedback_sections.append(
-                    f"""
-                    Disliked Title Suggestions:
-                    {disliked}
-                """
-                )
-
-            # Add guidance only if we have any feedback
-            if feedback_sections:
-                feedback_sections.append(
-                    """
-                    Use this feedback to guide your title generation.
-                    Create titles that are thematically similar to the "Liked" titles,
-                    and avoid any stylistic or thematic patterns from the "Disliked" titles.
-
-                    IMPORTANT!
-                    You must generate completely new and unique titles.
-                    Do not repeat or create minor variations of any titles listed above in the
-                    "Previously Generated", "Liked", or "Disliked" sections.
-                    Your primary goal is originality.
-                    """
-                )
-
-            return "\n".join(feedback_sections)
+        agent = create_title_suggestions_agent(content_type=content_type, model=model)
 
         deps = TitleSuggestionContext(
             project_details=self.project_details,
@@ -676,7 +596,6 @@ class Project(BaseModel):
 
             created_suggestions = BlogPostTitleSuggestion.objects.bulk_create(suggestions)
 
-            # Schedule background tasks to save target keywords for each suggestion
             for suggestion in created_suggestions:
                 if suggestion.target_keywords:
                     async_task("core.tasks.save_title_suggestion_keywords", suggestion.id)
@@ -684,22 +603,7 @@ class Project(BaseModel):
             return created_suggestions
 
     def get_a_list_of_links(self, model=None):
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=list[str],
-            deps_type=str,
-            system_prompt="""
-                You are an expert link extractor.
-                Extract all the URLs from the markdown-formatted text provided.
-                Return only valid, complete URLs (starting with http:// or https://).
-                If the text contains no valid URLs, return an empty list.
-            """,
-            retries=2,
-        )
-
-        @agent.system_prompt
-        def add_links_text(ctx: RunContext[str]) -> str:
-            return f"Markdown text containing links:\n{ctx.deps}"
+        agent = create_extract_links_agent(model)
 
         result = run_agent_synchronously(
             agent,
@@ -712,77 +616,7 @@ class Project(BaseModel):
         return result.output
 
     def find_competitors(self):
-        model = OpenAIChatModel(
-            AIModel.PERPLEXITY_SONAR,
-            provider=OpenAIProvider(
-                base_url="https://api.perplexity.ai",
-                api_key=settings.PERPLEXITY_API_KEY,
-            ),
-        )
-        agent = Agent(
-            model,
-            deps_type=ProjectDetails,
-            output_type=str,
-            system_prompt="""
-                You are a helpful assistant that helps me find competitors for my project.
-            """,
-            retries=2,
-        )
-
-        @agent.system_prompt
-        def add_project_details(ctx: RunContext[ProjectDetails]) -> str:
-            project = ctx.deps
-            return f"""I'm working on a project which has the following attributes:
-                Name:
-                {project.name}
-
-                Summary:
-                {project.summary}
-
-                Key Features:
-                {project.key_features}
-
-                Target Audience:
-                {project.target_audience_summary}
-
-                Pain Points Addressed:
-                {project.pain_points}
-
-                Language: {project.language}
-            """
-
-        @agent.system_prompt
-        def required_data() -> str:
-            return "Make sure that each competitor has a name, url, and description."
-
-        @agent.system_prompt
-        def number_of_competitors(ctx: RunContext[ProjectDetails]) -> str:
-            # Check if user is on free plan through the project's profile
-            profile = self.profile
-            if profile.is_on_free_plan:
-                return "Give me a list of exactly 3 competitors."
-            return "Give me a list of at least 20 competitors."
-
-        @agent.system_prompt
-        def language_specification(ctx: RunContext[ProjectDetails]) -> str:
-            project = ctx.deps
-            return f"""
-                IMPORTANT: Be mindful that competitors are likely to speak in
-                {project.language} language.
-            """
-
-        @agent.system_prompt
-        def location_specification(ctx: RunContext[ProjectDetails]) -> str:
-            project = ctx.deps
-            if project.location != "Global":
-                return f"""
-                    IMPORTANT: Only return competitors whose target audience is in
-                    {project.location}.
-                """
-            else:
-                return """
-                    IMPORTANT: Return competitors from all over the world.
-                """
+        agent = create_find_competitors_agent(is_on_free_plan=self.profile.is_on_free_plan)
 
         result = run_agent_synchronously(
             agent,
@@ -798,19 +632,7 @@ class Project(BaseModel):
         return result.output
 
     def get_and_save_list_of_competitors(self, model=None):
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=list[CompetitorDetails],
-            system_prompt="""
-                You are an expert data extractor.
-                Extract all the data from the text provided.
-            """,
-            retries=2,
-        )
-
-        @agent.system_prompt
-        def add_competitors(ctx: RunContext[list[CompetitorDetails]]) -> str:
-            return f"Here are the competitors: {ctx.deps}"
+        agent = create_extract_competitors_data_agent(model)
 
         result = run_agent_synchronously(
             agent,
@@ -834,6 +656,48 @@ class Project(BaseModel):
         competitors = Competitor.objects.bulk_create(competitors)
 
         return competitors
+
+    def save_keyword(self, keyword_text: str):
+        keyword_obj, created = Keyword.objects.get_or_create(
+            keyword_text=keyword_text,
+            country="us",
+            data_source=KeywordDataSource.GOOGLE_KEYWORD_PLANNER,
+        )
+
+        # Fetch metrics if newly created
+        if created:
+            metrics_fetched = keyword_obj.fetch_and_update_metrics()
+            if not metrics_fetched:
+                logger.warning(
+                    "[Save Keyword] Failed to fetch metrics for keyword",
+                    keyword_id=keyword_obj.id,
+                    keyword_text=keyword_text,
+                )
+
+        # Associate with project
+        ProjectKeyword.objects.get_or_create(project=self, keyword=keyword_obj)
+
+    def get_keywords(self) -> dict:
+        """
+        Build a dictionary of project keywords for quick lookup.
+
+        Returns a dict mapping lowercase keyword text to keyword metadata:
+        {
+            "keyword_text": {
+                "keyword": Keyword object,
+                "in_use": bool,
+                "project_keyword_id": int
+            }
+        }
+        """
+        project_keywords = {}
+        for project_keyword in self.project_keywords.select_related("keyword").all():
+            project_keywords[project_keyword.keyword.keyword_text.lower()] = {
+                "keyword": project_keyword.keyword,
+                "in_use": project_keyword.use,
+                "project_keyword_id": project_keyword.id,
+            }
+        return project_keywords
 
 
 class BlogPostTitleSuggestion(BaseModel):
@@ -883,25 +747,7 @@ class BlogPostTitleSuggestion(BaseModel):
         )
 
     def generate_content(self, content_type=ContentType.SHARING, model=None):
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=GeneratedBlogPostSchema,
-            deps_type=BlogPostGenerationContext,
-            system_prompt=GENERATE_CONTENT_SYSTEM_PROMPTS[content_type],
-            retries=2,
-            model_settings={"max_tokens": 65500, "temperature": 0.8},
-        )
-
-        agent.system_prompt(add_project_details)
-        agent.system_prompt(add_project_pages)
-        agent.system_prompt(add_title_details)
-        agent.system_prompt(add_todays_date)
-        agent.system_prompt(add_language_specification)
-        agent.system_prompt(add_target_keywords)
-        agent.system_prompt(valid_markdown_format)
-        agent.system_prompt(markdown_lists)
-        agent.system_prompt(post_structure)
-        agent.system_prompt(filler_content)
+        agent = create_generate_blog_post_content_agent(content_type, model)
 
         # Get all analyzed project pages (from AI and sitemap sources)
         project_pages = [
@@ -1051,13 +897,112 @@ class GeneratedBlogPost(BaseModel):
             content=self.content,
         )
 
+    @property
+    def has_placeholders(self) -> bool:
+        content = self.content or ""
+        content_lower = content.lower()
+
+        for pattern in PLACEHOLDER_PATTERNS:
+            if pattern in content_lower:
+                logger.warning(
+                    "[Blog Post Has Placeholders] Placeholder found",
+                    pattern=pattern,
+                    blog_post_id=self.id,
+                )
+                return True
+
+        for pattern in PLACEHOLDER_BRACKET_PATTERNS:
+            matches = re.findall(pattern, content_lower)
+            if matches:
+                logger.warning(
+                    "[Blog Post Has Placeholders] Bracket Placeholder found",
+                    pattern=pattern,
+                    blog_post_id=self.id,
+                )
+                return True
+
+        logger.info(
+            "[Blog Post Has Placeholders] No placeholders found",
+            blog_post_id=self.id,
+        )
+
+        return False
+
+    @property
+    def content_starts_with_header(self) -> bool:
+        content = self.content or ""
+        content = content.strip()
+
+        if not content:
+            return False
+
+        header_or_asterisk_pattern = r"^(#{1,6}\s+|\*)"
+        starts_with_header_or_asterisk = bool(re.match(header_or_asterisk_pattern, content))
+
+        if starts_with_header_or_asterisk:
+            logger.warning(
+                "[Blog Post Starts With Header] Content starts with header or asterisk",
+                blog_post_id=self.id,
+            )
+        else:
+            logger.info(
+                "[Blog Post Starts With Header] Content starts with regular text",
+                blog_post_id=self.id,
+            )
+
+        return starts_with_header_or_asterisk
+
+    def blog_post_has_valid_ending(self) -> bool:
+        """
+        Validate if a blog post has a complete, proper ending using AI analysis.
+
+        Args:
+            blog_post: GeneratedBlogPost instance to validate
+
+        Returns:
+            True if the ending is valid, False otherwise
+        """
+        content = self.content or ""
+        content = content.strip()
+
+        agent = create_validate_blog_post_ending_agent()
+
+        try:
+            result = run_agent_synchronously(
+                agent,
+                f"Please analyze this blog post and determine if it has a complete ending:\n\n{content}",  # noqa: E501
+                function_name="blog_post_has_valid_ending",
+            )
+
+            ending_is_valid = result.output
+
+            if ending_is_valid:
+                logger.info(
+                    "[Blog Post Has Valid Ending] Valid ending",
+                    result=ending_is_valid,
+                    blog_post_id=self.id,
+                )
+            else:
+                logger.warning(
+                    "[Blog Post Has Valid Ending] Invalid ending",
+                    result=ending_is_valid,
+                    blog_post_id=self.id,
+                )
+
+            return ending_is_valid
+
+        except Exception as error:
+            logger.error(
+                "[Blog Post Has Valid Ending] AI analysis failed",
+                error=str(error),
+                exc_info=True,
+                content_length=len(content),
+            )
+            return False
+
     def run_validation(self):
         """Run validation and update fields in a single query."""
-        from core.utils import (
-            blog_post_has_placeholders,
-            blog_post_has_valid_ending,
-            blog_post_starts_with_header,
-        )
+        from core.utils import blog_post_has_valid_ending
 
         base_logger_info = {
             "blog_post_id": self.id,
@@ -1079,8 +1024,8 @@ class GeneratedBlogPost(BaseModel):
             content = self.content.strip()
             self.content_too_short = len(content) < 3000
             self.has_valid_ending = blog_post_has_valid_ending(self)
-            self.placeholders = blog_post_has_placeholders(self)
-            self.starts_with_header = blog_post_starts_with_header(self)
+            self.placeholders = self.has_placeholders
+            self.starts_with_header = self.content_starts_with_header
 
         self.save(
             update_fields=[
@@ -1134,8 +1079,10 @@ class GeneratedBlogPost(BaseModel):
 
         context = self._build_fix_context()
 
+        agent = create_content_editor_agent()
+
         result = run_agent_synchronously(
-            content_editor_agent,
+            agent,
             """
             This blog post starts with a header (like # or ##) instead of regular text.
 
@@ -1209,8 +1156,10 @@ class GeneratedBlogPost(BaseModel):
 
         context = self._build_fix_context()
 
+        agent = create_content_editor_agent()
+
         result = run_agent_synchronously(
-            content_editor_agent,
+            agent,
             """
             This blog post is too short.
             I think something went wrong during generation.
@@ -1231,8 +1180,10 @@ class GeneratedBlogPost(BaseModel):
 
         context = self._build_fix_context()
 
+        agent = create_content_editor_agent()
+
         result = run_agent_synchronously(
-            content_editor_agent,
+            agent,
             """
             This blog post does not end on an ending that makes sense.
             Most likely generation failed at some point and returned half completed content.
@@ -1253,8 +1204,10 @@ class GeneratedBlogPost(BaseModel):
 
         context = self._build_fix_context()
 
+        agent = create_content_editor_agent()
+
         result = run_agent_synchronously(
-            content_editor_agent,
+            agent,
             """
             The content contains placeholders.
             Please regenerate the blog post without placeholders.
@@ -1280,6 +1233,113 @@ class GeneratedBlogPost(BaseModel):
 
         if self.starts_with_header is True:
             self.fix_header_start()
+
+    def generate_og_image(self) -> tuple[bool, str]:
+        """
+        Generate an Open Graph image for a blog post using Replicate flux-schnell model.
+
+        Args:
+            generated_post: The GeneratedBlogPost instance to generate an image for
+            replicate_api_token: Replicate API token for authentication
+
+        Returns:
+            A tuple of (success: bool, message: str)
+        """
+
+        if not settings.REPLICATE_API_TOKEN:
+            logger.error(
+                "[GenerateOGImage] Replicate API token not configured",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return False, "Replicate API token not configured"
+
+        if self.image:
+            logger.info(
+                "[GenerateOGImage] Image already exists for blog post",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return True, f"Image already exists for blog post {self.id}"
+
+        try:
+            blog_post_category = self.title.category if self.title.category else "technology"
+
+            project_og_style = self.project.og_image_style or OGImageStyle.MODERN_GRADIENT
+            prompt = get_og_image_prompt(project_og_style, blog_post_category)
+
+            logger.info(
+                "[GenerateOGImage] Starting image generation",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+                category=blog_post_category,
+                og_style=project_og_style,
+                prompt=prompt,
+            )
+
+            replicate_client = replicate.Client(api_token=settings.REPLICATE_API_TOKEN)
+
+            output = replicate_client.run(
+                "black-forest-labs/flux-schnell",
+                input={
+                    "prompt": prompt,
+                    "aspect_ratio": "16:9",
+                    "output_format": "png",
+                    "output_quality": 90,
+                },
+            )
+
+            if not output:
+                logger.error(
+                    "[GenerateOGImage] No output from Replicate",
+                    blog_post_id=self.id,
+                    project_id=self.project_id,
+                )
+                return False, f"Failed to generate image for blog post {self.id}"
+
+            file_output = output[0] if isinstance(output, list) else output
+            image_url = str(file_output)
+
+            logger.info(
+                "[GenerateOGImage] Image generated successfully",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+                image_url=image_url,
+            )
+
+            image_response = urlopen(image_url)
+            image_content = ContentFile(image_response.read())
+
+            filename = f"og-image-{self.id}.png"
+            self.image.save(filename, image_content, save=True)
+
+            logger.info(
+                "[GenerateOGImage] Image saved to blog post",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+                saved_url=self.image.url,
+            )
+
+            return True, f"Successfully generated and saved OG image for blog post {self.id}"
+
+        except replicate.exceptions.ReplicateError as replicate_error:
+            logger.error(
+                "[GenerateOGImage] Replicate API error",
+                error=str(replicate_error),
+                exc_info=True,
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return False, f"Replicate API error: {str(replicate_error)}"
+        except Exception as error:
+            logger.error(
+                "[GenerateOGImage] Unexpected error during image generation",
+                error=str(error),
+                exc_info=True,
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return False, f"Unexpected error: {str(error)}"
 
 
 class ProjectPage(BaseModel):
@@ -1397,8 +1457,7 @@ class ProjectPage(BaseModel):
         Analyze the page content using Claude via PydanticAI and update project details.
         Should be called after get_page_content().
         """
-        from core.agents import summarize_page_agent
-        from core.utils import get_jina_embedding
+        agent = create_summarize_page_agent()
 
         webpage_content = WebPageContent(
             title=self.title,
@@ -1407,7 +1466,7 @@ class ProjectPage(BaseModel):
         )
 
         analysis_result = run_agent_synchronously(
-            summarize_page_agent,
+            agent,
             "Please analyze this web page.",
             deps=webpage_content,
             function_name="analyze_content",
@@ -1543,26 +1602,7 @@ class Competitor(BaseModel):
         return True
 
     def populate_name_description(self, model=None):
-        from core.utils import get_jina_embedding
-
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=CompetitorDetails,
-            deps_type=WebPageContent,
-            system_prompt=(
-                """
-                You are an expert marketer.
-                Based on the competitor details and homepage content provided,
-                extract and infer the requested information. Make reasonable inferences based
-                on available content, context, and industry knowledge.
-                """
-            ),
-            retries=2,
-        )
-
-        @agent.system_prompt
-        def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
-            return f"Content: {ctx.deps.markdown_content}"
+        agent = create_populate_competitor_details_agent(model)
 
         deps = WebPageContent(
             title=self.homepage_title,
@@ -1614,54 +1654,7 @@ class Competitor(BaseModel):
         return True
 
     def analyze_competitor(self, model=None):
-        from core.utils import get_jina_embedding
-
-        agent = Agent(
-            model or get_default_ai_model(),
-            output_type=CompetitorAnalysis,
-            deps_type=CompetitorAnalysisContext,
-            system_prompt=(
-                """
-                You are an expert marketer.
-                Based on the competitor details and homepage content provided,
-                extract and infer the requested information. Make reasonable inferences based
-                on available content, context, and industry knowledge.
-                """
-            ),
-            retries=2,
-            model_settings={"temperature": 0.8},
-        )
-
-        @agent.system_prompt
-        def add_todays_date() -> str:
-            return f"Today's Date: {timezone.now().strftime('%Y-%m-%d')}"
-
-        @agent.system_prompt
-        def my_project_details(ctx: RunContext[CompetitorAnalysisContext]) -> str:
-            project = ctx.deps.project_details
-            return f"""
-                Project Details:
-                - Project Name: {project.name}
-                - Project Type: {project.type}
-                - Project Summary: {project.summary}
-                - Blog Theme: {project.blog_theme}
-                - Founders: {project.founders}
-                - Key Features: {project.key_features}
-                - Target Audience: {project.target_audience_summary}
-                - Pain Points: {project.pain_points}
-                - Product Usage: {project.product_usage}
-            """
-
-        @agent.system_prompt
-        def competitor_details(ctx: RunContext[CompetitorAnalysisContext]) -> str:
-            competitor = ctx.deps.competitor_details
-            return f"""
-                Competitor Details:
-                - Competitor Name: {competitor.name}
-                - Competitor URL: {competitor.url}
-                - Competitor Description: {competitor.description}
-                - Competitor Homepage Content: {ctx.deps.competitor_homepage_content}
-            """
+        agent = create_analyze_competitor_agent(model)
 
         deps = CompetitorAnalysisContext(
             project_details=self.project.project_details,
@@ -1724,8 +1717,9 @@ class Competitor(BaseModel):
         Generate comparison blog post content using Perplexity Sonar.
         This method uses Perplexity's web search capabilities to research both products.
         """
-        from core.agents import competitor_vs_blog_post_agent
         from core.schemas import CompetitorVsPostContext, ProjectPageContext
+
+        agent = create_competitor_vs_blog_post_agent()
 
         title = f"{self.project.name} vs. {self.name}: Which is Better?"
 
@@ -1756,7 +1750,7 @@ class Competitor(BaseModel):
         prompt = "Write a comprehensive comparison blog post. Return ONLY the markdown content for the blog post, nothing else."  # noqa: E501
 
         result = run_agent_synchronously(
-            competitor_vs_blog_post_agent,
+            agent,
             prompt,
             deps=context,
             function_name="generate_vs_blog_post",
@@ -2000,8 +1994,6 @@ class Feedback(BaseModel):
             from django.conf import settings
             from django.core.mail import send_mail
 
-            from core.utils import track_email_sent
-
             subject = "New Feedback Submitted"
             message = f"""
                 New feedback was submitted:
@@ -2015,10 +2007,12 @@ class Feedback(BaseModel):
             send_mail(subject, message, from_email, recipient_list, fail_silently=True)
 
             for recipient_email in recipient_list:
-                track_email_sent(
+                async_task(
+                    "core.tasks.track_email_sent",
                     email_address=recipient_email,
                     email_type=EmailType.FEEDBACK_NOTIFICATION,
                     profile=self.profile,
+                    group="Track Email Sent",
                 )
 
 

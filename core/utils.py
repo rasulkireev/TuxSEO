@@ -1,18 +1,14 @@
-import re
+import random
+import string
 from urllib.request import urlopen
 
-import posthog
-import replicate
 import requests
 from django.conf import settings
 from django.core.files.base import ContentFile
 from django.forms.utils import ErrorList
-from pydantic_ai import Agent
+from pydantic_ai import capture_run_messages
 
-from core.choices import EmailType, KeywordDataSource, OGImageStyle, get_default_ai_model
-from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
-from core.model_utils import run_agent_synchronously
-from core.models import EmailSent, GeneratedBlogPost, Keyword, Profile, Project, ProjectKeyword
+from core.choices import OGImageStyle
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -69,223 +65,6 @@ def replace_placeholders(data, blog_post):
         return data
 
 
-def get_or_create_project(profile_id, url, source=None):
-    profile = Profile.objects.get(id=profile_id)
-    project, created = Project.objects.get_or_create(profile=profile, url=url)
-
-    project_metadata = {
-        "source": source,
-        "profile_id": profile_id,
-        "profile_email": profile.user.email,
-        "project_id": project.id,
-        "project_name": project.name,
-        "project_url": url,
-    }
-
-    if created:
-        if settings.POSTHOG_API_KEY:
-            posthog.capture(
-                profile.user.email,
-                event="project_created",
-                properties=project_metadata,
-            )
-        logger.info("[Get or Create Project] Project created", **project_metadata)
-    else:
-        logger.info("[Get or Create Project] Got existing project", **project_metadata)
-
-    return project
-
-
-def save_keyword(keyword_text: str, project: Project):
-    """Helper function to save a related keyword with metrics and project association."""
-    keyword_obj, created = Keyword.objects.get_or_create(
-        keyword_text=keyword_text,
-        country="us",
-        data_source=KeywordDataSource.GOOGLE_KEYWORD_PLANNER,
-    )
-
-    # Fetch metrics if newly created
-    if created:
-        metrics_fetched = keyword_obj.fetch_and_update_metrics()
-        if not metrics_fetched:
-            logger.warning(
-                "[Save Keyword] Failed to fetch metrics for keyword",
-                keyword_id=keyword_obj.id,
-                keyword_text=keyword_text,
-            )
-
-    # Associate with project
-    ProjectKeyword.objects.get_or_create(project=project, keyword=keyword_obj)
-
-
-def blog_post_has_placeholders(blog_post: GeneratedBlogPost) -> bool:
-    content = blog_post.content or ""
-    content_lower = content.lower()
-
-    for pattern in PLACEHOLDER_PATTERNS:
-        if pattern in content_lower:
-            logger.warning(
-                "[Blog Post Has Placeholders] Placeholder found",
-                pattern=pattern,
-                blog_post_id=blog_post.id,
-            )
-            return True
-
-    for pattern in PLACEHOLDER_BRACKET_PATTERNS:
-        matches = re.findall(pattern, content_lower)
-        if matches:
-            logger.warning(
-                "[Blog Post Has Placeholders] Bracket Placeholder found",
-                pattern=pattern,
-                blog_post_id=blog_post.id,
-            )
-            return True
-
-    logger.info(
-        "[Blog Post Has Placeholders] No placeholders found",
-        blog_post_id=blog_post.id,
-    )
-
-    return False
-
-
-def get_project_keywords_dict(project: Project) -> dict:
-    """
-    Build a dictionary of project keywords for quick lookup.
-
-    Returns a dict mapping lowercase keyword text to keyword metadata:
-    {
-        "keyword_text": {
-            "keyword": Keyword object,
-            "in_use": bool,
-            "project_keyword_id": int
-        }
-    }
-    """
-    project_keywords = {}
-    for project_keyword in project.project_keywords.select_related("keyword").all():
-        project_keywords[project_keyword.keyword.keyword_text.lower()] = {
-            "keyword": project_keyword.keyword,
-            "in_use": project_keyword.use,
-            "project_keyword_id": project_keyword.id,
-        }
-    return project_keywords
-
-
-def blog_post_has_valid_ending(blog_post: GeneratedBlogPost) -> bool:
-    content = blog_post.content
-    content = content.strip()
-
-    agent = Agent(
-        get_default_ai_model(),
-        output_type=bool,
-        system_prompt="""
-        You are an expert content editor analyzing blog post endings. Your task is to determine
-        whether the provided text represents a complete, proper conclusion to a blog post.
-
-        A valid blog post ending should:
-        - Complete the final thought or sentence
-        - Provide closure to the topic being discussed
-        - Feel like a natural conclusion (not abruptly cut off)
-        - May include calls-to-action, summaries, or closing remarks
-
-        An invalid ending would be:
-        - Cut off mid-sentence
-        - Ending abruptly without proper conclusion
-        - Incomplete thoughts or paragraphs
-        - Missing expected closing elements for the content type
-
-        Analyze the text carefully and provide your assessment. Return True if the ending is valid, False if not.
-        """,  # noqa: E501
-        retries=2,
-        model_settings={"temperature": 0.1},  # Lower temperature for more consistent analysis
-    )
-
-    try:
-        result = run_agent_synchronously(
-            agent,
-            f"Please analyze this blog post and determine if it has a complete ending:\n\n{content}",  # noqa: E501
-            function_name="blog_post_has_valid_ending",
-        )
-
-        ending_is_valid = result.output
-
-        if ending_is_valid:
-            logger.info(
-                "[Blog Post Has Valid Ending] Valid ending",
-                result=ending_is_valid,
-                blog_post_id=blog_post.id,
-            )
-        else:
-            logger.warning(
-                "[Blog Post Has Valid Ending] Invalid ending",
-                result=ending_is_valid,
-                blog_post_id=blog_post.id,
-            )
-
-        return ending_is_valid
-
-    except Exception as e:
-        logger.error(
-            "[Blog Post Has Valid Ending] AI analysis failed",
-            error=str(e),
-            exc_info=True,
-            content_length=len(content),
-        )
-        return False
-
-
-def blog_post_starts_with_header(blog_post: GeneratedBlogPost) -> bool:
-    content = blog_post.content or ""
-    content = content.strip()
-
-    if not content:
-        return False
-
-    header_or_asterisk_pattern = r"^(#{1,6}\s+|\*)"
-    starts_with_header_or_asterisk = bool(re.match(header_or_asterisk_pattern, content))
-
-    if starts_with_header_or_asterisk:
-        logger.warning(
-            "[Blog Post Starts With Header] Content starts with header or asterisk",
-            blog_post_id=blog_post.id,
-        )
-    else:
-        logger.info(
-            "[Blog Post Starts With Header] Content starts with regular text",
-            blog_post_id=blog_post.id,
-        )
-
-    return starts_with_header_or_asterisk
-
-
-def track_email_sent(email_address: str, email_type: EmailType, profile: Profile = None):
-    """
-    Track sent emails by creating EmailSent records.
-    """
-    try:
-        email_sent = EmailSent.objects.create(
-            email_address=email_address, email_type=email_type, profile=profile
-        )
-        logger.info(
-            "[Track Email Sent] Email tracked successfully",
-            email_address=email_address,
-            email_type=email_type,
-            profile_id=profile.id if profile else None,
-            email_sent_id=email_sent.id,
-        )
-        return email_sent
-    except Exception as e:
-        logger.error(
-            "[Track Email Sent] Failed to track email",
-            email_address=email_address,
-            email_type=email_type,
-            error=str(e),
-            exc_info=True,
-        )
-        return None
-
-
 def get_og_image_prompt(style: str, category: str) -> str:
     """
     Generate a style-specific prompt for OG image generation.
@@ -314,110 +93,6 @@ def get_og_image_prompt(style: str, category: str) -> str:
         style,
         f"Abstract modern geometric background for a social media post about {category}. Clean minimalist design with vibrant gradients, smooth shapes, professional aesthetic. {base_format}",  # noqa: E501
     )
-
-
-def generate_og_image(
-    generated_post: GeneratedBlogPost,
-    replicate_api_token: str,
-) -> tuple[bool, str]:
-    """
-    Generate an Open Graph image for a blog post using Replicate flux-schnell model.
-
-    Args:
-        generated_post: The GeneratedBlogPost instance to generate an image for
-        replicate_api_token: Replicate API token for authentication
-
-    Returns:
-        A tuple of (success: bool, message: str)
-    """
-    if generated_post.image:
-        logger.info(
-            "[GenerateOGImage] Image already exists for blog post",
-            blog_post_id=generated_post.id,
-            project_id=generated_post.project_id,
-        )
-        return True, f"Image already exists for blog post {generated_post.id}"
-
-    try:
-        blog_post_category = (
-            generated_post.title.category if generated_post.title.category else "technology"
-        )
-
-        project_og_style = generated_post.project.og_image_style or OGImageStyle.MODERN_GRADIENT
-        prompt = get_og_image_prompt(project_og_style, blog_post_category)
-
-        logger.info(
-            "[GenerateOGImage] Starting image generation",
-            blog_post_id=generated_post.id,
-            project_id=generated_post.project_id,
-            category=blog_post_category,
-            og_style=project_og_style,
-            prompt=prompt,
-        )
-
-        replicate_client = replicate.Client(api_token=replicate_api_token)
-
-        output = replicate_client.run(
-            "black-forest-labs/flux-schnell",
-            input={
-                "prompt": prompt,
-                "aspect_ratio": "16:9",
-                "output_format": "png",
-                "output_quality": 90,
-            },
-        )
-
-        if not output:
-            logger.error(
-                "[GenerateOGImage] No output from Replicate",
-                blog_post_id=generated_post.id,
-                project_id=generated_post.project_id,
-            )
-            return False, f"Failed to generate image for blog post {generated_post.id}"
-
-        file_output = output[0] if isinstance(output, list) else output
-        image_url = str(file_output)
-
-        logger.info(
-            "[GenerateOGImage] Image generated successfully",
-            blog_post_id=generated_post.id,
-            project_id=generated_post.project_id,
-            image_url=image_url,
-        )
-
-        image_response = urlopen(image_url)
-        image_content = ContentFile(image_response.read())
-
-        filename = f"og-image-{generated_post.id}.png"
-        generated_post.image.save(filename, image_content, save=True)
-
-        logger.info(
-            "[GenerateOGImage] Image saved to blog post",
-            blog_post_id=generated_post.id,
-            project_id=generated_post.project_id,
-            saved_url=generated_post.image.url,
-        )
-
-        return True, f"Successfully generated and saved OG image for blog post {generated_post.id}"
-
-    except replicate.exceptions.ReplicateError as replicate_error:
-        logger.error(
-            "[GenerateOGImage] Replicate API error",
-            error=str(replicate_error),
-            exc_info=True,
-            blog_post_id=generated_post.id,
-            project_id=generated_post.project_id,
-        )
-        return False, f"Replicate API error: {str(replicate_error)}"
-    except Exception as error:
-        logger.error(
-            "[GenerateOGImage] Unexpected error during image generation",
-            error=str(error),
-            exc_info=True,
-            blog_post_id=generated_post.id,
-            project_id=generated_post.project_id,
-        )
-        return False, f"Unexpected error: {str(error)}"
 
 
 def download_image_from_url(
@@ -509,3 +184,127 @@ def get_jina_embedding(text: str) -> list[float] | None:
             exc_info=True,
         )
         return None
+
+
+def generate_random_key():
+    characters = string.ascii_letters + string.digits
+    return "".join(random.choice(characters) for _ in range(10))
+
+
+def run_agent_synchronously(agent, input_string, deps=None, function_name="", model_name=""):
+    """
+    Run a PydanticAI agent synchronously.
+
+    Args:
+        agent: The PydanticAI agent to run
+        input_string: The input string to pass to the agent
+        deps: Optional dependencies to pass to the agent
+
+    Returns:
+        The result of the agent run
+
+    Raises:
+        RuntimeError: If the agent execution fails
+    """
+    import asyncio
+
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    with capture_run_messages() as messages:
+        try:
+            logger.info(
+                "[Run Agent Synchronously] Running agent",
+                messages=messages,
+                input_string=input_string,
+                deps=deps,
+                function_name=function_name,
+                model_name=model_name,
+            )
+            if deps is not None:
+                result = loop.run_until_complete(agent.run(input_string, deps=deps))
+            else:
+                result = loop.run_until_complete(agent.run(input_string))
+
+            logger.info(
+                "[Run Agent Synchronously] Agent run successfully",
+                messages=messages,
+                input_string=input_string,
+                deps=deps,
+                result=result,
+                function_name=function_name,
+                model_name=model_name,
+            )
+            return result
+        except Exception as e:
+            logger.error(
+                "[Run Agent Synchronously] Failed execution",
+                messages=messages,
+                exc_info=True,
+                error=str(e),
+                function_name=function_name,
+                model_name=model_name,
+            )
+            raise
+
+
+def get_html_content(url):
+    html_content = ""
+    try:
+        html_response = requests.get(url, timeout=30)
+        html_response.raise_for_status()
+        html_content = html_response.text
+    except requests.exceptions.RequestException as e:
+        logger.warning(
+            "[Get HTML Content] Could not fetch HTML content",
+            exc_info=True,
+            error=str(e),
+            url=url,
+        )
+    except Exception as e:
+        logger.warning(
+            "[Get HTML Content] Unexpected error",
+            exc_info=True,
+            error=str(e),
+            url=url,
+        )
+
+    return html_content
+
+
+def get_markdown_content(url):
+    jina_url = f"https://r.jina.ai/{url}"
+    headers = {
+        "Accept": "application/json",
+        "Authorization": f"Bearer {settings.JINA_READER_API_KEY}",
+    }
+
+    try:
+        response = requests.get(jina_url, headers=headers, timeout=30)
+        response.raise_for_status()
+
+        data = response.json().get("data", {})
+
+        logger.info(
+            "[Get Markdown Content] Successfully fetched content from Jina Reader",
+            data=data,
+            url=url,
+        )
+
+        return (
+            data.get("title", "")[:500],
+            data.get("description", ""),
+            data.get("content", ""),
+        )
+
+    except requests.exceptions.RequestException as e:
+        logger.error(
+            "[Get Markdown Content] Error fetching content from Jina Reader",
+            error=str(e),
+            exc_info=True,
+            url=url,
+        )
+        return ("", "", "")
