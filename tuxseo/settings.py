@@ -485,7 +485,6 @@ if ENVIRONMENT == "prod":
 if SENTRY_DSN and ENVIRONMENT == "prod":
     Q_CLUSTER["error_reporter"]["sentry"] = {"dsn": SENTRY_DSN}
     sentry_sdk.init(
-        debug=DEBUG,
         dsn=SENTRY_DSN,
         environment=ENVIRONMENT,
         send_default_pii=False,

@@ -1,4 +1,3 @@
-import re
 from decimal import Decimal, InvalidOperation
 from urllib.request import urlopen
 
@@ -23,16 +22,17 @@ from core.agents import (
     create_extract_links_agent,
     create_find_competitors_agent,
     create_generate_blog_post_content_agent,
+    create_insert_internal_links_agent,
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
-    create_validate_blog_post_ending_agent,
 )
 from core.agents.schemas import (
     BlogPostGenerationContext,
     CompetitorAnalysisContext,
     CompetitorDetails,
     GeneratedBlogPostSchema,
+    InsertInternalLinksContext,
     ProjectDetails,
     ProjectPageContext,
     TitleSuggestion,
@@ -54,7 +54,6 @@ from core.choices import (
     ProjectStyle,
     ProjectType,
 )
-from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.utils import (
     generate_random_key,
     get_jina_embedding,
@@ -747,58 +746,96 @@ class BlogPostTitleSuggestion(BaseModel):
         )
 
     def generate_content(self, content_type=ContentType.SHARING, model=None):
-        agent = create_generate_blog_post_content_agent(content_type, model)
+        """Generate blog post content with automatic retry on validation failure."""
+        MAX_ATTEMPTS = 2
 
-        # Get all analyzed project pages (from AI and sitemap sources)
-        project_pages = [
-            ProjectPageContext(
-                url=page.url,
-                title=page.title,
-                description=page.description,
-                summary=page.summary,
-                always_use=page.always_use,
-            )
-            for page in self.project.project_pages.filter(date_analyzed__isnull=False)
-        ]
-
-        project_keywords = [
-            pk.keyword.keyword_text
-            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
-        ]
-
-        deps = BlogPostGenerationContext(
-            project_details=self.project.project_details,
-            title_suggestion=self.title_suggestion_schema,
-            project_pages=project_pages,
-            content_type=content_type,
-            project_keywords=project_keywords,
-        )
-
-        result = run_agent_synchronously(
-            agent,
-            "Generate an article based on the project details and title suggestions.",
-            deps=deps,
-            function_name="generate_content",
-            model_name="BlogPostTitleSuggestion",
-        )
-
-        blog_post = GeneratedBlogPost.objects.create_and_validate(
-            project=self.project,
-            title=self,
-            description=result.output.description,
-            slug=result.output.slug,
-            tags=result.output.tags,
-            content=result.output.content,
-        )
-
-        if self.project.enable_automatic_og_image_generation:
-            async_task(
-                "core.tasks.generate_og_image_for_blog_post",
-                blog_post.id,
-                group="Generate OG Image",
+        for attempt in range(1, MAX_ATTEMPTS + 1):
+            logger.info(
+                "[Generate Content] Attempt %s/%s",
+                attempt,
+                MAX_ATTEMPTS,
+                project_id=self.project.id,
+                title=self.title,
             )
 
-        return blog_post
+            agent = create_generate_blog_post_content_agent(content_type, model)
+
+            project_keywords = [
+                pk.keyword.keyword_text
+                for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
+            ]
+
+            deps = BlogPostGenerationContext(
+                project_details=self.project.project_details,
+                title_suggestion=self.title_suggestion_schema,
+                content_type=content_type,
+                project_keywords=project_keywords,
+            )
+
+            result = run_agent_synchronously(
+                agent,
+                "Generate an article based on the project details and title suggestions.",
+                deps=deps,
+                function_name="generate_content",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            # Create blog post (or recreate on retry)
+            if attempt == 1:
+                blog_post = GeneratedBlogPost.objects.create_and_validate(
+                    project=self.project,
+                    title=self,
+                    description=result.output.description,
+                    slug=result.output.slug,
+                    tags=result.output.tags,
+                    content=result.output.content,
+                )
+            else:
+                # On retry, update existing blog post
+                blog_post.description = result.output.description
+                blog_post.slug = result.output.slug
+                blog_post.tags = result.output.tags
+                blog_post.content = result.output.content
+                blog_post.save(update_fields=["description", "slug", "tags", "content"])
+                blog_post.run_validation()
+
+            # Check if valid
+            if blog_post.is_content_valid:
+                logger.info(
+                    "[Generate Content] Validation passed, inserting links",
+                    blog_post_id=blog_post.id,
+                    attempt=attempt,
+                )
+                blog_post.insert_internal_links(model=model)
+
+                if self.project.enable_automatic_og_image_generation:
+                    async_task(
+                        "core.tasks.generate_og_image_for_blog_post",
+                        blog_post.id,
+                        group="Generate OG Image",
+                    )
+
+                return blog_post
+            else:
+                logger.warning(
+                    "[Generate Content] Validation failed",
+                    blog_post_id=blog_post.id,
+                    attempt=attempt,
+                    issues=blog_post.validation_issues,
+                )
+
+                if attempt < MAX_ATTEMPTS:
+                    logger.info(
+                        "[Generate Content] Retrying generation",
+                        blog_post_id=blog_post.id,
+                    )
+                    continue
+                else:
+                    logger.error(
+                        "[Generate Content] Max attempts reached, returning invalid post",
+                        blog_post_id=blog_post.id,
+                    )
+                    return blog_post
 
 
 class AutoSubmissionSetting(BaseModel):
@@ -865,10 +902,9 @@ class GeneratedBlogPost(BaseModel):
     date_posted = models.DateTimeField(null=True, blank=True)
 
     # Validation Issues - Innocent until proven guilty
-    content_too_short = models.BooleanField(default=False)
-    has_valid_ending = models.BooleanField(default=True)
-    placeholders = models.BooleanField(default=False)
-    starts_with_header = models.BooleanField(default=False)
+    is_content_valid = models.BooleanField(default=False)
+    validation_issues = models.JSONField(default=list, blank=True)
+    validation_attempts = models.IntegerField(default=0)
 
     objects = GeneratedBlogPostManager()
 
@@ -881,12 +917,7 @@ class GeneratedBlogPost(BaseModel):
 
     @property
     def blog_post_content_is_valid(self):
-        return (
-            self.content_too_short is False
-            and self.has_valid_ending is True
-            and self.placeholders is False
-            and self.starts_with_header is False
-        )
+        return self.is_content_valid
 
     @property
     def generated_blog_post_schema(self):
@@ -897,112 +928,10 @@ class GeneratedBlogPost(BaseModel):
             content=self.content,
         )
 
-    @property
-    def has_placeholders(self) -> bool:
-        content = self.content or ""
-        content_lower = content.lower()
-
-        for pattern in PLACEHOLDER_PATTERNS:
-            if pattern in content_lower:
-                logger.warning(
-                    "[Blog Post Has Placeholders] Placeholder found",
-                    pattern=pattern,
-                    blog_post_id=self.id,
-                )
-                return True
-
-        for pattern in PLACEHOLDER_BRACKET_PATTERNS:
-            matches = re.findall(pattern, content_lower)
-            if matches:
-                logger.warning(
-                    "[Blog Post Has Placeholders] Bracket Placeholder found",
-                    pattern=pattern,
-                    blog_post_id=self.id,
-                )
-                return True
-
-        logger.info(
-            "[Blog Post Has Placeholders] No placeholders found",
-            blog_post_id=self.id,
-        )
-
-        return False
-
-    @property
-    def content_starts_with_header(self) -> bool:
-        content = self.content or ""
-        content = content.strip()
-
-        if not content:
-            return False
-
-        header_or_asterisk_pattern = r"^(#{1,6}\s+|\*)"
-        starts_with_header_or_asterisk = bool(re.match(header_or_asterisk_pattern, content))
-
-        if starts_with_header_or_asterisk:
-            logger.warning(
-                "[Blog Post Starts With Header] Content starts with header or asterisk",
-                blog_post_id=self.id,
-            )
-        else:
-            logger.info(
-                "[Blog Post Starts With Header] Content starts with regular text",
-                blog_post_id=self.id,
-            )
-
-        return starts_with_header_or_asterisk
-
-    def blog_post_has_valid_ending(self) -> bool:
-        """
-        Validate if a blog post has a complete, proper ending using AI analysis.
-
-        Args:
-            blog_post: GeneratedBlogPost instance to validate
-
-        Returns:
-            True if the ending is valid, False otherwise
-        """
-        content = self.content or ""
-        content = content.strip()
-
-        agent = create_validate_blog_post_ending_agent()
-
-        try:
-            result = run_agent_synchronously(
-                agent,
-                f"Please analyze this blog post and determine if it has a complete ending:\n\n{content}",  # noqa: E501
-                function_name="blog_post_has_valid_ending",
-            )
-
-            ending_is_valid = result.output
-
-            if ending_is_valid:
-                logger.info(
-                    "[Blog Post Has Valid Ending] Valid ending",
-                    result=ending_is_valid,
-                    blog_post_id=self.id,
-                )
-            else:
-                logger.warning(
-                    "[Blog Post Has Valid Ending] Invalid ending",
-                    result=ending_is_valid,
-                    blog_post_id=self.id,
-                )
-
-            return ending_is_valid
-
-        except Exception as error:
-            logger.error(
-                "[Blog Post Has Valid Ending] AI analysis failed",
-                error=str(error),
-                exc_info=True,
-                content_length=len(content),
-            )
-            return False
-
     def run_validation(self):
-        """Run validation and update fields in a single query."""
-        from core.utils import blog_post_has_valid_ending
+        """Run AI-powered validation and update fields."""
+        from core.agents.validate_blog_post_agent import create_validate_blog_post_agent
+        from core.utils import run_agent_synchronously
 
         base_logger_info = {
             "blog_post_id": self.id,
@@ -1012,39 +941,56 @@ class GeneratedBlogPost(BaseModel):
             "profile_email": self.project.profile.user.email,
         }
 
-        logger.info("[Validation] Running validation", **base_logger_info)
+        logger.info("[Validation] Running AI validation", **base_logger_info)
 
         if not self.content:
-            self.content_too_short = True
-            self.has_valid_ending = False
-            self.placeholders = False
-            self.starts_with_header = False
+            self.is_content_valid = False
+            self.validation_issues = ["No content provided"]
+            self.save(update_fields=["is_content_valid", "validation_issues"])
+            logger.warning("[Validation] No content to validate", **base_logger_info)
+            return
 
-        else:
-            content = self.content.strip()
-            self.content_too_short = len(content) < 3000
-            self.has_valid_ending = blog_post_has_valid_ending(self)
-            self.placeholders = self.has_placeholders
-            self.starts_with_header = self.content_starts_with_header
+        agent = create_validate_blog_post_agent()
 
-        self.save(
-            update_fields=[
-                "content_too_short",
-                "has_valid_ending",
-                "placeholders",
-                "starts_with_header",
-            ]
-        )
+        try:
+            result = run_agent_synchronously(
+                agent,
+                f"Please validate this blog post content:\n\n{self.content}",
+                function_name="run_validation",
+            )
 
-        logger.info(
-            "[Validation] Blog post validation complete",
-            **base_logger_info,
-            blog_post_title=self.title.title,
-            content_too_short=self.content_too_short,
-            has_valid_ending=self.has_valid_ending,
-            placeholders=self.placeholders,
-            starts_with_header=self.starts_with_header,
-        )
+            self.is_content_valid = result.output.is_valid
+            self.validation_issues = result.output.issues or []
+            self.validation_attempts += 1
+
+            self.save(
+                update_fields=["is_content_valid", "validation_issues", "validation_attempts"]
+            )
+
+            if self.is_content_valid:
+                logger.info(
+                    "[Validation] Content validated successfully",
+                    **base_logger_info,
+                    attempts=self.validation_attempts,
+                )
+            else:
+                logger.warning(
+                    "[Validation] Content validation failed",
+                    **base_logger_info,
+                    issues=self.validation_issues,
+                    attempts=self.validation_attempts,
+                )
+
+        except Exception as error:
+            logger.error(
+                "[Validation] Validation failed with error",
+                error=str(error),
+                exc_info=True,
+                **base_logger_info,
+            )
+            self.is_content_valid = False
+            self.validation_issues = [f"Validation error: {str(error)}"]
+            self.save(update_fields=["is_content_valid", "validation_issues"])
 
     def _build_fix_context(self):
         """Build full context for content editor agent to ensure accurate regeneration."""
@@ -1072,32 +1018,6 @@ class GeneratedBlogPost(BaseModel):
             content_type=self.title.content_type,
             project_keywords=project_keywords,
         )
-
-    def fix_header_start(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post starts with a header (like # or ##) instead of regular text.
-
-            Please remove it such that the content starts with regular text, usually an introduction.
-            """,  # noqa: E501
-            deps=context,
-            function_name="fix_header_start",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-        return True
 
     def submit_blog_post_to_endpoint(self):
         from core.utils import replace_placeholders
@@ -1150,89 +1070,158 @@ class GeneratedBlogPost(BaseModel):
             )
             return False
 
-    def fix_content_length(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post is too short.
-            I think something went wrong during generation.
-            Please regenerate.
-          """,
-            deps=context,
-            function_name="fix_content_length",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_valid_ending(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post does not end on an ending that makes sense.
-            Most likely generation failed at some point and returned half completed content.
-            Please regenerate the blog post.
-            """,
-            deps=context,
-            function_name="fix_valid_ending",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_placeholders(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            The content contains placeholders.
-            Please regenerate the blog post without placeholders.
-            """,
-            deps=context,
-            function_name="fix_placeholders",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
     def fix_generated_blog_post(self):
-        if self.content_too_short is True:
-            self.fix_content_length()
+        """Attempt to fix validation issues using AI editor."""
+        self.refresh_from_db()
+        self.title.refresh_from_db()
 
-        if self.has_valid_ending is False:
-            self.fix_valid_ending()
+        if self.is_content_valid:
+            logger.info(
+                "[Fix Generated Blog Post] Content already valid",
+                blog_post_id=self.id,
+            )
+            return
 
-        if self.placeholders is True:
-            self.fix_placeholders()
+        context = self._build_fix_context()
+        agent = create_content_editor_agent()
 
-        if self.starts_with_header is True:
-            self.fix_header_start()
+        issues_text = "\n".join(f"- {issue}" for issue in self.validation_issues)
+
+        result = run_agent_synchronously(
+            agent,
+            f"""
+The blog post has the following validation issues:
+{issues_text}
+
+Please fix these issues and return the corrected content.
+            """,
+            deps=context,
+            function_name="fix_generated_blog_post",
+            model_name="GeneratedBlogPost",
+        )
+
+        self.content = result.output
+        self.save(update_fields=["content"])
+        self.run_validation()
+
+        # Insert links if now valid
+        if self.is_content_valid:
+            self.insert_internal_links()
+            logger.info(
+                "[Fix Generated Blog Post] Content fixed and links inserted",
+                blog_post_id=self.id,
+            )
+
+    def insert_internal_links(self, model=None):
+        """
+        Insert internal links into the blog post content.
+
+        This method uses an AI agent to intelligently insert links to project pages
+        within the blog post content where they are contextually relevant.
+
+        Pages marked with always_use=True will be prioritized for linking.
+        Other pages will be included based on semantic similarity to the content.
+
+        Args:
+            model: Optional AI model to use. Defaults to the default AI model.
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        from core.utils import get_jina_embedding
+
+        logger.info(
+            "[Insert Internal Links] Starting internal link insertion",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+        )
+
+        # Get all pages marked as must-use
+        must_use_pages = self.project.project_pages.filter(
+            date_analyzed__isnull=False, always_use=True
+        )
+
+        # Get all other analyzed pages with embeddings
+        optional_pages_queryset = self.project.project_pages.filter(
+            date_analyzed__isnull=False, always_use=False, embedding__isnull=False
+        )
+
+        # Generate embedding for the blog post content to find similar pages
+        content_embedding = get_jina_embedding(self.content)
+
+        if content_embedding and optional_pages_queryset.exists():
+            # Find semantically similar pages using vector similarity
+            # Order by cosine distance (lower is more similar) and limit to top 5
+            from pgvector.django import CosineDistance
+
+            similar_pages = optional_pages_queryset.order_by(
+                CosineDistance("embedding", content_embedding)
+            )[:5]
+        else:
+            similar_pages = []
+
+        # Build context for the agent
+        must_use_page_contexts = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+                always_use=page.always_use,
+            )
+            for page in must_use_pages
+        ]
+
+        optional_page_contexts = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+                always_use=page.always_use,
+            )
+            for page in similar_pages
+        ]
+
+        deps = InsertInternalLinksContext(
+            content=self.content,
+            must_use_pages=must_use_page_contexts,
+            optional_pages=optional_page_contexts,
+        )
+
+        agent = create_insert_internal_links_agent(model)
+
+        try:
+            result = run_agent_synchronously(
+                agent,
+                "Please insert internal links into the blog post content where contextually relevant.",  # noqa: E501
+                deps=deps,
+                function_name="insert_internal_links",
+                model_name="GeneratedBlogPost",
+            )
+
+            self.content = result.output.content
+            self.save(update_fields=["content"])
+
+            logger.info(
+                "[Insert Internal Links] Successfully inserted internal links",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+                must_use_pages_count=len(must_use_page_contexts),
+                optional_pages_count=len(optional_page_contexts),
+            )
+
+            return True
+
+        except Exception as error:
+            logger.error(
+                "[Insert Internal Links] Failed to insert internal links",
+                error=str(error),
+                exc_info=True,
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return False
 
     def generate_og_image(self) -> tuple[bool, str]:
         """
