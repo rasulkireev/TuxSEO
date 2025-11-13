@@ -1,34 +1,36 @@
 {% if referrer_banner %}
 <div
-  class="fixed top-0 left-0 right-0 z-50 isolate flex items-center justify-center gap-x-6 overflow-hidden {{ referrer_banner.background_color }} px-6 py-4 shadow-lg"
+  class="fixed top-0 left-0 right-0 z-50 isolate flex items-center justify-center gap-x-6 overflow-hidden {{ referrer_banner.background_color }} px-3 py-3 sm:px-6 sm:py-4 shadow-lg"
 >
-  <div class="flex flex-wrap gap-y-2 gap-x-4 justify-center items-center text-center sm:text-left">
-    <div class="flex gap-x-3 items-center">
-      <svg class="w-6 h-6 {{ referrer_banner.text_color }} flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <div class="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-y-2 sm:gap-x-4 justify-center items-center text-center sm:text-left w-full max-w-7xl">
+    <div class="flex gap-x-2 sm:gap-x-3 items-start sm:items-center w-full sm:w-auto">
+      <svg class="w-5 h-5 sm:w-6 sm:h-6 {{ referrer_banner.text_color }} flex-shrink-0 mt-0.5 sm:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
       </svg>
-      <p class="text-base leading-6 {{ referrer_banner.text_color }} font-medium">
-        <strong class="font-bold">Welcome {{ referrer_banner.referrer_printable_name }} users!</strong>
-        {% if referrer_banner.discount_amount > 0 %}
-          <span class="hidden sm:inline">
-            <svg viewBox="0 0 2 2" aria-hidden="true" class="inline mx-2 fill-current size-0.5"><circle r="1" cx="1" cy="1" /></svg>
-            Get <strong class="font-bold">{{ referrer_banner.discount_percentage }}% off with</strong>
-            {% if referrer_banner.coupon_code %}
-              <strong class="px-2 py-1 font-bold rounded bg-white/20">{{ referrer_banner.coupon_code }}</strong>
-            {% endif %}
-            {% if referrer_banner.expiry_date %}
-              until {{ referrer_banner.expiry_date|date:"M j, Y" }}
-            {% endif %}
-          </span>
-        {% else %}
-          <span class="hidden sm:inline">
-            <svg viewBox="0 0 2 2" aria-hidden="true" class="inline mx-2 fill-current size-0.5"><circle r="1" cx="1" cy="1" /></svg>
-            Special offer until {{ referrer_banner.expiry_date|date:"M j, Y" }}
-          </span>
-        {% endif %}
-      </p>
+      <div class="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-0 flex-1">
+        <p class="text-sm sm:text-base leading-5 sm:leading-6 {{ referrer_banner.text_color }} font-medium">
+          <strong class="font-bold">Welcome {{ referrer_banner.referrer_printable_name }} users!</strong>
+          {% if referrer_banner.discount_amount > 0 %}
+            <span class="block sm:inline mt-1 sm:mt-0">
+              <svg viewBox="0 0 2 2" aria-hidden="true" class="hidden sm:inline mx-2 fill-current size-0.5"><circle r="1" cx="1" cy="1" /></svg>
+              <span class="text-xs sm:text-base">Get <strong class="font-bold">{{ referrer_banner.discount_percentage }}% off</strong></span>
+              {% if referrer_banner.coupon_code %}
+                <span class="text-xs sm:text-base"> with <strong class="inline-block px-1.5 py-0.5 sm:px-2 sm:py-1 font-bold rounded bg-white/20">{{ referrer_banner.coupon_code }}</strong></span>
+              {% endif %}
+              {% if referrer_banner.expiry_date %}
+                <span class="text-xs sm:text-sm"> until {{ referrer_banner.expiry_date|date:"M j, Y" }}</span>
+              {% endif %}
+            </span>
+          {% else %}
+            <span class="block sm:inline mt-1 sm:mt-0">
+              <svg viewBox="0 0 2 2" aria-hidden="true" class="hidden sm:inline mx-2 fill-current size-0.5"><circle r="1" cx="1" cy="1" /></svg>
+              <span class="text-xs sm:text-base">Special offer until {{ referrer_banner.expiry_date|date:"M j, Y" }}</span>
+            </span>
+          {% endif %}
+        </p>
+      </div>
     </div>
-    <a href="{% url 'account_signup' %}" class="flex-none px-5 py-2.5 text-sm font-bold text-red-600 bg-white rounded-full shadow-sm transition-colors hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white">
+    <a href="{% url 'account_signup' %}" class="flex-none px-4 py-2 sm:px-5 sm:py-2.5 text-xs sm:text-sm font-bold text-red-600 bg-white rounded-full shadow-sm transition-colors hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white whitespace-nowrap">
       Get Started <span aria-hidden="true">&rarr;</span>
     </a>
   </div>
