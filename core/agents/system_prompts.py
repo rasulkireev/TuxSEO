@@ -9,9 +9,7 @@ def add_todays_date() -> str:
 
 
 def valid_markdown_format() -> str:
-    return """
-        IMPORTANT: Generate the content in valid markdown format.
-    """
+    return "Generate the content in valid markdown format."
 
 
 def post_structure() -> str:
@@ -23,12 +21,14 @@ def post_structure() -> str:
 
 
 def markdown_lists() -> str:
-    return "IMPORTANT: Add an empty line before the first item in the list."
+    return "Add an empty line before the first item in the markdown list."
 
 
 def filler_content() -> str:
     return """
         - Do not add content that needs to be filled in later.
+          - No link placeholders
+          - No image placeholders
         - No placeholders either. This means no:
           - Image Suggestion: [Image]
           - Link Suggestion: [Link]
@@ -122,7 +122,7 @@ def add_title_details(ctx: RunContext[BlogPostGenerationContext]) -> str:
 
 def add_language_specification(ctx: RunContext[BlogPostGenerationContext]) -> str:
     return f"""
-        IMPORTANT: Generate the content in {ctx.deps.project_details.language} language.
+        Generate the content in {ctx.deps.project_details.language} language.
         Make sure the content is grammatically correct and culturally appropriate for
         {ctx.deps.project_details.language}-speaking audiences.
     """
@@ -151,3 +151,23 @@ def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
         f"Description: {ctx.deps.description}"
         f"Content: {ctx.deps.markdown_content}"
     )
+
+
+def add_validation_feedback(ctx: RunContext[BlogPostGenerationContext]) -> str:
+    """
+    Add previous validation issues as feedback to help avoid making the same mistakes.
+
+    This helps the agent learn from previous validation failures and improve content quality.
+    """
+    if hasattr(ctx.deps, "previous_validation_issues") and ctx.deps.previous_validation_issues:
+        issues_text = "\n        - ".join(ctx.deps.previous_validation_issues)
+        return f"""
+            IMPORTANT - Previous Validation Feedback:
+            The previous version of this content failed validation with the following issues.
+            Please avoid making these same mistakes:
+
+            - {issues_text}
+
+            Make sure to address all of these issues in the content you generate.
+        """
+    return ""

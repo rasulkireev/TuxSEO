@@ -1,5 +1,6 @@
 from pydantic_ai import Agent
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import BlogPostGenerationContext, GeneratedBlogPostSchema
 from core.agents.system_prompts import (
     add_language_specification,
@@ -7,12 +8,13 @@ from core.agents.system_prompts import (
     add_target_keywords,
     add_title_details,
     add_todays_date,
+    add_validation_feedback,
     filler_content,
     markdown_lists,
     post_structure,
     valid_markdown_format,
 )
-from core.choices import ContentType, get_default_ai_model
+from core.choices import ContentType
 from core.prompts import GENERATE_CONTENT_SYSTEM_PROMPTS
 
 
@@ -38,7 +40,7 @@ def create_generate_blog_post_content_agent(
         deps_type=BlogPostGenerationContext,
         system_prompt=GENERATE_CONTENT_SYSTEM_PROMPTS[content_type],
         retries=2,
-        model_settings={"max_tokens": 65500, "temperature": 0.6},
+        model_settings={"max_tokens": 65500, "temperature": 0.3, "thinking_budget": 0},
     )
 
     agent.system_prompt(add_project_details)
@@ -46,6 +48,7 @@ def create_generate_blog_post_content_agent(
     agent.system_prompt(add_todays_date)
     agent.system_prompt(add_language_specification)
     agent.system_prompt(add_target_keywords)
+    agent.system_prompt(add_validation_feedback)
     agent.system_prompt(valid_markdown_format)
     agent.system_prompt(markdown_lists)
     agent.system_prompt(post_structure)

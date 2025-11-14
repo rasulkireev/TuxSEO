@@ -1,5 +1,6 @@
 from pydantic_ai import Agent
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import BlogPostGenerationContext
 from core.agents.system_prompts import (
     add_language_specification,
@@ -8,7 +9,6 @@ from core.agents.system_prompts import (
     add_target_keywords,
     add_title_details,
 )
-from core.choices import get_default_ai_model
 
 
 def create_content_editor_agent(model=None):
@@ -31,13 +31,13 @@ def create_content_editor_agent(model=None):
         Your task is to edit the blog post content based on the requested changes.
         """,
         retries=2,
-        model_settings={"temperature": 0.3},
+        model_settings={"temperature": 0.3, "thinking_budget": 0},
     )
 
     @agent.system_prompt
     def only_return_the_edited_content() -> str:
         return """
-            IMPORTANT: Only return the edited content, no other text.
+            Only return the edited content, no other text.
         """
 
     agent.system_prompt(add_project_details)

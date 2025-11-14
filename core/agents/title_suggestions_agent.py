@@ -1,8 +1,9 @@
 from pydantic_ai import Agent, RunContext
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import TitleSuggestionContext, TitleSuggestions
 from core.agents.system_prompts import add_todays_date
-from core.choices import ContentType, get_default_ai_model
+from core.choices import ContentType
 from core.prompts import TITLE_SUGGESTION_SYSTEM_PROMPTS
 
 
@@ -14,7 +15,7 @@ def create_title_suggestions_agent(content_type=ContentType.SHARING, model=None)
         deps_type=TitleSuggestionContext,
         system_prompt=TITLE_SUGGESTION_SYSTEM_PROMPTS[content_type],
         retries=2,
-        model_settings={"temperature": 0.9},
+        model_settings={"temperature": 0.9, "thinking_budget": 0},
     )
 
     agent.system_prompt(add_todays_date)
@@ -37,13 +38,13 @@ def create_title_suggestions_agent(content_type=ContentType.SHARING, model=None)
 
     @agent.system_prompt
     def add_number_of_titles_to_generate(ctx: RunContext[TitleSuggestionContext]) -> str:
-        return f"""IMPORTANT: Generate only {ctx.deps.num_titles} titles."""
+        return f"""Generate only {ctx.deps.num_titles} titles."""
 
     @agent.system_prompt
     def add_language_specification(ctx: RunContext[TitleSuggestionContext]) -> str:
         project = ctx.deps.project_details
         return f"""
-            IMPORTANT: Generate all titles in {project.language} language.
+            Generate all titles in {project.language} language.
             Make sure the titles are grammatically correct and culturally
             appropriate for {project.language}-speaking audiences.
         """

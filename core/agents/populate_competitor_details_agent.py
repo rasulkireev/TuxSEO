@@ -1,7 +1,7 @@
 from pydantic_ai import Agent, RunContext
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import CompetitorDetails, WebPageContent
-from core.choices import get_default_ai_model
 
 
 def create_populate_competitor_details_agent(model=None):
@@ -27,6 +27,7 @@ def create_populate_competitor_details_agent(model=None):
             """
         ),
         retries=2,
+        model_settings={"temperature": 0.5, "thinking_budget": 0},
     )
 
     @agent.system_prompt

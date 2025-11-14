@@ -3,9 +3,9 @@ from pydantic_ai import Agent
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from core.agents.models import AIModel
 from core.agents.schemas import CompetitorVsPostContext
 from core.agents.system_prompts import add_project_pages, markdown_lists
-from core.choices import AIModel
 
 
 def create_competitor_vs_blog_post_agent(model=None):
@@ -64,7 +64,7 @@ def create_competitor_vs_blog_post_agent(model=None):
     @agent.system_prompt
     def output_format() -> str:
         return """
-            IMPORTANT: Return only the text. Don't surround the text with ```markdown or ```.
+            Return only the text. Don't surround the text with ```markdown or ```.
         """
 
     @agent.system_prompt

@@ -748,6 +748,7 @@ class BlogPostTitleSuggestion(BaseModel):
     def generate_content(self, content_type=ContentType.SHARING, model=None):
         """Generate blog post content with automatic retry on validation failure."""
         MAX_ATTEMPTS = 2
+        previous_validation_issues = []
 
         for attempt in range(1, MAX_ATTEMPTS + 1):
             logger.info(
@@ -770,6 +771,7 @@ class BlogPostTitleSuggestion(BaseModel):
                 title_suggestion=self.title_suggestion_schema,
                 content_type=content_type,
                 project_keywords=project_keywords,
+                previous_validation_issues=previous_validation_issues,
             )
 
             result = run_agent_synchronously(
@@ -826,9 +828,11 @@ class BlogPostTitleSuggestion(BaseModel):
 
                 if attempt < MAX_ATTEMPTS:
                     logger.info(
-                        "[Generate Content] Retrying generation",
+                        "[Generate Content] Retrying generation with validation feedback",
                         blog_post_id=blog_post.id,
+                        validation_issues=blog_post.validation_issues,
                     )
+                    previous_validation_issues = blog_post.validation_issues or []
                     continue
                 else:
                     logger.error(

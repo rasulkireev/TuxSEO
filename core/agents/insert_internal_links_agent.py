@@ -1,7 +1,7 @@
 from pydantic_ai import Agent, RunContext
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import InsertedLinksOutput, InsertInternalLinksContext
-from core.choices import get_default_ai_model
 
 
 def create_insert_internal_links_agent(model=None):
@@ -56,7 +56,7 @@ Return the complete blog post content with internal links inserted. The content 
         deps_type=InsertInternalLinksContext,
         system_prompt=system_prompt,
         retries=2,
-        model_settings={"max_tokens": 65500, "temperature": 0.7},
+        model_settings={"max_tokens": 65500, "temperature": 0.3, "thinking_budget": 0},
     )
 
     @agent.system_prompt
@@ -80,6 +80,6 @@ Return the complete blog post content with internal links inserted. The content 
 
     @agent.system_prompt
     def output() -> str:
-        return "IMPORTANT: Return only the post that I gave you, but with links."
+        return "Return only the post that I gave you, but with links."
 
     return agent

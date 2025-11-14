@@ -186,6 +186,10 @@ class BlogPostGenerationContext(BaseModel):
     title_suggestion: TitleSuggestion
     project_keywords: list[str] = []
     content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
+    previous_validation_issues: list[str] = Field(
+        default_factory=list,
+        description="Previous validation issues to avoid in the new content generation",
+    )
 
 
 class GeneratedBlogPostSchema(BaseModel):
