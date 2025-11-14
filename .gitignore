@@ -1,3 +1,4 @@
+poetry.toml
 .taskmaster/
 .logfire/
 .ruff_cache/
