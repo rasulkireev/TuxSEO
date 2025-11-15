@@ -1,8 +1,8 @@
 from django.utils import timezone
 from pydantic_ai import Agent, RunContext
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import CompetitorAnalysis, CompetitorAnalysisContext
-from core.choices import get_default_ai_model
 
 
 def create_analyze_competitor_agent(model=None):
@@ -23,7 +23,7 @@ def create_analyze_competitor_agent(model=None):
             """
             You are an expert marketer.
             Based on the competitor details and homepage content provided,
-            extract and infer the requested information. Make reasonable inferences based
+            extract and infer the requested information. Make     reasonable inferences based
             on available content, context, and industry knowledge.
             """
         ),

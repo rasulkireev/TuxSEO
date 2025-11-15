@@ -1,8 +1,8 @@
 from pydantic_ai import Agent
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import ProjectPageDetails, WebPageContent
 from core.agents.system_prompts import add_webpage_content
-from core.choices import get_default_ai_model
 
 
 def create_summarize_page_agent(model=None):
@@ -25,7 +25,7 @@ def create_summarize_page_agent(model=None):
             "information of the page. Focus on what the page is about and its main value proposition."  # noqa: E501
         ),
         retries=2,
-        model_settings={"temperature": 0.5},
+        model_settings={"temperature": 0.5, "thinking_budget": 0},
     )
     agent.system_prompt(add_webpage_content)
 

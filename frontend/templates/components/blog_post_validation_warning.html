@@ -14,15 +14,9 @@
         <div class="mt-2 text-sm text-yellow-700">
           <p class="mb-2">This blog post has some quality issues that should be addressed before posting:</p>
           <ul class="pl-5 space-y-1 list-disc">
-            {% if generated_post.content_too_short %}
-              <li>Content is too short (less than 3,000 characters). Likely that generation failed at some point.</li>
-            {% endif %}
-            {% if not generated_post.has_valid_ending %}
-              <li>Content does not have a proper ending. Likely that generation failed at some point.</li>
-            {% endif %}
-            {% if generated_post.placeholders %}
-              <li>Content contains placeholder text that needs to be replaced</li>
-            {% endif %}
+            {% for issue in generated_post.validation_issues %}
+              <li>{{ issue }}</li>
+            {% endfor %}
           </ul>
         </div>
         <div class="mt-4" data-controller="fix-blog-post" data-fix-blog-post-generated-post-id-value="{{ generated_post.id }}">

@@ -185,8 +185,11 @@ class BlogPostGenerationContext(BaseModel):
     project_details: ProjectDetails
     title_suggestion: TitleSuggestion
     project_keywords: list[str] = []
-    project_pages: list[ProjectPageContext] = []
     content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
+    previous_validation_issues: list[str] = Field(
+        default_factory=list,
+        description="Previous validation issues to avoid in the new content generation",
+    )
 
 
 class GeneratedBlogPostSchema(BaseModel):
@@ -274,4 +277,26 @@ class CompetitorVsPostContext(BaseModel):
     language: str
     project_pages: list[ProjectPageContext] = Field(
         default_factory=list, description="List of project pages available for linking"
+    )
+
+
+class InsertInternalLinksContext(BaseModel):
+    """Context for inserting internal links into blog post content."""
+
+    content: str = Field(description="The blog post content in Markdown format")
+    must_use_pages: list[ProjectPageContext] = Field(
+        default_factory=list,
+        description="Pages that must be linked in the content where contextually relevant",
+    )
+    optional_pages: list[ProjectPageContext] = Field(
+        default_factory=list,
+        description="Pages that can be linked if they are contextually relevant to the content",
+    )
+
+
+class InsertedLinksOutput(BaseModel):
+    """Output schema for the insert internal links agent."""
+
+    content: str = Field(
+        description="The blog post content with internal links inserted in Markdown format"
     )

@@ -1,7 +1,7 @@
 from pydantic_ai import Agent, RunContext
 
+from core.agents.models import get_default_ai_model
 from core.agents.schemas import CompetitorDetails
-from core.choices import get_default_ai_model
 
 
 def create_extract_competitors_data_agent(model=None):
@@ -22,6 +22,7 @@ def create_extract_competitors_data_agent(model=None):
             Extract all the data from the text provided.
         """,
         retries=2,
+        model_settings={"temperature": 0.2, "thinking_budget": 0},
     )
 
     @agent.system_prompt

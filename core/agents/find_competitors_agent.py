@@ -3,8 +3,8 @@ from pydantic_ai import Agent, RunContext
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
 
+from core.agents.models import AIModel
 from core.agents.schemas import ProjectDetails
-from core.choices import AIModel
 
 
 def create_find_competitors_agent(is_on_free_plan: bool):
@@ -70,22 +70,14 @@ def create_find_competitors_agent(is_on_free_plan: bool):
     @agent.system_prompt
     def language_specification(ctx: RunContext[ProjectDetails]) -> str:
         project = ctx.deps
-        return f"""
-            IMPORTANT: Be mindful that competitors are likely to speak in
-            {project.language} language.
-        """
+        return f"Be mindful that competitors are likely to speak in {project.language} language."  # noqa: E501
 
     @agent.system_prompt
     def location_specification(ctx: RunContext[ProjectDetails]) -> str:
         project = ctx.deps
         if project.location != "Global":
-            return f"""
-                IMPORTANT: Only return competitors whose target audience is in
-                {project.location}.
-            """
+            return f"Only return competitors whose target audience is in {project.location}."  # noqa: E501
         else:
-            return """
-                IMPORTANT: Return competitors from all over the world.
-            """
+            return "Return competitors from all over the world."
 
     return agent
