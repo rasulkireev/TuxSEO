@@ -75,23 +75,7 @@
     <!-- Status indicator -->
     <div data-generate-content-target="status" class="mb-4">
       {% with generated_post=suggestion.generated_blog_posts.first %}
-        {% if generated_post and generated_post.content %}
-          <!-- Validation status -->
-          {% if generated_post.blog_post_content_is_valid %}
-            <div class="flex gap-1.5 items-center">
-              <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-              <span class="text-sm font-medium text-green-700">Ready to post</span>
-            </div>
-          {% else %}
-            <div class="flex gap-1.5 items-center">
-              <div class="w-3 h-3 bg-yellow-500 rounded-full"></div>
-              <a href="{% url 'generated_blog_post_detail' suggestion.project.id generated_post.id %}"
-                 class="text-sm font-medium text-yellow-700 transition-colors hover:text-yellow-800 hover:underline">
-                Warning: Some validation failed and require fixing
-              </a>
-            </div>
-          {% endif %}
-        {% elif generated_post %}
+        {% if generated_post %}
           <div class="w-5 h-5 rounded-full border-2 border-gray-300 animate-spin border-t-gray-600"></div>
         {% else %}
           <div class="flex gap-1.5 items-center">

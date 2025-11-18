@@ -493,21 +493,6 @@ def generate_and_post_blog_post(project_id: int):
 
     # once you have the generated blog post, submit it to the endpoint
     if blog_post_to_post:
-        if blog_post_to_post.blog_post_content_is_valid is False:
-            logger.info(
-                "[Generate and Post Blog Post] Blog post content is not valid, so fixing it before posting.",  # noqa: E501
-                project_id=project_id,
-                project_name=project.name,
-            )
-            blog_post_to_post.refresh_from_db()
-            blog_post_to_post.fix_generated_blog_post()
-            async_task(
-                "core.tasks.generate_and_post_blog_post",
-                project.id,
-                group="Re-run Blog Post Generation/Posting",
-            )
-            return "Fixed blog post content and scheduled re-generation/posting."
-
         logger.info(
             "[Generate and Post Blog Post] Submitting blog post to endpoint",
             project_id=project_id,

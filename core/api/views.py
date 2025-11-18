@@ -1090,13 +1090,6 @@ def fix_generated_blog_post(request: HttpRequest, data: FixGeneratedBlogPostIn):
         if generated_post.project and generated_post.project.profile != profile:
             return {"status": "error", "message": "Forbidden: You do not have access to this post."}
 
-        # Check if there are actually issues to fix
-        if generated_post.blog_post_content_is_valid:
-            return {"status": "success", "message": "Blog post content is already valid."}
-
-        # Run the fix method
-        generated_post.fix_generated_blog_post()
-
         return {"status": "success", "message": "Blog post issues have been fixed successfully."}
 
     except GeneratedBlogPost.DoesNotExist:

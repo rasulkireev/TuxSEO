@@ -1,4 +1,3 @@
-import re
 from decimal import Decimal, InvalidOperation
 from urllib.request import urlopen
 
@@ -20,17 +19,14 @@ from core.agents import (
     create_analyze_competitor_agent,
     create_analyze_project_agent,
     create_competitor_vs_blog_post_agent,
-    create_content_editor_agent,
     create_extract_competitors_data_agent,
     create_extract_links_agent,
     create_find_competitors_agent,
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
-    create_validate_blog_post_ending_agent,
 )
 from core.agents.schemas import (
-    BlogPostGenerationContext,
     CompetitorAnalysisContext,
     CompetitorDetails,
     GeneratedBlogPostSchema,
@@ -55,7 +51,6 @@ from core.choices import (
     ProjectStyle,
     ProjectType,
 )
-from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.prompts import GENERATE_CONTENT_SYSTEM_PROMPTS
 from core.utils import (
     generate_random_key,
@@ -859,14 +854,6 @@ class AutoSubmissionSetting(BaseModel):
         return f"{self.project.name}"
 
 
-class GeneratedBlogPostManager(models.Manager):
-    def create_and_validate(self, **kwargs):
-        """Create a new blog post and validate it."""
-        instance = self.create(**kwargs)
-        instance.run_validation()
-        return instance
-
-
 class GeneratedBlogPost(BaseModel):
     project = models.ForeignKey(
         Project,
@@ -892,29 +879,12 @@ class GeneratedBlogPost(BaseModel):
     posted = models.BooleanField(default=False)
     date_posted = models.DateTimeField(null=True, blank=True)
 
-    # Validation Issues - Innocent until proven guilty
-    content_too_short = models.BooleanField(default=False)
-    has_valid_ending = models.BooleanField(default=True)
-    placeholders = models.BooleanField(default=False)
-    starts_with_header = models.BooleanField(default=False)
-
-    objects = GeneratedBlogPostManager()
-
     def __str__(self):
         return f"{self.project.name}: {self.title.title}"
 
     @property
     def post_title(self):
         return self.title.title
-
-    @property
-    def blog_post_content_is_valid(self):
-        return (
-            self.content_too_short is False
-            and self.has_valid_ending is True
-            and self.placeholders is False
-            and self.starts_with_header is False
-        )
 
     @property
     def generated_blog_post_schema(self):
@@ -924,207 +894,6 @@ class GeneratedBlogPost(BaseModel):
             tags=self.tags,
             content=self.content,
         )
-
-    @property
-    def has_placeholders(self) -> bool:
-        content = self.content or ""
-        content_lower = content.lower()
-
-        for pattern in PLACEHOLDER_PATTERNS:
-            if pattern in content_lower:
-                logger.warning(
-                    "[Blog Post Has Placeholders] Placeholder found",
-                    pattern=pattern,
-                    blog_post_id=self.id,
-                )
-                return True
-
-        for pattern in PLACEHOLDER_BRACKET_PATTERNS:
-            matches = re.findall(pattern, content_lower)
-            if matches:
-                logger.warning(
-                    "[Blog Post Has Placeholders] Bracket Placeholder found",
-                    pattern=pattern,
-                    blog_post_id=self.id,
-                )
-                return True
-
-        logger.info(
-            "[Blog Post Has Placeholders] No placeholders found",
-            blog_post_id=self.id,
-        )
-
-        return False
-
-    @property
-    def content_starts_with_header(self) -> bool:
-        content = self.content or ""
-        content = content.strip()
-
-        if not content:
-            return False
-
-        header_or_asterisk_pattern = r"^(#{1,6}\s+|\*)"
-        starts_with_header_or_asterisk = bool(re.match(header_or_asterisk_pattern, content))
-
-        if starts_with_header_or_asterisk:
-            logger.warning(
-                "[Blog Post Starts With Header] Content starts with header or asterisk",
-                blog_post_id=self.id,
-            )
-        else:
-            logger.info(
-                "[Blog Post Starts With Header] Content starts with regular text",
-                blog_post_id=self.id,
-            )
-
-        return starts_with_header_or_asterisk
-
-    def blog_post_has_valid_ending(self) -> bool:
-        """
-        Validate if a blog post has a complete, proper ending using AI analysis.
-
-        Args:
-            blog_post: GeneratedBlogPost instance to validate
-
-        Returns:
-            True if the ending is valid, False otherwise
-        """
-        content = self.content or ""
-        content = content.strip()
-
-        agent = create_validate_blog_post_ending_agent()
-
-        try:
-            result = run_agent_synchronously(
-                agent,
-                f"Please analyze this blog post and determine if it has a complete ending:\n\n{content}",  # noqa: E501
-                function_name="blog_post_has_valid_ending",
-            )
-
-            ending_is_valid = result.output
-
-            if ending_is_valid:
-                logger.info(
-                    "[Blog Post Has Valid Ending] Valid ending",
-                    result=ending_is_valid,
-                    blog_post_id=self.id,
-                )
-            else:
-                logger.warning(
-                    "[Blog Post Has Valid Ending] Invalid ending",
-                    result=ending_is_valid,
-                    blog_post_id=self.id,
-                )
-
-            return ending_is_valid
-
-        except Exception as error:
-            logger.error(
-                "[Blog Post Has Valid Ending] AI analysis failed",
-                error=str(error),
-                exc_info=True,
-                content_length=len(content),
-            )
-            return False
-
-    def run_validation(self):
-        """Run validation and update fields in a single query."""
-        from core.utils import blog_post_has_valid_ending
-
-        base_logger_info = {
-            "blog_post_id": self.id,
-            "project_id": self.project_id,
-            "project_name": self.project.name,
-            "profile_id": self.project.profile.id,
-            "profile_email": self.project.profile.user.email,
-        }
-
-        logger.info("[Validation] Running validation", **base_logger_info)
-
-        if not self.content:
-            self.content_too_short = True
-            self.has_valid_ending = False
-            self.placeholders = False
-            self.starts_with_header = False
-
-        else:
-            content = self.content.strip()
-            self.content_too_short = len(content) < 3000
-            self.has_valid_ending = blog_post_has_valid_ending(self)
-            self.placeholders = self.has_placeholders
-            self.starts_with_header = self.content_starts_with_header
-
-        self.save(
-            update_fields=[
-                "content_too_short",
-                "has_valid_ending",
-                "placeholders",
-                "starts_with_header",
-            ]
-        )
-
-        logger.info(
-            "[Validation] Blog post validation complete",
-            **base_logger_info,
-            blog_post_title=self.title.title,
-            content_too_short=self.content_too_short,
-            has_valid_ending=self.has_valid_ending,
-            placeholders=self.placeholders,
-            starts_with_header=self.starts_with_header,
-        )
-
-    def _build_fix_context(self):
-        """Build full context for content editor agent to ensure accurate regeneration."""
-
-        project_pages = [
-            ProjectPageContext(
-                url=page.url,
-                title=page.title,
-                description=page.description,
-                summary=page.summary,
-            )
-            for page in self.project.project_pages.all()
-        ]
-
-        project_keywords = [
-            pk.keyword.keyword_text
-            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
-        ]
-
-        return BlogPostGenerationContext(
-            project_details=self.project.project_details,
-            title_suggestion=self.title.title_suggestion_schema,
-            project_pages=project_pages,
-            content_type=self.title.content_type,
-            project_keywords=project_keywords,
-        )
-
-    def fix_header_start(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post starts with a header (like # or ##) instead of regular text.
-
-            Please remove it such that the content starts with regular text, usually an introduction.
-            """,  # noqa: E501
-            deps=context,
-            function_name="fix_header_start",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-        return True
 
     def submit_blog_post_to_endpoint(self):
         from core.utils import replace_placeholders
@@ -1176,90 +945,6 @@ class GeneratedBlogPost(BaseModel):
                 exc_info=True,
             )
             return False
-
-    def fix_content_length(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post is too short.
-            I think something went wrong during generation.
-            Please regenerate.
-          """,
-            deps=context,
-            function_name="fix_content_length",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_valid_ending(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post does not end on an ending that makes sense.
-            Most likely generation failed at some point and returned half completed content.
-            Please regenerate the blog post.
-            """,
-            deps=context,
-            function_name="fix_valid_ending",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_placeholders(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            The content contains placeholders.
-            Please regenerate the blog post without placeholders.
-            """,
-            deps=context,
-            function_name="fix_placeholders",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_generated_blog_post(self):
-        if self.content_too_short is True:
-            self.fix_content_length()
-
-        if self.has_valid_ending is False:
-            self.fix_valid_ending()
-
-        if self.placeholders is True:
-            self.fix_placeholders()
-
-        if self.starts_with_header is True:
-            self.fix_header_start()
 
     def generate_og_image(self) -> tuple[bool, str]:
         """
