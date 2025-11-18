@@ -11,7 +11,9 @@ from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from django_q.tasks import async_task
+from gpt_researcher import GPTResearcher
 from pgvector.django import HnswIndex, VectorField
 
 from core.agents import (
@@ -22,7 +24,6 @@ from core.agents import (
     create_extract_competitors_data_agent,
     create_extract_links_agent,
     create_find_competitors_agent,
-    create_generate_blog_post_content_agent,
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
@@ -55,12 +56,15 @@ from core.choices import (
     ProjectType,
 )
 from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
+from core.prompts import GENERATE_CONTENT_SYSTEM_PROMPTS
 from core.utils import (
     generate_random_key,
     get_jina_embedding,
     get_markdown_content,
     get_og_image_prompt,
+    get_relevant_pages_for_blog_post,
     run_agent_synchronously,
+    run_gptr_synchronously,
 )
 from tuxseo.utils import get_tuxseo_logger
 
@@ -746,49 +750,73 @@ class BlogPostTitleSuggestion(BaseModel):
             suggested_meta_description=self.suggested_meta_description,
         )
 
-    def generate_content(self, content_type=ContentType.SHARING, model=None):
-        agent = create_generate_blog_post_content_agent(content_type, model)
+    def generate_content(self, content_type=ContentType.SHARING):
+        # Build the query starting with the system prompt
+        query = GENERATE_CONTENT_SYSTEM_PROMPTS[content_type]
 
-        # Get all analyzed project pages (from AI and sitemap sources)
-        project_pages = [
-            ProjectPageContext(
-                url=page.url,
-                title=page.title,
-                description=page.description,
-                summary=page.summary,
-                always_use=page.always_use,
+        # Get pages to insert into the blog post
+        manually_selected_project_pages = list(self.project.project_pages.filter(always_use=True))
+        relevant_project_pages = list(
+            get_relevant_pages_for_blog_post(self.project, self.suggested_meta_description)
+        )
+        project_pages_to_insert = manually_selected_project_pages + relevant_project_pages
+
+        if project_pages_to_insert:
+            newline_separator = "\n"
+            pages_list = newline_separator.join(
+                [
+                    f"- Title: {page.title} - URL: {page.url} - Summary: {page.summary}"
+                    for page in project_pages_to_insert
+                ]
             )
-            for page in self.project.project_pages.filter(date_analyzed__isnull=False)
-        ]
+            query += f"""
+          The following internal pages should be inserted into the blog post:
+          {pages_list}
+        """
 
-        project_keywords = [
-            pk.keyword.keyword_text
-            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
-        ]
+        # Get keywords to use in the blog post
+        project_keywords = list(
+            self.project.project_keywords.filter(use=True).select_related("keyword")
+        )
+        project_keyword_texts = [keyword.keyword.keyword_text for keyword in project_keywords]
+        post_suggestion_keywords = self.target_keywords or []
+        keywords_to_use = list(set(project_keyword_texts + post_suggestion_keywords))
+        newline_separator = "\n"
+        keywords_list = newline_separator.join([f"- {keyword}" for keyword in keywords_to_use])
+        query += f"""
+          The following keywords should be used (organically) in the blog post:
+          {keywords_list}
+        """
 
-        deps = BlogPostGenerationContext(
-            project_details=self.project.project_details,
-            title_suggestion=self.title_suggestion_schema,
-            project_pages=project_pages,
-            content_type=content_type,
-            project_keywords=project_keywords,
+        # Final Instructions
+        query += "\n\nWrite a post from the following suggestion:\n"
+        query += f"- Title: {self.title}\n"
+        query += f"- Category: {self.category}\n"
+        query += f"- Description: {self.description}\n"
+        query += f"- Suggested Meta Description: {self.suggested_meta_description}\n"
+
+        if self.prompt:
+            query += f"- Original User Prompt: {self.prompt}\n"
+
+        agent = GPTResearcher(
+            query,
+            report_type="deep",
+            tone="Simple (written for young readers, using basic vocabulary and clear explanations)",  # noqa: E501
+            report_format="markdown",
         )
 
-        result = run_agent_synchronously(
-            agent,
-            "Generate an article based on the project details and title suggestions.",
-            deps=deps,
-            function_name="generate_content",
-            model_name="BlogPostTitleSuggestion",
-        )
+        result = run_gptr_synchronously(agent)
 
-        blog_post = GeneratedBlogPost.objects.create_and_validate(
+        slug = slugify(self.title)
+        tags = ", ".join(self.target_keywords) if self.target_keywords else ""
+
+        blog_post = GeneratedBlogPost.objects.create(
             project=self.project,
             title=self,
-            description=result.output.description,
-            slug=result.output.slug,
-            tags=result.output.tags,
-            content=result.output.content,
+            description=self.description,
+            slug=slug,
+            tags=tags,
+            content=result,
         )
 
         if self.project.enable_automatic_og_image_generation:
@@ -1048,7 +1076,6 @@ class GeneratedBlogPost(BaseModel):
 
     def _build_fix_context(self):
         """Build full context for content editor agent to ensure accurate regeneration."""
-        from core.agents.schemas import BlogPostGenerationContext, ProjectPageContext
 
         project_pages = [
             ProjectPageContext(
@@ -1717,7 +1744,7 @@ class Competitor(BaseModel):
         Generate comparison blog post content using Perplexity Sonar.
         This method uses Perplexity's web search capabilities to research both products.
         """
-        from core.agents.schemas import CompetitorVsPostContext, ProjectPageContext
+        from core.agents.schemas import CompetitorVsPostContext
 
         agent = create_competitor_vs_blog_post_agent()
 

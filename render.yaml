@@ -142,6 +142,10 @@ envVarGroups:
         value: $RENDER_EXTERNAL_URL
 
       # AI Keys
+      - key: OPENAI_API_KEY
+        value: ""
+      - key: TAVILY_API_KEY
+        value: ""
       - key: GEMINI_API_KEY
         value: ""
       - key: PERPLEXITY_API_KEY

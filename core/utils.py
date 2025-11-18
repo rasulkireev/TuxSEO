@@ -1,3 +1,4 @@
+import asyncio
 import random
 import string
 from urllib.request import urlopen
@@ -191,66 +192,6 @@ def generate_random_key():
     return "".join(random.choice(characters) for _ in range(10))
 
 
-def run_agent_synchronously(agent, input_string, deps=None, function_name="", model_name=""):
-    """
-    Run a PydanticAI agent synchronously.
-
-    Args:
-        agent: The PydanticAI agent to run
-        input_string: The input string to pass to the agent
-        deps: Optional dependencies to pass to the agent
-
-    Returns:
-        The result of the agent run
-
-    Raises:
-        RuntimeError: If the agent execution fails
-    """
-    import asyncio
-
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-
-    with capture_run_messages() as messages:
-        try:
-            logger.info(
-                "[Run Agent Synchronously] Running agent",
-                messages=messages,
-                input_string=input_string,
-                deps=deps,
-                function_name=function_name,
-                model_name=model_name,
-            )
-            if deps is not None:
-                result = loop.run_until_complete(agent.run(input_string, deps=deps))
-            else:
-                result = loop.run_until_complete(agent.run(input_string))
-
-            logger.info(
-                "[Run Agent Synchronously] Agent run successfully",
-                messages=messages,
-                input_string=input_string,
-                deps=deps,
-                result=result,
-                function_name=function_name,
-                model_name=model_name,
-            )
-            return result
-        except Exception as e:
-            logger.error(
-                "[Run Agent Synchronously] Failed execution",
-                messages=messages,
-                exc_info=True,
-                error=str(e),
-                function_name=function_name,
-                model_name=model_name,
-            )
-            raise
-
-
 def get_html_content(url):
     html_content = ""
     try:
@@ -308,3 +249,158 @@ def get_markdown_content(url):
             url=url,
         )
         return ("", "", "")
+
+
+def run_agent_synchronously(agent, input_string, deps=None, function_name="", model_name=""):
+    """
+    Run a PydanticAI agent synchronously.
+
+    Args:
+        agent: The PydanticAI agent to run
+        input_string: The input string to pass to the agent
+        deps: Optional dependencies to pass to the agent
+
+    Returns:
+        The result of the agent run
+
+    Raises:
+        RuntimeError: If the agent execution fails
+    """
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    with capture_run_messages() as messages:
+        try:
+            logger.info(
+                "[Run Agent Synchronously] Running agent",
+                messages=messages,
+                input_string=input_string,
+                deps=deps,
+                function_name=function_name,
+                model_name=model_name,
+            )
+            if deps is not None:
+                result = loop.run_until_complete(agent.run(input_string, deps=deps))
+            else:
+                result = loop.run_until_complete(agent.run(input_string))
+
+            logger.info(
+                "[Run Agent Synchronously] Agent run successfully",
+                messages=messages,
+                input_string=input_string,
+                deps=deps,
+                result=result,
+                function_name=function_name,
+                model_name=model_name,
+            )
+            return result
+        except Exception as e:
+            logger.error(
+                "[Run Agent Synchronously] Failed execution",
+                messages=messages,
+                exc_info=True,
+                error=str(e),
+                function_name=function_name,
+                model_name=model_name,
+            )
+            raise
+
+
+def run_gptr_synchronously(agent, custom_prompt=None):
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    if custom_prompt is not None:
+        result = loop.run_until_complete(agent.write_report())
+    else:
+        result = loop.run_until_complete(agent.write_report(custom_prompt=custom_prompt))
+
+    return result
+
+
+def get_relevant_pages_for_blog_post(project, meta_description: str, max_pages: int = 5):
+    """
+    Find the most relevant project pages for a blog post based on semantic similarity.
+
+    This function converts the meta description into an embedding vector and finds
+    project pages with similar content using vector similarity search with pgvector.
+
+    Args:
+        project: The Project instance to search pages within
+        meta_description: The meta description text to find relevant pages for
+        max_pages: Maximum number of relevant pages to return (default: 5)
+
+    Returns:
+        QuerySet of ProjectPage objects ordered by relevance (most relevant first),
+        or empty queryset if embedding generation fails or no pages have embeddings
+
+    Example:
+        # Get relevant pages for a title suggestion's meta description
+        title_suggestion = BlogPostTitleSuggestion.objects.get(id=123)
+        relevant_pages = get_relevant_pages_for_blog_post(
+            project=title_suggestion.project,
+            meta_description=title_suggestion.suggested_meta_description,
+            max_pages=10
+        )
+
+        # Use the relevant pages in blog post generation
+        for page in relevant_pages:
+            print(f"Relevant page: {page.title} - {page.url}")
+    """
+    from pgvector.django import CosineDistance
+
+    from core.models import ProjectPage
+
+    if not meta_description or not meta_description.strip():
+        logger.warning(
+            "[GetRelevantPages] Empty meta description provided",
+            project_id=project.id,
+            project_name=project.name,
+        )
+        return ProjectPage.objects.none()
+
+    meta_description_embedding = get_jina_embedding(meta_description)
+
+    if not meta_description_embedding:
+        logger.error(
+            "[GetRelevantPages] Failed to generate embedding for meta description",
+            project_id=project.id,
+            project_name=project.name,
+            meta_description_length=len(meta_description),
+        )
+        return ProjectPage.objects.none()
+
+    pages_with_embeddings = project.project_pages.filter(
+        embedding__isnull=False,
+        date_analyzed__isnull=False,
+    )
+
+    if not pages_with_embeddings.exists():
+        logger.info(
+            "[GetRelevantPages] No pages with embeddings found for project",
+            project_id=project.id,
+            project_name=project.name,
+        )
+        return ProjectPage.objects.none()
+
+    relevant_pages = pages_with_embeddings.order_by(
+        CosineDistance("embedding", meta_description_embedding)
+    )[:max_pages]
+
+    logger.info(
+        "[GetRelevantPages] Successfully found relevant pages",
+        project_id=project.id,
+        project_name=project.name,
+        num_relevant_pages=len(relevant_pages),
+        max_pages=max_pages,
+        total_pages_with_embeddings=pages_with_embeddings.count(),
+        meta_description_preview=meta_description[:100],
+    )
+
+    return relevant_pages

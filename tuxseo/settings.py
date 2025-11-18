@@ -525,6 +525,10 @@ PERPLEXITY_API_KEY = env("PERPLEXITY_API_KEY")
 
 KEYWORDS_EVERYWHERE_API_KEY = env("KEYWORDS_EVERYWHERE_API_KEY")
 
+# GPT-Researcher Configuration
+OPENAI_API_KEY = env("OPENAI_API_KEY", default="")
+TAVILY_API_KEY = env("TAVILY_API_KEY", default="")
+
 MJML_BACKEND_MODE = "httpserver"
 MJML_URL = env("MJML_URL", default="")
 MJML_HTTPSERVERS = [
