@@ -11,6 +11,7 @@ from core.agents.find_competitors_agent import create_find_competitors_agent
 from core.agents.generate_blog_post_content_agent import (
     create_generate_blog_post_content_agent,
 )
+from core.agents.insert_links_agent import create_insert_links_agent
 from core.agents.populate_competitor_details_agent import (
     create_populate_competitor_details_agent,
 )
@@ -25,6 +26,7 @@ __all__ = [
     "create_extract_links_agent",
     "create_find_competitors_agent",
     "create_generate_blog_post_content_agent",
+    "create_insert_links_agent",
     "create_populate_competitor_details_agent",
     "create_summarize_page_agent",
     "create_title_suggestions_agent",

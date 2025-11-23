@@ -275,3 +275,12 @@ class CompetitorVsPostContext(BaseModel):
     project_pages: list[ProjectPageContext] = Field(
         default_factory=list, description="List of project pages available for linking"
     )
+
+
+class LinkInsertionContext(BaseModel):
+    """Context for inserting links into blog post content."""
+
+    blog_post_content: str = Field(description="The blog post content in markdown format")
+    project_pages: list[ProjectPageContext] = Field(
+        default_factory=list, description="List of project pages available for linking"
+    )

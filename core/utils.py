@@ -310,18 +310,208 @@ def run_agent_synchronously(agent, input_string, deps=None, function_name="", mo
 
 
 def run_gptr_synchronously(agent, custom_prompt=None):
+    """
+    Run a GPTR agent synchronously.
+
+    Args:
+        agent: The GPTR agent to run
+        custom_prompt: Optional custom prompt to pass to the agent
+
+    Returns:
+        The result of the agent run
+
+    Raises:
+        RuntimeError: If the agent execution fails
+    """
     try:
         loop = asyncio.get_event_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-    if custom_prompt is not None:
-        result = loop.run_until_complete(agent.write_report())
-    else:
-        result = loop.run_until_complete(agent.write_report(custom_prompt=custom_prompt))
+    try:
+        logger.info(
+            "[Run GPTR Synchronously] Running agent",
+            agent=agent,
+            custom_prompt=custom_prompt,
+            has_custom_prompt=custom_prompt is not None,
+        )
 
-    return result
+        if custom_prompt is None:
+            result = loop.run_until_complete(agent.write_report())
+        else:
+            result = loop.run_until_complete(agent.write_report(custom_prompt=custom_prompt))
+
+        logger.info(
+            "[Run GPTR Synchronously] Agent run successfully",
+            custom_prompt=custom_prompt,
+            has_custom_prompt=custom_prompt is not None,
+            result_length=len(str(result)) if result else 0,
+        )
+        return result
+
+    except Exception as error:
+        logger.error(
+            "[Run GPTR Synchronously] Failed execution",
+            exc_info=True,
+            error=str(error),
+            custom_prompt=custom_prompt,
+            has_custom_prompt=custom_prompt is not None,
+        )
+        raise
+
+
+def extract_title_from_content(content: str) -> tuple[str | None, str]:
+    """
+    Extract the title from blog post content and remove it from the content.
+
+    The function looks for a markdown H1 title (# Title) at the beginning of the content,
+    extracts it, and returns both the title and the content with the title removed.
+
+    Args:
+        content: The full blog post content as markdown text
+
+    Returns:
+        A tuple of (title, content_without_title) where:
+        - title is the extracted title string or None if no title found
+        - content_without_title is the remaining content after title removal
+
+    Example:
+        >>> content = "# My Blog Title\\n\\nSome content here"
+        >>> title, content = extract_title_from_content(content)
+        >>> print(title)
+        "My Blog Title"
+        >>> print(content)
+        "Some content here"
+    """
+    import re
+
+    if not content or not content.strip():
+        logger.warning("[ExtractTitleFromContent] Empty or whitespace-only content provided")
+        return None, content
+
+    lines = content.strip().split("\n")
+
+    if not lines:
+        logger.warning("[ExtractTitleFromContent] No lines found in content")
+        return None, content
+
+    first_line = lines[0].strip()
+
+    title_match = re.match(r"^#\s+(.+)$", first_line)
+
+    if not title_match:
+        logger.warning(
+            "[ExtractTitleFromContent] No H1 title found at the beginning of content",
+            first_line_preview=first_line[:100],
+        )
+        return None, content
+
+    extracted_title = title_match.group(1).strip()
+
+    remaining_lines = lines[1:]
+    content_without_title = "\n".join(remaining_lines).strip()
+
+    logger.info(
+        "[ExtractTitleFromContent] Successfully extracted title from content",
+        extracted_title=extracted_title,
+        original_content_length=len(content),
+        new_content_length=len(content_without_title),
+    )
+
+    return extracted_title, content_without_title
+
+
+def process_generated_blog_content(
+    generated_content: str, fallback_title: str, title_suggestion_id: int, project_id: int
+) -> tuple[str, str]:
+    """
+    Process generated blog content by extracting title and cleaning up unwanted sections.
+
+    This function:
+    1. Extracts the H1 title from the content
+    2. Removes the title from the content
+    3. Removes the "## Introduction" header if present
+    4. Falls back to provided title if extraction fails
+
+    Args:
+        generated_content: The raw generated blog post content
+        fallback_title: Title to use if extraction fails
+        title_suggestion_id: ID of the title suggestion for logging
+        project_id: ID of the project for logging
+
+    Returns:
+        A tuple of (blog_post_title, blog_post_content) where:
+        - blog_post_title is the extracted title or fallback title
+        - blog_post_content is the cleaned content without title and introduction header
+
+    Example:
+        >>> content = "# My Title\\n\\n## Introduction\\n\\nSome intro text\\n\\nMore content"
+        >>> title, content = process_generated_blog_content(content, "Fallback", 1, 1)
+        >>> print(title)
+        "My Title"
+        >>> print(content)
+        "Some intro text\\n\\nMore content"
+    """
+    import re
+
+    extracted_title, content_without_title = extract_title_from_content(generated_content)
+
+    if extracted_title:
+        blog_post_title = extracted_title
+        blog_post_content = content_without_title
+        logger.info(
+            "[ProcessGeneratedBlogContent] Successfully extracted title from generated content",
+            title_suggestion_id=title_suggestion_id,
+            project_id=project_id,
+            extracted_title=extracted_title,
+        )
+    else:
+        blog_post_title = fallback_title
+        blog_post_content = generated_content
+        logger.error(
+            "[ProcessGeneratedBlogContent] Failed to extract title from content, using fallback title",  # noqa: E501
+            title_suggestion_id=title_suggestion_id,
+            project_id=project_id,
+            fallback_title=fallback_title,
+        )
+
+    introduction_pattern = r"^##\s+Introduction\s*\n+"
+    content_cleaned = re.sub(
+        introduction_pattern, "", blog_post_content, count=1, flags=re.MULTILINE
+    )
+
+    if content_cleaned != blog_post_content:
+        logger.info(
+            "[ProcessGeneratedBlogContent] Removed Introduction header from content",
+            title_suggestion_id=title_suggestion_id,
+            project_id=project_id,
+        )
+        blog_post_content = content_cleaned
+
+    references_pattern = r"\n---\n+##\s+References\s*\n.*?(?=\n---\n|$)"
+    content_without_references = re.sub(references_pattern, "", blog_post_content, flags=re.DOTALL)
+
+    if content_without_references != blog_post_content:
+        logger.info(
+            "[ProcessGeneratedBlogContent] Removed References section from content",
+            title_suggestion_id=title_suggestion_id,
+            project_id=project_id,
+        )
+        blog_post_content = content_without_references
+
+    horizontal_rule_pattern = r"\n---\n"
+    content_without_horizontal_rules = re.sub(horizontal_rule_pattern, "\n\n", blog_post_content)
+
+    if content_without_horizontal_rules != blog_post_content:
+        logger.info(
+            "[ProcessGeneratedBlogContent] Removed horizontal rule patterns from content",
+            title_suggestion_id=title_suggestion_id,
+            project_id=project_id,
+        )
+        blog_post_content = content_without_horizontal_rules
+
+    return blog_post_title, blog_post_content
 
 
 def get_relevant_pages_for_blog_post(project, meta_description: str, max_pages: int = 5):
@@ -404,3 +594,91 @@ def get_relevant_pages_for_blog_post(project, meta_description: str, max_pages: 
     )
 
     return relevant_pages
+
+
+def get_relevant_external_pages_for_blog_post(
+    meta_description: str, exclude_project=None, max_pages: int = 3
+):
+    """
+    Find the most relevant pages from other paying users' projects for a blog post.
+
+    This function searches across all project pages from paying users,
+    finds those with analyzed content (embeddings), and returns the most relevant ones
+    based on semantic similarity to the blog post's meta description.
+
+    Args:
+        meta_description: The meta description text to find relevant pages for
+        exclude_project: Project instance to exclude pages from (typically the project we're writing for)
+        max_pages: Maximum number of relevant pages to return (default: 3)
+
+    Returns:
+        QuerySet of ProjectPage objects ordered by relevance (most relevant first),
+        or empty queryset if embedding generation fails or no pages have embeddings
+
+    Example:
+        # Get relevant external pages for a title suggestion's meta description
+        title_suggestion = BlogPostTitleSuggestion.objects.get(id=123)
+        relevant_external_pages = get_relevant_external_pages_for_blog_post(
+            meta_description=title_suggestion.suggested_meta_description,
+            exclude_project=title_suggestion.project,
+            max_pages=5
+        )
+
+        # Use the relevant external pages in blog post generation
+        for page in relevant_external_pages:
+            print(f"Relevant external page: {page.title} - {page.url}")
+    """  # noqa: E501
+    from pgvector.django import CosineDistance
+
+    from core.models import ProjectPage
+
+    if not meta_description or not meta_description.strip():
+        logger.warning("[GetRelevantExternalPages] Empty meta description provided")
+        return ProjectPage.objects.none()
+
+    meta_description_embedding = get_jina_embedding(meta_description)
+
+    if not meta_description_embedding:
+        logger.error(
+            "[GetRelevantExternalPages] Failed to generate embedding for meta description",
+            meta_description_length=len(meta_description),
+        )
+        return ProjectPage.objects.none()
+
+    pages_from_paying_users_query = ProjectPage.objects.filter(
+        embedding__isnull=False,
+        date_analyzed__isnull=False,
+        project__profile__isnull=False,
+    )
+
+    if exclude_project:
+        pages_from_paying_users_query = pages_from_paying_users_query.exclude(
+            project=exclude_project
+        )
+
+    pages_from_paying_users = pages_from_paying_users_query.select_related("project__profile")
+
+    pages_with_active_subscriptions = [
+        page for page in pages_from_paying_users if page.project.profile.has_product_or_subscription
+    ]
+
+    if not pages_with_active_subscriptions:
+        logger.info("[GetRelevantExternalPages] No pages with embeddings found from paying users")
+        return ProjectPage.objects.none()
+
+    page_ids = [page.id for page in pages_with_active_subscriptions]
+
+    relevant_external_pages = ProjectPage.objects.filter(id__in=page_ids).order_by(
+        CosineDistance("embedding", meta_description_embedding)
+    )[:max_pages]
+
+    logger.info(
+        "[GetRelevantExternalPages] Successfully found relevant external pages",
+        num_relevant_pages=len(relevant_external_pages),
+        max_pages=max_pages,
+        total_pages_with_embeddings=len(pages_with_active_subscriptions),
+        meta_description_preview=meta_description[:100],
+        page_ids=page_ids,
+    )
+
+    return relevant_external_pages

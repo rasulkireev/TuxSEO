@@ -3,7 +3,7 @@
 {% load markdown_extras %}
 
 {% block meta %}
-<title>{{ generated_post.title.title }} - TuxSEO</title>
+<title>{{ generated_post.title }} - TuxSEO</title>
 <meta name="description" content="{{ generated_post.description }}" />
 {% endblock meta %}
 
@@ -22,7 +22,7 @@
     </nav>
 
     <h2 class="mb-2 text-2xl font-bold text-gray-900">
-      {{ generated_post.title.title }}
+      {{ generated_post.title }}
     </h2>
 
     {% if generated_post.description %}
@@ -45,7 +45,7 @@
             </svg>
           </button>
           <div data-archived-list-target="list" class="hidden p-4 border-t border-gray-200">
-            {% include "components/blog_post_suggestion_card.html" with suggestion=generated_post.title page="generated_post" %}
+            {% include "components/blog_post_suggestion_card.html" with suggestion=generated_post.title_suggestion page="generated_post" %}
           </div>
         </div>
       </div>
@@ -161,7 +161,7 @@
           <div class="overflow-hidden rounded-lg border border-gray-200">
             <img
               src="{{ generated_post.image.url|replace:'minio:9000,localhost:9000' }}"
-              alt="{{ generated_post.title.title }}"
+              alt="{{ generated_post.title }}"
               data-generate-image-target="imageDisplay"
               class="w-full h-auto"
             >

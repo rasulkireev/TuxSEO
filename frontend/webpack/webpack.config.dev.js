@@ -13,11 +13,11 @@ module.exports = merge(common, {
   devtool: "inline-source-map",
   output: {
     chunkFilename: "js/[name].chunk.js",
-    publicPath: "http://localhost:9091/",
+    publicPath: "http://localhost:9093/",
   },
   devServer: {
     host: "0.0.0.0",
-    port: 9091,
+    port: 9093,
     headers: {
       "Access-Control-Allow-Origin": "*",
     },

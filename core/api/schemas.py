@@ -231,6 +231,12 @@ class ToggleOGImageGenerationOut(Schema):
     message: str = ""
 
 
+class ToggleLinkExchangeOut(Schema):
+    status: str
+    enabled: bool
+    message: str = ""
+
+
 class FixGeneratedBlogPostIn(Schema):
     id: int
 

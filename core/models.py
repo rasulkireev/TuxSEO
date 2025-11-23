@@ -22,6 +22,7 @@ from core.agents import (
     create_extract_competitors_data_agent,
     create_extract_links_agent,
     create_find_competitors_agent,
+    create_insert_links_agent,
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
@@ -30,6 +31,7 @@ from core.agents.schemas import (
     CompetitorAnalysisContext,
     CompetitorDetails,
     GeneratedBlogPostSchema,
+    LinkInsertionContext,
     ProjectDetails,
     ProjectPageContext,
     TitleSuggestion,
@@ -51,13 +53,14 @@ from core.choices import (
     ProjectStyle,
     ProjectType,
 )
-from core.prompts import GENERATE_CONTENT_SYSTEM_PROMPTS
 from core.utils import (
     generate_random_key,
     get_jina_embedding,
     get_markdown_content,
     get_og_image_prompt,
+    get_relevant_external_pages_for_blog_post,
     get_relevant_pages_for_blog_post,
+    process_generated_blog_content,
     run_agent_synchronously,
     run_gptr_synchronously,
 )
@@ -400,6 +403,8 @@ class Project(BaseModel):
         blank=True,
     )
 
+    particiate_in_link_exchange = models.BooleanField(default=False)
+
     # Sitemap
     sitemap_url = models.URLField(max_length=500, blank=True, default="")
 
@@ -428,6 +433,21 @@ class Project(BaseModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def project_desctiption_string_for_ai(self):
+        return f"""
+        Project Description:
+        - Project Name: {self.name}
+        - Project Type: {self.type}
+        - Project Summary: {self.summary}
+        - Blog Theme: {self.blog_theme}
+        - Founders: {self.founders}
+        - Key Features: {self.key_features}
+        - Target Audience: {self.target_audience_summary}
+        - Pain Points: {self.pain_points}
+        - Product Usage: {self.product_usage}
+        """
 
     @property
     def project_details(self):
@@ -736,6 +756,18 @@ class BlogPostTitleSuggestion(BaseModel):
         return f"{self.project.name}: {self.title}"
 
     @property
+    def title_suggestion_string_for_ai(self):
+        query = f"- Title: {self.title}\n"
+        query += f"- Category: {self.category}\n"
+        query += f"- Description: {self.description}\n"
+        query += f"- Suggested Meta Description: {self.suggested_meta_description}\n"
+
+        if self.prompt:
+            query += f"- Original User Prompt: {self.prompt}\n\n"
+
+        return query
+
+    @property
     def title_suggestion_schema(self):
         return TitleSuggestion(
             title=self.title,
@@ -745,29 +777,33 @@ class BlogPostTitleSuggestion(BaseModel):
             suggested_meta_description=self.suggested_meta_description,
         )
 
-    def generate_content(self, content_type=ContentType.SHARING):
-        # Build the query starting with the system prompt
-        query = GENERATE_CONTENT_SYSTEM_PROMPTS[content_type]
-
+    def get_internal_links(self, max_pages=2):
         # Get pages to insert into the blog post
         manually_selected_project_pages = list(self.project.project_pages.filter(always_use=True))
         relevant_project_pages = list(
-            get_relevant_pages_for_blog_post(self.project, self.suggested_meta_description)
-        )
-        project_pages_to_insert = manually_selected_project_pages + relevant_project_pages
-
-        if project_pages_to_insert:
-            newline_separator = "\n"
-            pages_list = newline_separator.join(
-                [
-                    f"- Title: {page.title} - URL: {page.url} - Summary: {page.summary}"
-                    for page in project_pages_to_insert
-                ]
+            get_relevant_pages_for_blog_post(
+                self.project, self.suggested_meta_description, max_pages=max_pages
             )
-            query += f"""
-          The following internal pages should be inserted into the blog post:
-          {pages_list}
-        """
+        )
+        return manually_selected_project_pages + relevant_project_pages
+
+    def get_blog_post_keywords(self):
+        project_keywords = list(
+            self.project.project_keywords.filter(use=True).select_related("keyword")
+        )
+        project_keyword_texts = [keyword.keyword.keyword_text for keyword in project_keywords]
+        post_suggestion_keywords = self.target_keywords or []
+        keywords_to_use = list(set(project_keyword_texts + post_suggestion_keywords))
+
+        return keywords_to_use
+
+    def generate_content(self, content_type=ContentType.SHARING):
+        # query defines the research question researcher will analyze
+        # custom_prompt controls how the research findings are presented
+
+        # Suggestion Instructions
+        query = "Write a post from the following suggestion:\n"
+        query += f"{self.title_suggestion_string_for_ai}\n\n"
 
         # Get keywords to use in the blog post
         project_keywords = list(
@@ -778,20 +814,19 @@ class BlogPostTitleSuggestion(BaseModel):
         keywords_to_use = list(set(project_keyword_texts + post_suggestion_keywords))
         newline_separator = "\n"
         keywords_list = newline_separator.join([f"- {keyword}" for keyword in keywords_to_use])
-        query += f"""
-          The following keywords should be used (organically) in the blog post:
-          {keywords_list}
-        """
+        query += "The following keywords should be used (organically) in the blog post:\n"
+        query += keywords_list
+        query += "\n\n"
 
-        # Final Instructions
-        query += "\n\nWrite a post from the following suggestion:\n"
-        query += f"- Title: {self.title}\n"
-        query += f"- Category: {self.category}\n"
-        query += f"- Description: {self.description}\n"
-        query += f"- Suggested Meta Description: {self.suggested_meta_description}\n"
+        query += "Quick reminder. You are writing a blog post for this company."
+        query += self.project.project_desctiption_string_for_ai
+        query += ". Make it look good, as the best solution for anyone reading the post."
+        query += "\n\n"
 
-        if self.prompt:
-            query += f"- Original User Prompt: {self.prompt}\n"
+        # # Writing Instructions
+        # query += GENERATE_CONTENT_SYSTEM_PROMPTS[content_type]
+        # query += "\n"
+        query += GeneratedBlogPost.blog_post_structure_rules()
 
         agent = GPTResearcher(
             query,
@@ -802,17 +837,36 @@ class BlogPostTitleSuggestion(BaseModel):
 
         result = run_gptr_synchronously(agent)
 
+        # Create blog post with raw content first
         slug = slugify(self.title)
         tags = ", ".join(self.target_keywords) if self.target_keywords else ""
 
         blog_post = GeneratedBlogPost.objects.create(
             project=self.project,
-            title=self,
+            title_suggestion=self,
+            title=self.title,  # Temporary title, will be updated after processing
             description=self.description,
             slug=slug,
             tags=tags,
-            content=result,
+            content=result,  # Raw content from GPTResearcher
         )
+
+        # Insert links into the blog post content
+        blog_post.insert_links_into_post()
+
+        # Process content after link insertion (extract title, clean up sections)
+        blog_post_title, blog_post_content = process_generated_blog_content(
+            generated_content=blog_post.content,  # Use content after link insertion
+            fallback_title=self.title,
+            title_suggestion_id=self.id,
+            project_id=self.project.id,
+        )
+
+        # Update blog post with processed content and extracted title
+        blog_post.title = blog_post_title
+        blog_post.slug = slugify(blog_post_title)
+        blog_post.content = blog_post_content
+        blog_post.save(update_fields=["title", "slug", "content"])
 
         if self.project.enable_automatic_og_image_generation:
             async_task(
@@ -862,13 +916,14 @@ class GeneratedBlogPost(BaseModel):
         on_delete=models.CASCADE,
         related_name="generated_blog_posts",
     )
-    title = models.ForeignKey(
+    title_suggestion = models.ForeignKey(
         BlogPostTitleSuggestion,
         null=True,
         blank=True,
         on_delete=models.CASCADE,
         related_name="generated_blog_posts",
     )
+    title = models.CharField(max_length=250)
     description = models.TextField(blank=True)
     slug = models.SlugField(max_length=250)
     tags = models.TextField()
@@ -880,11 +935,22 @@ class GeneratedBlogPost(BaseModel):
     date_posted = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
-        return f"{self.project.name}: {self.title.title}"
+        return f"{self.project.name}: {self.title}"
 
-    @property
-    def post_title(self):
-        return self.title.title
+    @classmethod
+    def blog_post_structure_rules(cls):
+        return """
+        - Use markdown.
+        - Start with the title as h1 (#). Do no include any other metadata (description, slug, etc.)
+        - Then do and intro, starting with `## Introduction`, then a paragraph of text.
+        - Continue with h2 (##) topics as you see fit.
+        - Do not go deeper than h2 (##) for post structure.
+        - Never inlcude placeholder items (insert image here, link suggestions, etc.)
+        - Do not have `References` section, insert all the links into the post directly, organically.
+        - Do not include a call to action paragraph at the end of the post.
+        - Finish the post with a conclusion.
+        - Instead of using links as a reference, try to insert them into the post directly, organically.
+        """  # noqa: E501
 
     @property
     def generated_blog_post_schema(self):
@@ -975,7 +1041,9 @@ class GeneratedBlogPost(BaseModel):
             return True, f"Image already exists for blog post {self.id}"
 
         try:
-            blog_post_category = self.title.category if self.title.category else "technology"
+            blog_post_category = (
+                self.title_suggestion.category if self.title_suggestion.category else "technology"
+            )
 
             project_og_style = self.project.og_image_style or OGImageStyle.MODERN_GRADIENT
             prompt = get_og_image_prompt(project_og_style, blog_post_category)
@@ -1052,6 +1120,127 @@ class GeneratedBlogPost(BaseModel):
                 project_id=self.project_id,
             )
             return False, f"Unexpected error: {str(error)}"
+
+    def insert_links_into_post(self, max_pages=4, max_external_pages=3):
+        """
+        Insert links from project pages into the blog post content organically.
+        Uses PydanticAI to intelligently place links without modifying the content.
+
+        Args:
+            max_pages: Maximum number of internal project pages to use for linking (default: 4)
+            max_external_pages: Maximum number of external project pages to use for linking (default: 3)
+
+        Returns:
+            str: The blog post content with links inserted
+        """  # noqa: E501
+        from core.utils import (
+            get_relevant_pages_for_blog_post,
+            run_agent_synchronously,
+        )
+
+        if not self.title_suggestion:
+            logger.warning(
+                "[InsertLinksIntoPost] No title suggestion found for blog post",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return self.content
+
+        # Get internal project pages
+        manually_selected_project_pages = list(self.project.project_pages.filter(always_use=True))
+        relevant_project_pages = list(
+            get_relevant_pages_for_blog_post(
+                self.project,
+                self.title_suggestion.suggested_meta_description,
+                max_pages=max_pages,
+            )
+        )
+
+        all_project_pages = manually_selected_project_pages + relevant_project_pages
+
+        # Get external project pages if link exchange is enabled
+        external_project_pages = []
+        if self.project.particiate_in_link_exchange:
+            external_project_pages = list(
+                get_relevant_external_pages_for_blog_post(
+                    meta_description=self.title_suggestion.suggested_meta_description,
+                    exclude_project=self.project,
+                    max_pages=max_external_pages,
+                )
+            )
+            # Filter to only include pages from projects that also participate in link exchange
+            external_project_pages = [
+                page for page in external_project_pages if page.project.particiate_in_link_exchange
+            ]
+
+        all_pages_to_link = all_project_pages + external_project_pages
+
+        if not all_pages_to_link:
+            logger.info(
+                "[InsertLinksIntoPost] No pages found for link insertion",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return self.content
+
+        project_page_contexts = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+            )
+            for page in all_pages_to_link
+        ]
+
+        # Extract URLs for logging
+        urls_to_insert = [page.url for page in all_pages_to_link]
+        internal_urls = [page.url for page in all_project_pages]
+        external_urls = [page.url for page in external_project_pages]
+
+        link_insertion_context = LinkInsertionContext(
+            blog_post_content=self.content,
+            project_pages=project_page_contexts,
+        )
+
+        insert_links_agent = create_insert_links_agent()
+
+        prompt = "Insert the provided project page links into the blog post content organically. Do not modify the existing content, only add links where appropriate."  # noqa: E501
+
+        logger.info(
+            "[InsertLinksIntoPost] Running link insertion agent",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+            num_total_pages=len(project_page_contexts),
+            num_internal_pages=len(all_project_pages),
+            num_external_pages=len(external_project_pages),
+            num_always_use_pages=len(manually_selected_project_pages),
+            participate_in_link_exchange=self.project.particiate_in_link_exchange,
+            urls_to_insert=urls_to_insert,
+            internal_urls=internal_urls,
+            external_urls=external_urls,
+        )
+
+        result = run_agent_synchronously(
+            insert_links_agent,
+            prompt,
+            deps=link_insertion_context,
+            function_name="insert_links_into_post",
+            model_name="GeneratedBlogPost",
+        )
+
+        content_with_links = result.output
+
+        self.content = content_with_links
+        self.save(update_fields=["content"])
+
+        logger.info(
+            "[InsertLinksIntoPost] Links inserted successfully",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+        )
+
+        return content_with_links
 
 
 class ProjectPage(BaseModel):
@@ -1442,7 +1631,6 @@ class Competitor(BaseModel):
                 title=page.title,
                 description=page.description,
                 summary=page.summary,
-                always_use=page.always_use,
             )
             for page in self.project.project_pages.filter(date_analyzed__isnull=False)
         ]
