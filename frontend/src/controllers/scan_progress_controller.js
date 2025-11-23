@@ -142,7 +142,7 @@ export default class extends Controller {
   }
 
   updateResultsButton(projectId) {
-    this.resultsButtonTarget.href = `/project/${projectId}/`;
+    this.resultsButtonTarget.href = `/project/${projectId}/posts/seo-optimized/`;
     this.resultsButtonTarget.classList.remove('hidden');
   }
 

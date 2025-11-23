@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
+import { showMessage } from "../utils/messages";
 
 export default class extends Controller {
   static values = {
@@ -12,6 +13,11 @@ export default class extends Controller {
   }
 
   toggle() {
+    // Check if button is disabled (for free users)
+    if (this.toggleTarget.hasAttribute("disabled")) {
+      return;
+    }
+
     // Optimistically update UI
     this.enabledValue = !this.enabledValue;
     this.updateToggleState();
@@ -29,15 +35,27 @@ export default class extends Controller {
         throw new Error("Server response wasn't OK");
       })
       .then((body) => {
-        // Server state
-        this.enabledValue = body.enabled;
-        this.updateToggleState(); // Sync UI with server state
+        if (body.status === "error") {
+          // Revert optimistic update
+          this.enabledValue = !this.enabledValue;
+          this.updateToggleState();
+          showMessage(body.message, "error");
+        } else {
+          // Server state
+          this.enabledValue = body.enabled;
+          this.updateToggleState(); // Sync UI with server state
+          const message = this.enabledValue
+            ? "OG Image Generation enabled successfully"
+            : "OG Image Generation disabled successfully";
+          showMessage(message, "success");
+        }
       })
       .catch((error) => {
         // Revert optimistic update on failure
         this.enabledValue = !this.enabledValue;
         this.updateToggleState();
         console.error("Error toggling OG image generation:", error);
+        showMessage("Failed to toggle OG Image Generation. Please try again.", "error");
       });
   }
 

@@ -1,4 +1,5 @@
 from django.urls import path
+from django.views.generic import RedirectView
 
 from core import views
 from core.api.views import api
@@ -16,6 +17,11 @@ urlpatterns = [
     path("blog/<slug:slug>", views.BlogPostView.as_view(), name="blog_post"),
     # app
     path("api/", api.urls),
+    path(
+        "project/<int:pk>/",
+        RedirectView.as_view(pattern_name="project_seo_posts", permanent=False),
+        name="project_redirect",
+    ),
     path(
         "project/<int:pk>/posts/eye-catching/",
         views.ProjectEyeCatchingPostsView.as_view(),

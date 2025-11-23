@@ -37,6 +37,7 @@ from core.api.schemas import (
     SubmitFeedbackIn,
     SubmitSitemapIn,
     ToggleAutoSubmissionOut,
+    ToggleLinkExchangeOut,
     ToggleOGImageGenerationOut,
     ToggleProjectKeywordUseIn,
     ToggleProjectKeywordUseOut,
@@ -452,6 +453,13 @@ def toggle_auto_submission(request: HttpRequest, project_id: int):
     profile = request.auth
     project = get_object_or_404(Project, id=project_id, profile=profile)
 
+    if not profile.is_on_pro_plan:
+        return {
+            "status": "error",
+            "enabled": False,
+            "message": "Automatic Post Submission is only available on the Pro plan. Please upgrade to access this feature.",  # noqa: E501
+        }
+
     project.enable_automatic_post_submission = not project.enable_automatic_post_submission
     project.save(update_fields=["enable_automatic_post_submission"])
 
@@ -467,10 +475,39 @@ def toggle_og_image_generation(request: HttpRequest, project_id: int):
     profile = request.auth
     project = get_object_or_404(Project, id=project_id, profile=profile)
 
+    if not profile.is_on_pro_plan:
+        return {
+            "status": "error",
+            "enabled": False,
+            "message": "OG Image Generation is only available on the Pro plan. Please upgrade to access this feature.",  # noqa: E501
+        }
+
     project.enable_automatic_og_image_generation = not project.enable_automatic_og_image_generation
     project.save(update_fields=["enable_automatic_og_image_generation"])
 
     return {"status": "success", "enabled": project.enable_automatic_og_image_generation}
+
+
+@api.post(
+    "/projects/{project_id}/toggle-link-exchange",
+    response=ToggleLinkExchangeOut,
+    auth=[session_auth],
+)
+def toggle_link_exchange(request: HttpRequest, project_id: int):
+    profile = request.auth
+    project = get_object_or_404(Project, id=project_id, profile=profile)
+
+    if not profile.is_on_pro_plan:
+        return {
+            "status": "error",
+            "enabled": False,
+            "message": "Link Exchange is only available on the Pro plan. Please upgrade to access this feature.",  # noqa: E501
+        }
+
+    project.particiate_in_link_exchange = not project.particiate_in_link_exchange
+    project.save(update_fields=["particiate_in_link_exchange"])
+
+    return {"status": "success", "enabled": project.particiate_in_link_exchange}
 
 
 @api.post("/projects/update-sitemap-url", response=UpdateSitemapUrlOut, auth=[session_auth])
@@ -1089,13 +1126,6 @@ def fix_generated_blog_post(request: HttpRequest, data: FixGeneratedBlogPostIn):
         generated_post = GeneratedBlogPost.objects.get(id=blog_post_id)
         if generated_post.project and generated_post.project.profile != profile:
             return {"status": "error", "message": "Forbidden: You do not have access to this post."}
-
-        # Check if there are actually issues to fix
-        if generated_post.blog_post_content_is_valid:
-            return {"status": "success", "message": "Blog post content is already valid."}
-
-        # Run the fix method
-        generated_post.fix_generated_blog_post()
 
         return {"status": "success", "message": "Blog post issues have been fixed successfully."}
 

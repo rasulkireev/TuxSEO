@@ -22,7 +22,7 @@ export default class extends Controller {
     this.enabledValue = !this.enabledValue;
     this.updateToggleState();
 
-    fetch(`/api/projects/${this.projectIdValue}/toggle-auto-submission`, {
+    fetch(`/api/projects/${this.projectIdValue}/toggle-link-exchange`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -45,8 +45,8 @@ export default class extends Controller {
           this.enabledValue = body.enabled;
           this.updateToggleState(); // Sync UI with server state
           const message = this.enabledValue
-            ? "Automatic Post Submission enabled successfully"
-            : "Automatic Post Submission disabled successfully";
+            ? "Link Exchange enabled successfully"
+            : "Link Exchange disabled successfully";
           showMessage(message, "success");
         }
       })
@@ -54,8 +54,8 @@ export default class extends Controller {
         // Revert optimistic update on failure
         this.enabledValue = !this.enabledValue;
         this.updateToggleState();
-        console.error("Error toggling auto-submission:", error);
-        showMessage("Failed to toggle Automatic Post Submission. Please try again.", "error");
+        console.error("Error toggling link exchange:", error);
+        showMessage("Failed to toggle Link Exchange. Please try again.", "error");
       });
   }
 

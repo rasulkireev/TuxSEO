@@ -68,7 +68,7 @@ services:
     volumes:
       - .:/app
     ports:
-      - "9091:9091"
+      - "9093:9093"
 
   mailhog:
     image: mailhog/mailhog

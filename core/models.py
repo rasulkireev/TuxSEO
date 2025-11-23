@@ -1,4 +1,3 @@
-import re
 from decimal import Decimal, InvalidOperation
 from urllib.request import urlopen
 
@@ -11,28 +10,28 @@ from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
 from django_q.tasks import async_task
+from gpt_researcher import GPTResearcher
 from pgvector.django import HnswIndex, VectorField
 
 from core.agents import (
     create_analyze_competitor_agent,
     create_analyze_project_agent,
     create_competitor_vs_blog_post_agent,
-    create_content_editor_agent,
     create_extract_competitors_data_agent,
     create_extract_links_agent,
     create_find_competitors_agent,
-    create_generate_blog_post_content_agent,
+    create_insert_links_agent,
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
-    create_validate_blog_post_ending_agent,
 )
 from core.agents.schemas import (
-    BlogPostGenerationContext,
     CompetitorAnalysisContext,
     CompetitorDetails,
     GeneratedBlogPostSchema,
+    LinkInsertionContext,
     ProjectDetails,
     ProjectPageContext,
     TitleSuggestion,
@@ -54,13 +53,16 @@ from core.choices import (
     ProjectStyle,
     ProjectType,
 )
-from core.constants import PLACEHOLDER_BRACKET_PATTERNS, PLACEHOLDER_PATTERNS
 from core.utils import (
     generate_random_key,
     get_jina_embedding,
     get_markdown_content,
     get_og_image_prompt,
+    get_relevant_external_pages_for_blog_post,
+    get_relevant_pages_for_blog_post,
+    process_generated_blog_content,
     run_agent_synchronously,
+    run_gptr_synchronously,
 )
 from tuxseo.utils import get_tuxseo_logger
 
@@ -401,6 +403,8 @@ class Project(BaseModel):
         blank=True,
     )
 
+    particiate_in_link_exchange = models.BooleanField(default=False)
+
     # Sitemap
     sitemap_url = models.URLField(max_length=500, blank=True, default="")
 
@@ -429,6 +433,21 @@ class Project(BaseModel):
 
     def __str__(self):
         return self.name
+
+    @property
+    def project_desctiption_string_for_ai(self):
+        return f"""
+        Project Description:
+        - Project Name: {self.name}
+        - Project Type: {self.type}
+        - Project Summary: {self.summary}
+        - Blog Theme: {self.blog_theme}
+        - Founders: {self.founders}
+        - Key Features: {self.key_features}
+        - Target Audience: {self.target_audience_summary}
+        - Pain Points: {self.pain_points}
+        - Product Usage: {self.product_usage}
+        """
 
     @property
     def project_details(self):
@@ -737,6 +756,18 @@ class BlogPostTitleSuggestion(BaseModel):
         return f"{self.project.name}: {self.title}"
 
     @property
+    def title_suggestion_string_for_ai(self):
+        query = f"- Title: {self.title}\n"
+        query += f"- Category: {self.category}\n"
+        query += f"- Description: {self.description}\n"
+        query += f"- Suggested Meta Description: {self.suggested_meta_description}\n"
+
+        if self.prompt:
+            query += f"- Original User Prompt: {self.prompt}\n\n"
+
+        return query
+
+    @property
     def title_suggestion_schema(self):
         return TitleSuggestion(
             title=self.title,
@@ -746,50 +777,96 @@ class BlogPostTitleSuggestion(BaseModel):
             suggested_meta_description=self.suggested_meta_description,
         )
 
-    def generate_content(self, content_type=ContentType.SHARING, model=None):
-        agent = create_generate_blog_post_content_agent(content_type, model)
-
-        # Get all analyzed project pages (from AI and sitemap sources)
-        project_pages = [
-            ProjectPageContext(
-                url=page.url,
-                title=page.title,
-                description=page.description,
-                summary=page.summary,
-                always_use=page.always_use,
+    def get_internal_links(self, max_pages=2):
+        # Get pages to insert into the blog post
+        manually_selected_project_pages = list(self.project.project_pages.filter(always_use=True))
+        relevant_project_pages = list(
+            get_relevant_pages_for_blog_post(
+                self.project, self.suggested_meta_description, max_pages=max_pages
             )
-            for page in self.project.project_pages.filter(date_analyzed__isnull=False)
-        ]
+        )
+        return manually_selected_project_pages + relevant_project_pages
 
-        project_keywords = [
-            pk.keyword.keyword_text
-            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
-        ]
+    def get_blog_post_keywords(self):
+        project_keywords = list(
+            self.project.project_keywords.filter(use=True).select_related("keyword")
+        )
+        project_keyword_texts = [keyword.keyword.keyword_text for keyword in project_keywords]
+        post_suggestion_keywords = self.target_keywords or []
+        keywords_to_use = list(set(project_keyword_texts + post_suggestion_keywords))
 
-        deps = BlogPostGenerationContext(
-            project_details=self.project.project_details,
-            title_suggestion=self.title_suggestion_schema,
-            project_pages=project_pages,
-            content_type=content_type,
-            project_keywords=project_keywords,
+        return keywords_to_use
+
+    def generate_content(self, content_type=ContentType.SHARING):
+        # query defines the research question researcher will analyze
+        # custom_prompt controls how the research findings are presented
+
+        # Suggestion Instructions
+        query = "Write a post from the following suggestion:\n"
+        query += f"{self.title_suggestion_string_for_ai}\n\n"
+
+        # Get keywords to use in the blog post
+        project_keywords = list(
+            self.project.project_keywords.filter(use=True).select_related("keyword")
+        )
+        project_keyword_texts = [keyword.keyword.keyword_text for keyword in project_keywords]
+        post_suggestion_keywords = self.target_keywords or []
+        keywords_to_use = list(set(project_keyword_texts + post_suggestion_keywords))
+        newline_separator = "\n"
+        keywords_list = newline_separator.join([f"- {keyword}" for keyword in keywords_to_use])
+        query += "The following keywords should be used (organically) in the blog post:\n"
+        query += keywords_list
+        query += "\n\n"
+
+        query += "Quick reminder. You are writing a blog post for this company."
+        query += self.project.project_desctiption_string_for_ai
+        query += ". Make it look good, as the best solution for anyone reading the post."
+        query += "\n\n"
+
+        # # Writing Instructions
+        # query += GENERATE_CONTENT_SYSTEM_PROMPTS[content_type]
+        # query += "\n"
+        query += GeneratedBlogPost.blog_post_structure_rules()
+
+        agent = GPTResearcher(
+            query,
+            report_type="deep",
+            tone="Simple (written for young readers, using basic vocabulary and clear explanations)",  # noqa: E501
+            report_format="markdown",
         )
 
-        result = run_agent_synchronously(
-            agent,
-            "Generate an article based on the project details and title suggestions.",
-            deps=deps,
-            function_name="generate_content",
-            model_name="BlogPostTitleSuggestion",
-        )
+        result = run_gptr_synchronously(agent)
 
-        blog_post = GeneratedBlogPost.objects.create_and_validate(
+        # Create blog post with raw content first
+        slug = slugify(self.title)
+        tags = ", ".join(self.target_keywords) if self.target_keywords else ""
+
+        blog_post = GeneratedBlogPost.objects.create(
             project=self.project,
-            title=self,
-            description=result.output.description,
-            slug=result.output.slug,
-            tags=result.output.tags,
-            content=result.output.content,
+            title_suggestion=self,
+            title=self.title,  # Temporary title, will be updated after processing
+            description=self.description,
+            slug=slug,
+            tags=tags,
+            content=result,  # Raw content from GPTResearcher
         )
+
+        # Insert links into the blog post content
+        blog_post.insert_links_into_post()
+
+        # Process content after link insertion (extract title, clean up sections)
+        blog_post_title, blog_post_content = process_generated_blog_content(
+            generated_content=blog_post.content,  # Use content after link insertion
+            fallback_title=self.title,
+            title_suggestion_id=self.id,
+            project_id=self.project.id,
+        )
+
+        # Update blog post with processed content and extracted title
+        blog_post.title = blog_post_title
+        blog_post.slug = slugify(blog_post_title)
+        blog_post.content = blog_post_content
+        blog_post.save(update_fields=["title", "slug", "content"])
 
         if self.project.enable_automatic_og_image_generation:
             async_task(
@@ -831,14 +908,6 @@ class AutoSubmissionSetting(BaseModel):
         return f"{self.project.name}"
 
 
-class GeneratedBlogPostManager(models.Manager):
-    def create_and_validate(self, **kwargs):
-        """Create a new blog post and validate it."""
-        instance = self.create(**kwargs)
-        instance.run_validation()
-        return instance
-
-
 class GeneratedBlogPost(BaseModel):
     project = models.ForeignKey(
         Project,
@@ -847,13 +916,14 @@ class GeneratedBlogPost(BaseModel):
         on_delete=models.CASCADE,
         related_name="generated_blog_posts",
     )
-    title = models.ForeignKey(
+    title_suggestion = models.ForeignKey(
         BlogPostTitleSuggestion,
         null=True,
         blank=True,
         on_delete=models.CASCADE,
         related_name="generated_blog_posts",
     )
+    title = models.CharField(max_length=250)
     description = models.TextField(blank=True)
     slug = models.SlugField(max_length=250)
     tags = models.TextField()
@@ -864,29 +934,23 @@ class GeneratedBlogPost(BaseModel):
     posted = models.BooleanField(default=False)
     date_posted = models.DateTimeField(null=True, blank=True)
 
-    # Validation Issues - Innocent until proven guilty
-    content_too_short = models.BooleanField(default=False)
-    has_valid_ending = models.BooleanField(default=True)
-    placeholders = models.BooleanField(default=False)
-    starts_with_header = models.BooleanField(default=False)
-
-    objects = GeneratedBlogPostManager()
-
     def __str__(self):
-        return f"{self.project.name}: {self.title.title}"
+        return f"{self.project.name}: {self.title}"
 
-    @property
-    def post_title(self):
-        return self.title.title
-
-    @property
-    def blog_post_content_is_valid(self):
-        return (
-            self.content_too_short is False
-            and self.has_valid_ending is True
-            and self.placeholders is False
-            and self.starts_with_header is False
-        )
+    @classmethod
+    def blog_post_structure_rules(cls):
+        return """
+        - Use markdown.
+        - Start with the title as h1 (#). Do no include any other metadata (description, slug, etc.)
+        - Then do and intro, starting with `## Introduction`, then a paragraph of text.
+        - Continue with h2 (##) topics as you see fit.
+        - Do not go deeper than h2 (##) for post structure.
+        - Never inlcude placeholder items (insert image here, link suggestions, etc.)
+        - Do not have `References` section, insert all the links into the post directly, organically.
+        - Do not include a call to action paragraph at the end of the post.
+        - Finish the post with a conclusion.
+        - Instead of using links as a reference, try to insert them into the post directly, organically.
+        """  # noqa: E501
 
     @property
     def generated_blog_post_schema(self):
@@ -896,208 +960,6 @@ class GeneratedBlogPost(BaseModel):
             tags=self.tags,
             content=self.content,
         )
-
-    @property
-    def has_placeholders(self) -> bool:
-        content = self.content or ""
-        content_lower = content.lower()
-
-        for pattern in PLACEHOLDER_PATTERNS:
-            if pattern in content_lower:
-                logger.warning(
-                    "[Blog Post Has Placeholders] Placeholder found",
-                    pattern=pattern,
-                    blog_post_id=self.id,
-                )
-                return True
-
-        for pattern in PLACEHOLDER_BRACKET_PATTERNS:
-            matches = re.findall(pattern, content_lower)
-            if matches:
-                logger.warning(
-                    "[Blog Post Has Placeholders] Bracket Placeholder found",
-                    pattern=pattern,
-                    blog_post_id=self.id,
-                )
-                return True
-
-        logger.info(
-            "[Blog Post Has Placeholders] No placeholders found",
-            blog_post_id=self.id,
-        )
-
-        return False
-
-    @property
-    def content_starts_with_header(self) -> bool:
-        content = self.content or ""
-        content = content.strip()
-
-        if not content:
-            return False
-
-        header_or_asterisk_pattern = r"^(#{1,6}\s+|\*)"
-        starts_with_header_or_asterisk = bool(re.match(header_or_asterisk_pattern, content))
-
-        if starts_with_header_or_asterisk:
-            logger.warning(
-                "[Blog Post Starts With Header] Content starts with header or asterisk",
-                blog_post_id=self.id,
-            )
-        else:
-            logger.info(
-                "[Blog Post Starts With Header] Content starts with regular text",
-                blog_post_id=self.id,
-            )
-
-        return starts_with_header_or_asterisk
-
-    def blog_post_has_valid_ending(self) -> bool:
-        """
-        Validate if a blog post has a complete, proper ending using AI analysis.
-
-        Args:
-            blog_post: GeneratedBlogPost instance to validate
-
-        Returns:
-            True if the ending is valid, False otherwise
-        """
-        content = self.content or ""
-        content = content.strip()
-
-        agent = create_validate_blog_post_ending_agent()
-
-        try:
-            result = run_agent_synchronously(
-                agent,
-                f"Please analyze this blog post and determine if it has a complete ending:\n\n{content}",  # noqa: E501
-                function_name="blog_post_has_valid_ending",
-            )
-
-            ending_is_valid = result.output
-
-            if ending_is_valid:
-                logger.info(
-                    "[Blog Post Has Valid Ending] Valid ending",
-                    result=ending_is_valid,
-                    blog_post_id=self.id,
-                )
-            else:
-                logger.warning(
-                    "[Blog Post Has Valid Ending] Invalid ending",
-                    result=ending_is_valid,
-                    blog_post_id=self.id,
-                )
-
-            return ending_is_valid
-
-        except Exception as error:
-            logger.error(
-                "[Blog Post Has Valid Ending] AI analysis failed",
-                error=str(error),
-                exc_info=True,
-                content_length=len(content),
-            )
-            return False
-
-    def run_validation(self):
-        """Run validation and update fields in a single query."""
-        from core.utils import blog_post_has_valid_ending
-
-        base_logger_info = {
-            "blog_post_id": self.id,
-            "project_id": self.project_id,
-            "project_name": self.project.name,
-            "profile_id": self.project.profile.id,
-            "profile_email": self.project.profile.user.email,
-        }
-
-        logger.info("[Validation] Running validation", **base_logger_info)
-
-        if not self.content:
-            self.content_too_short = True
-            self.has_valid_ending = False
-            self.placeholders = False
-            self.starts_with_header = False
-
-        else:
-            content = self.content.strip()
-            self.content_too_short = len(content) < 3000
-            self.has_valid_ending = blog_post_has_valid_ending(self)
-            self.placeholders = self.has_placeholders
-            self.starts_with_header = self.content_starts_with_header
-
-        self.save(
-            update_fields=[
-                "content_too_short",
-                "has_valid_ending",
-                "placeholders",
-                "starts_with_header",
-            ]
-        )
-
-        logger.info(
-            "[Validation] Blog post validation complete",
-            **base_logger_info,
-            blog_post_title=self.title.title,
-            content_too_short=self.content_too_short,
-            has_valid_ending=self.has_valid_ending,
-            placeholders=self.placeholders,
-            starts_with_header=self.starts_with_header,
-        )
-
-    def _build_fix_context(self):
-        """Build full context for content editor agent to ensure accurate regeneration."""
-        from core.agents.schemas import BlogPostGenerationContext, ProjectPageContext
-
-        project_pages = [
-            ProjectPageContext(
-                url=page.url,
-                title=page.title,
-                description=page.description,
-                summary=page.summary,
-            )
-            for page in self.project.project_pages.all()
-        ]
-
-        project_keywords = [
-            pk.keyword.keyword_text
-            for pk in self.project.project_keywords.filter(use=True).select_related("keyword")
-        ]
-
-        return BlogPostGenerationContext(
-            project_details=self.project.project_details,
-            title_suggestion=self.title.title_suggestion_schema,
-            project_pages=project_pages,
-            content_type=self.title.content_type,
-            project_keywords=project_keywords,
-        )
-
-    def fix_header_start(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post starts with a header (like # or ##) instead of regular text.
-
-            Please remove it such that the content starts with regular text, usually an introduction.
-            """,  # noqa: E501
-            deps=context,
-            function_name="fix_header_start",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-        return True
 
     def submit_blog_post_to_endpoint(self):
         from core.utils import replace_placeholders
@@ -1150,90 +1012,6 @@ class GeneratedBlogPost(BaseModel):
             )
             return False
 
-    def fix_content_length(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post is too short.
-            I think something went wrong during generation.
-            Please regenerate.
-          """,
-            deps=context,
-            function_name="fix_content_length",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_valid_ending(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            This blog post does not end on an ending that makes sense.
-            Most likely generation failed at some point and returned half completed content.
-            Please regenerate the blog post.
-            """,
-            deps=context,
-            function_name="fix_valid_ending",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_placeholders(self):
-        self.refresh_from_db()
-        self.title.refresh_from_db()
-
-        context = self._build_fix_context()
-
-        agent = create_content_editor_agent()
-
-        result = run_agent_synchronously(
-            agent,
-            """
-            The content contains placeholders.
-            Please regenerate the blog post without placeholders.
-            """,
-            deps=context,
-            function_name="fix_placeholders",
-            model_name="GeneratedBlogPost",
-        )
-
-        self.content = result.output
-        self.save(update_fields=["content"])
-        self.run_validation()
-
-    def fix_generated_blog_post(self):
-        if self.content_too_short is True:
-            self.fix_content_length()
-
-        if self.has_valid_ending is False:
-            self.fix_valid_ending()
-
-        if self.placeholders is True:
-            self.fix_placeholders()
-
-        if self.starts_with_header is True:
-            self.fix_header_start()
-
     def generate_og_image(self) -> tuple[bool, str]:
         """
         Generate an Open Graph image for a blog post using Replicate flux-schnell model.
@@ -1263,7 +1041,9 @@ class GeneratedBlogPost(BaseModel):
             return True, f"Image already exists for blog post {self.id}"
 
         try:
-            blog_post_category = self.title.category if self.title.category else "technology"
+            blog_post_category = (
+                self.title_suggestion.category if self.title_suggestion.category else "technology"
+            )
 
             project_og_style = self.project.og_image_style or OGImageStyle.MODERN_GRADIENT
             prompt = get_og_image_prompt(project_og_style, blog_post_category)
@@ -1340,6 +1120,127 @@ class GeneratedBlogPost(BaseModel):
                 project_id=self.project_id,
             )
             return False, f"Unexpected error: {str(error)}"
+
+    def insert_links_into_post(self, max_pages=4, max_external_pages=3):
+        """
+        Insert links from project pages into the blog post content organically.
+        Uses PydanticAI to intelligently place links without modifying the content.
+
+        Args:
+            max_pages: Maximum number of internal project pages to use for linking (default: 4)
+            max_external_pages: Maximum number of external project pages to use for linking (default: 3)
+
+        Returns:
+            str: The blog post content with links inserted
+        """  # noqa: E501
+        from core.utils import (
+            get_relevant_pages_for_blog_post,
+            run_agent_synchronously,
+        )
+
+        if not self.title_suggestion:
+            logger.warning(
+                "[InsertLinksIntoPost] No title suggestion found for blog post",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return self.content
+
+        # Get internal project pages
+        manually_selected_project_pages = list(self.project.project_pages.filter(always_use=True))
+        relevant_project_pages = list(
+            get_relevant_pages_for_blog_post(
+                self.project,
+                self.title_suggestion.suggested_meta_description,
+                max_pages=max_pages,
+            )
+        )
+
+        all_project_pages = manually_selected_project_pages + relevant_project_pages
+
+        # Get external project pages if link exchange is enabled
+        external_project_pages = []
+        if self.project.particiate_in_link_exchange:
+            external_project_pages = list(
+                get_relevant_external_pages_for_blog_post(
+                    meta_description=self.title_suggestion.suggested_meta_description,
+                    exclude_project=self.project,
+                    max_pages=max_external_pages,
+                )
+            )
+            # Filter to only include pages from projects that also participate in link exchange
+            external_project_pages = [
+                page for page in external_project_pages if page.project.particiate_in_link_exchange
+            ]
+
+        all_pages_to_link = all_project_pages + external_project_pages
+
+        if not all_pages_to_link:
+            logger.info(
+                "[InsertLinksIntoPost] No pages found for link insertion",
+                blog_post_id=self.id,
+                project_id=self.project_id,
+            )
+            return self.content
+
+        project_page_contexts = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+            )
+            for page in all_pages_to_link
+        ]
+
+        # Extract URLs for logging
+        urls_to_insert = [page.url for page in all_pages_to_link]
+        internal_urls = [page.url for page in all_project_pages]
+        external_urls = [page.url for page in external_project_pages]
+
+        link_insertion_context = LinkInsertionContext(
+            blog_post_content=self.content,
+            project_pages=project_page_contexts,
+        )
+
+        insert_links_agent = create_insert_links_agent()
+
+        prompt = "Insert the provided project page links into the blog post content organically. Do not modify the existing content, only add links where appropriate."  # noqa: E501
+
+        logger.info(
+            "[InsertLinksIntoPost] Running link insertion agent",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+            num_total_pages=len(project_page_contexts),
+            num_internal_pages=len(all_project_pages),
+            num_external_pages=len(external_project_pages),
+            num_always_use_pages=len(manually_selected_project_pages),
+            participate_in_link_exchange=self.project.particiate_in_link_exchange,
+            urls_to_insert=urls_to_insert,
+            internal_urls=internal_urls,
+            external_urls=external_urls,
+        )
+
+        result = run_agent_synchronously(
+            insert_links_agent,
+            prompt,
+            deps=link_insertion_context,
+            function_name="insert_links_into_post",
+            model_name="GeneratedBlogPost",
+        )
+
+        content_with_links = result.output
+
+        self.content = content_with_links
+        self.save(update_fields=["content"])
+
+        logger.info(
+            "[InsertLinksIntoPost] Links inserted successfully",
+            blog_post_id=self.id,
+            project_id=self.project_id,
+        )
+
+        return content_with_links
 
 
 class ProjectPage(BaseModel):
@@ -1717,7 +1618,7 @@ class Competitor(BaseModel):
         Generate comparison blog post content using Perplexity Sonar.
         This method uses Perplexity's web search capabilities to research both products.
         """
-        from core.agents.schemas import CompetitorVsPostContext, ProjectPageContext
+        from core.agents.schemas import CompetitorVsPostContext
 
         agent = create_competitor_vs_blog_post_agent()
 
@@ -1730,7 +1631,6 @@ class Competitor(BaseModel):
                 title=page.title,
                 description=page.description,
                 summary=page.summary,
-                always_use=page.always_use,
             )
             for page in self.project.project_pages.filter(date_analyzed__isnull=False)
         ]

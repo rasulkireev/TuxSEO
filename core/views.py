@@ -729,6 +729,7 @@ class ProjectSettingsView(LoginRequiredMixin, DetailView):
         context["auto_submission_settings_form"] = form
         context["languages"] = Language.choices
         context["og_image_styles"] = OGImageStyle.choices
+        context["has_pro_subscription"] = self.request.user.profile.is_on_pro_plan
 
         return context
 
@@ -936,14 +937,14 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
             project_keywords = project.get_keywords()
 
             # Add keyword usage info to the suggestion
-            generated_post.title.keywords_with_usage = []
-            if generated_post.title.target_keywords:
-                for keyword_text in generated_post.title.target_keywords:
+            generated_post.title_suggestion.keywords_with_usage = []
+            if generated_post.title_suggestion.target_keywords:
+                for keyword_text in generated_post.title_suggestion.target_keywords:
                     keyword_info = project_keywords.get(
                         keyword_text.lower(),
                         {"keyword": None, "in_use": False, "project_keyword_id": None},
                     )
-                    generated_post.title.keywords_with_usage.append(
+                    generated_post.title_suggestion.keywords_with_usage.append(
                         {
                             "text": keyword_text,
                             "keyword": keyword_info["keyword"],

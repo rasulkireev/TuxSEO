@@ -64,7 +64,7 @@ You need to configure several environment variables for TuxSEO to work properly.
 
 At minimum, update these required values:
 
-- AI API keys (GEMINI_API_KEY, PERPLEXITY_API_KEY, JINA_READER_API_KEY, KEYWORDS_EVERYWHERE_API_KEY)
+- AI API keys (OPENAI_API_KEY, TAVILY_API_KEY, GEMINI_API_KEY, PERPLEXITY_API_KEY, JINA_READER_API_KEY, KEYWORDS_EVERYWHERE_API_KEY)
 - Database password (POSTGRES_PASSWORD)
 - Redis password (REDIS_PASSWORD)
 - Django secret key (SECRET_KEY)

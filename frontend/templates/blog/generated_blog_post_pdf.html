@@ -4,7 +4,7 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>{{ generated_post.title.title }}</title>
+    <title>{{ generated_post.title }}</title>
     <style>
         @page {
             size: A4;
@@ -185,7 +185,7 @@
 <body>
     <div class="header">
         <div class="project-name">{{ project.name }}</div>
-        <h1>{{ generated_post.title.title }}</h1>
+        <h1>{{ generated_post.title }}</h1>
         {% if generated_post.description %}
         <div class="description">{{ generated_post.description }}</div>
         {% endif %}

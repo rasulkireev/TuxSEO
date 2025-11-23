@@ -302,7 +302,7 @@
   </section>
 
   <!-- OG Image Generation Section -->
-  <section id="og-image-generation" class="bg-white rounded-lg border border-gray-200 shadow-sm">
+  <section id="og-image-generation" class="bg-white rounded-lg border border-gray-200 shadow-sm {% if not has_pro_subscription %}opacity-75{% endif %}">
     <div class="px-6 py-5 border-b border-gray-200">
       <div class="flex justify-between items-start">
         <div>
@@ -319,9 +319,10 @@
             type="button"
             data-action="og-image-toggle#toggle"
             data-og-image-toggle-target="toggle"
-            class="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 outline-offset-2 outline-gray-600 ring-1 ring-inset ring-gray-900/5 transition-colors duration-200 ease-in-out has-[:checked]:bg-gray-600 has-[:focus-visible]:outline has-[:focus-visible]:outline-2"
+            class="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 outline-offset-2 outline-gray-600 ring-1 ring-inset ring-gray-900/5 transition-colors duration-200 ease-in-out has-[:checked]:bg-gray-600 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 {% if not has_pro_subscription %}cursor-not-allowed opacity-50{% endif %}"
             role="switch"
             aria-checked="{{ project.enable_automatic_og_image_generation|lower }}"
+            {% if not has_pro_subscription %}disabled{% endif %}
           >
             <span
               data-og-image-toggle-target="switch"
@@ -333,6 +334,36 @@
     </div>
 
     <div class="px-6 py-6">
+      {% if not has_pro_subscription %}
+        <!-- Upgrade Banner for Free Users -->
+        <div class="p-4 mb-6 bg-amber-50 rounded-lg border border-amber-200">
+          <div class="flex gap-3">
+            <div class="flex-shrink-0">
+              <svg class="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-sm font-medium text-amber-900">Pro Feature</h3>
+              <p class="mt-1 text-sm text-amber-700">
+                Automatic OG Image Generation is available on the Pro plan. Upgrade to automatically create eye-catching social media images for all your blog posts.
+              </p>
+              <div class="mt-3">
+                <a
+                  href="{% url 'settings' %}"
+                  class="inline-flex items-center px-4 py-2 text-sm font-semibold text-amber-900 bg-amber-100 rounded-lg border border-amber-300 transition-colors hover:bg-amber-200"
+                >
+                  <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Upgrade to Pro
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
       <form
         data-controller="project-details"
         data-project-details-project-id-value="{{ project.id }}"
@@ -341,6 +372,7 @@
         {% csrf_token %}
 
         <div class="space-y-6">
+          {% if has_pro_subscription %}
           <!-- Info Banner -->
           <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
             <div class="flex gap-3">
@@ -357,20 +389,22 @@
               </div>
             </div>
           </div>
+          {% endif %}
 
           <!-- Image Style Selection -->
           <div id="og-image-style">
             <h3 class="mb-4 text-base font-semibold text-gray-900">Image Style</h3>
             <div>
-              <label for="og_image_style" class="block mb-2 text-sm font-medium text-gray-700">
+              <label for="og_image_style" class="block mb-2 text-sm font-medium {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-700{% endif %}">
                 Visual Style for Generated Images
               </label>
-              <p class="mb-2 text-xs text-gray-500">Choose the aesthetic that best matches your brand</p>
+              <p class="mb-2 text-xs {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-500{% endif %}">Choose the aesthetic that best matches your brand</p>
               <select
                 id="og_image_style"
                 name="og_image_style"
                 data-project-details-target="input"
-                class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm"
+                class="block w-full rounded-lg border-gray-300 shadow-sm transition-colors focus:border-gray-500 focus:ring-gray-500 sm:text-sm {% if not has_pro_subscription %}cursor-not-allowed opacity-50{% endif %}"
+                {% if not has_pro_subscription %}disabled{% endif %}
               >
                 {% for value, label in og_image_styles %}
                   <option value="{{ value }}" {% if project.og_image_style == value %}selected{% endif %}>{{ label }}</option>
@@ -379,9 +413,9 @@
             </div>
 
             <!-- Style Descriptions -->
-            <div class="p-4 mt-4 bg-gray-50 rounded-lg">
-              <h4 class="mb-3 text-sm font-medium text-gray-900">Style Descriptions</h4>
-              <div class="space-y-2 text-xs text-gray-600">
+            <div class="p-4 mt-4 {% if not has_pro_subscription %}bg-gray-100{% else %}bg-gray-50{% endif %} rounded-lg">
+              <h4 class="mb-3 text-sm font-medium {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-900{% endif %}">Style Descriptions</h4>
+              <div class="space-y-2 text-xs {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-600{% endif %}">
                 <p><strong>Modern Gradient:</strong> Contemporary gradient backgrounds with clean typography</p>
                 <p><strong>Minimalist Clean:</strong> Simple, elegant designs with plenty of white space</p>
                 <p><strong>Bold Typography:</strong> Eye-catching text-focused designs with strong contrast</p>
@@ -395,6 +429,7 @@
           </div>
         </div>
 
+        {% if has_pro_subscription %}
         <!-- Save Button -->
         <div class="flex justify-end pt-6 mt-6 border-t border-gray-200">
           <button
@@ -407,12 +442,13 @@
             Save OG Image Settings
           </button>
         </div>
+        {% endif %}
       </form>
     </div>
   </section>
 
   <!-- Automatic Submission Section -->
-  <section id="automatic-submission" class="bg-white rounded-lg border border-gray-200 shadow-sm">
+  <section id="automatic-submission" class="bg-white rounded-lg border border-gray-200 shadow-sm {% if not has_pro_subscription %}opacity-75{% endif %}">
     <div class="px-6 py-5 border-b border-gray-200">
       <div class="flex justify-between items-start">
         <div>
@@ -429,9 +465,10 @@
             type="button"
             data-action="auto-submission-toggle#toggle"
             data-auto-submission-toggle-target="toggle"
-            class="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 outline-offset-2 outline-gray-600 ring-1 ring-inset ring-gray-900/5 transition-colors duration-200 ease-in-out has-[:checked]:bg-gray-600 has-[:focus-visible]:outline has-[:focus-visible]:outline-2"
+            class="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 outline-offset-2 outline-gray-600 ring-1 ring-inset ring-gray-900/5 transition-colors duration-200 ease-in-out has-[:checked]:bg-gray-600 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 {% if not has_pro_subscription %}cursor-not-allowed opacity-50{% endif %}"
             role="switch"
             aria-checked="{{ project.enable_automatic_post_submission|lower }}"
+            {% if not has_pro_subscription %}disabled{% endif %}
           >
             <span
               data-auto-submission-toggle-target="switch"
@@ -443,13 +480,43 @@
     </div>
 
     <div class="px-6 py-6">
+      {% if not has_pro_subscription %}
+        <!-- Upgrade Banner for Free Users -->
+        <div class="p-4 mb-6 bg-amber-50 rounded-lg border border-amber-200">
+          <div class="flex gap-3">
+            <div class="flex-shrink-0">
+              <svg class="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-sm font-medium text-amber-900">Pro Feature</h3>
+              <p class="mt-1 text-sm text-amber-700">
+                Automatic Post Submission is available on the Pro plan. Upgrade to automatically publish your generated blog posts to your website via API.
+              </p>
+              <div class="mt-3">
+                <a
+                  href="{% url 'settings' %}"
+                  class="inline-flex items-center px-4 py-2 text-sm font-semibold text-amber-900 bg-amber-100 rounded-lg border border-amber-300 transition-colors hover:bg-amber-200"
+                >
+                  <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Upgrade to Pro
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
       <form method="post" class="space-y-8">
         {% csrf_token %}
         {{ auto_submission_settings_form.non_field_errors | safe }}
 
         <!-- Datalist for dynamic value suggestions -->
         <datalist id="body-value-suggestions">
-          <option value="{% templatetag openvariable %} post_title {% templatetag closevariable %}"></option>
+          <option value="{% templatetag openvariable %} title {% templatetag closevariable %}"></option>
           <option value="{% templatetag openvariable %} description {% templatetag closevariable %}"></option>
           <option value="{% templatetag openvariable %} slug {% templatetag closevariable %}"></option>
           <option value="{% templatetag openvariable %} tags {% templatetag closevariable %}"></option>
@@ -459,19 +526,23 @@
 
         <!-- API Configuration -->
         <div id="api-configuration">
-          <h3 class="mb-4 text-base font-semibold text-gray-900">API Configuration</h3>
+          <h3 class="mb-4 text-base font-semibold {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-900{% endif %}">API Configuration</h3>
           <div class="space-y-6">
             {% for field in auto_submission_settings_form.visible_fields %}
               {% if field.name != "body" and field.name != "header" and field.name != "posts_per_month" %}
                 <div>
                   {{ field.errors | safe }}
-                  <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
+                  <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-700{% endif %}">
                     {{ field.label }}
                   </label>
                   {% if field.help_text %}
-                    <p class="mb-2 text-xs text-gray-500">{{ field.help_text }}</p>
+                    <p class="mb-2 text-xs {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-500{% endif %}">{{ field.help_text }}</p>
                   {% endif %}
-                  {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" %}
+                  {% if not has_pro_subscription %}
+                    {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" disabled="disabled" %}
+                  {% else %}
+                    {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" %}
+                  {% endif %}
                 </div>
               {% endif %}
             {% endfor %}
@@ -480,8 +551,8 @@
 
         <!-- Request Headers -->
         <div id="request-headers" class="pt-8 border-t border-gray-200">
-          <h3 class="mb-4 text-base font-semibold text-gray-900">Request Headers</h3>
-          <p class="mb-4 text-sm text-gray-500">Add custom headers for your API requests (e.g., authentication tokens)</p>
+          <h3 class="mb-4 text-base font-semibold {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-900{% endif %}">Request Headers</h3>
+          <p class="mb-4 text-sm {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-500{% endif %}">Add custom headers for your API requests (e.g., authentication tokens)</p>
           {% for field in auto_submission_settings_form.visible_fields %}
             {% if field.name == "header" %}
               <div
@@ -492,7 +563,8 @@
                 <button
                   type="button"
                   data-action="auto-submit-header#addRow"
-                  class="inline-flex items-center px-4 py-2 mt-3 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 transition-colors hover:bg-gray-50"
+                  class="inline-flex items-center px-4 py-2 mt-3 text-sm font-medium {% if not has_pro_subscription %}text-gray-400 cursor-not-allowed{% else %}text-gray-700 hover:bg-gray-50{% endif %} bg-white rounded-lg border border-gray-300 transition-colors"
+                  {% if not has_pro_subscription %}disabled{% endif %}
                 >
                   <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -507,7 +579,8 @@
 
         <!-- Request Body -->
         <div id="request-body" class="pt-8 border-t border-gray-200">
-          <h3 class="mb-4 text-base font-semibold text-gray-900">Request Body</h3>
+          <h3 class="mb-4 text-base font-semibold {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-900{% endif %}">Request Body</h3>
+          {% if has_pro_subscription %}
           <div class="p-4 mb-4 bg-amber-50 rounded-lg border border-amber-200">
             <div class="flex gap-3">
               <svg class="flex-shrink-0 w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -515,10 +588,21 @@
               </svg>
               <div class="text-sm text-amber-800">
                 <p class="font-medium">Dynamic Values</p>
-                <p class="mt-1">Use <code class="px-1 py-0.5 bg-amber-100 rounded">{% templatetag openvariable %} variable_name {% templatetag closevariable %}</code> for dynamic content. Available: <code class="px-1 py-0.5 bg-amber-100 rounded">post_title</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">description</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">slug</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">tags</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">content</code>, <code class="px-1 py-0.5 bg-amber-100 rounded">created_at</code></p>
+                <p class="mt-1">
+                  Use
+                  <code class="px-1 py-0.5 bg-amber-100 rounded">{% templatetag openvariable %} variable_name {% templatetag closevariable %}</code>
+                  for dynamic content. Available:
+                  <code class="px-1 py-0.5 bg-amber-100 rounded">title</code>,
+                  <code class="px-1 py-0.5 bg-amber-100 rounded">description</code>,
+                  <code class="px-1 py-0.5 bg-amber-100 rounded">slug</code>,
+                  <code class="px-1 py-0.5 bg-amber-100 rounded">tags</code>,
+                  <code class="px-1 py-0.5 bg-amber-100 rounded">content</code>,
+                  <code class="px-1 py-0.5 bg-amber-100 rounded">created_at</code>
+                </p>
               </div>
             </div>
           </div>
+          {% endif %}
           {% for field in auto_submission_settings_form.visible_fields %}
             {% if field.name == "body" %}
               <div
@@ -529,7 +613,8 @@
                 <button
                   type="button"
                   data-action="auto-submit-body#addRow"
-                  class="inline-flex items-center px-4 py-2 mt-3 text-sm font-medium text-gray-700 bg-white rounded-lg border border-gray-300 transition-colors hover:bg-gray-50"
+                  class="inline-flex items-center px-4 py-2 mt-3 text-sm font-medium {% if not has_pro_subscription %}text-gray-400 cursor-not-allowed{% else %}text-gray-700 hover:bg-gray-50{% endif %} bg-white rounded-lg border border-gray-300 transition-colors"
+                  {% if not has_pro_subscription %}disabled{% endif %}
                 >
                   <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -544,25 +629,30 @@
 
         <!-- Publishing Schedule -->
         <div id="publishing-schedule" class="pt-8 border-t border-gray-200">
-          <h3 class="mb-4 text-base font-semibold text-gray-900">Publishing Schedule</h3>
+          <h3 class="mb-4 text-base font-semibold {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-900{% endif %}">Publishing Schedule</h3>
           <div class="space-y-6">
             {% for field in auto_submission_settings_form.visible_fields %}
               {% if field.name == "posts_per_month" %}
                 <div>
                   {{ field.errors | safe }}
-                  <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium text-gray-700">
+                  <label for="{{ field.id_for_label }}" class="block mb-2 text-sm font-medium {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-700{% endif %}">
                     {{ field.label }}
                   </label>
                   {% if field.help_text %}
-                    <p class="mb-2 text-xs text-gray-500">{{ field.help_text }}</p>
+                    <p class="mb-2 text-xs {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-500{% endif %}">{{ field.help_text }}</p>
                   {% endif %}
-                  {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" %}
+                  {% if not has_pro_subscription %}
+                    {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" disabled="disabled" %}
+                  {% else %}
+                    {% render_field field class="block px-3 py-2 w-full placeholder-gray-500 text-gray-900 rounded-lg border border-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-gray-500 sm:text-sm" %}
+                  {% endif %}
                 </div>
               {% endif %}
             {% endfor %}
           </div>
         </div>
 
+        {% if has_pro_subscription %}
         <!-- Form Actions -->
         <div class="flex justify-between items-center pt-6 border-t border-gray-200">
           <a
@@ -585,7 +675,125 @@
             Save Submission Settings
           </button>
         </div>
+        {% endif %}
       </form>
+    </div>
+  </section>
+
+  <!-- Link Exchange Section -->
+  <section id="link-exchange" class="bg-white rounded-lg border border-gray-200 shadow-sm {% if not has_pro_subscription %}opacity-75{% endif %}">
+    <div class="px-6 py-5 border-b border-gray-200">
+      <div class="flex justify-between items-start">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900">
+            Link Exchange Program
+          </h2>
+          <p class="mt-1 text-sm text-gray-500">Participate in cross-linking with other projects to improve SEO</p>
+        </div>
+        <!-- Toggle Switch -->
+        <div
+          data-controller="link-exchange-toggle"
+          data-link-exchange-toggle-project-id-value="{{ project.id }}"
+          data-link-exchange-toggle-enabled-value="{{ project.particiate_in_link_exchange|lower }}"
+        >
+          <button
+            type="button"
+            data-action="link-exchange-toggle#toggle"
+            data-link-exchange-toggle-target="toggle"
+            class="group relative inline-flex w-11 shrink-0 rounded-full bg-gray-200 p-0.5 outline-offset-2 outline-gray-600 ring-1 ring-inset ring-gray-900/5 transition-colors duration-200 ease-in-out has-[:checked]:bg-gray-600 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 {% if not has_pro_subscription %}cursor-not-allowed opacity-50{% endif %}"
+            role="switch"
+            aria-checked="{{ project.particiate_in_link_exchange|lower }}"
+            {% if not has_pro_subscription %}disabled{% endif %}
+          >
+            <span
+              data-link-exchange-toggle-target="switch"
+              class="size-5 rounded-full bg-white shadow-sm ring-1 ring-gray-900/5 transition-transform duration-200 ease-in-out group-has-[:checked]:translate-x-5"
+            ></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-6 py-6">
+      {% if not has_pro_subscription %}
+        <!-- Upgrade Banner for Free Users -->
+        <div class="p-4 mb-6 bg-amber-50 rounded-lg border border-amber-200">
+          <div class="flex gap-3">
+            <div class="flex-shrink-0">
+              <svg class="w-5 h-5 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <div class="flex-1">
+              <h3 class="text-sm font-medium text-amber-900">Pro Feature</h3>
+              <p class="mt-1 text-sm text-amber-700">
+                Link Exchange is available on the Pro plan. Upgrade to participate in our link exchange program and boost your SEO with natural backlinks.
+              </p>
+              <div class="mt-3">
+                <a
+                  href="{% url 'settings' %}"
+                  class="inline-flex items-center px-4 py-2 text-sm font-semibold text-amber-900 bg-amber-100 rounded-lg border border-amber-300 transition-colors hover:bg-amber-200"
+                >
+                  <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
+                  Upgrade to Pro
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% else %}
+        <!-- Info Banner -->
+        <div class="p-4 mb-6 bg-blue-50 rounded-lg border border-blue-200">
+          <div class="flex gap-3">
+            <div class="flex-shrink-0">
+              <svg class="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-sm font-medium text-blue-900">About Link Exchange</h3>
+              <p class="mt-1 text-sm text-blue-700">
+                When enabled, TuxSEO will automatically insert relevant links from other participating projects into your blog posts, and vice versa. This helps improve SEO through natural backlinks and provides additional value to readers.
+              </p>
+            </div>
+          </div>
+        </div>
+      {% endif %}
+
+      <!-- Feature Details -->
+      <div class="mt-6 space-y-4">
+        <div>
+          <h3 class="mb-3 text-base font-semibold text-gray-900">How It Works</h3>
+          <ul class="space-y-2 text-sm {% if not has_pro_subscription %}text-gray-400{% else %}text-gray-600{% endif %}">
+            <li class="flex gap-2 items-start">
+              <svg class="flex-shrink-0 mt-0.5 w-5 h-5 {% if not has_pro_subscription %}text-gray-400{% else %}text-green-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Links are inserted organically into relevant sections of your blog posts</span>
+            </li>
+            <li class="flex gap-2 items-start">
+              <svg class="flex-shrink-0 mt-0.5 w-5 h-5 {% if not has_pro_subscription %}text-gray-400{% else %}text-green-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>AI matches content contextually to ensure links add value</span>
+            </li>
+            <li class="flex gap-2 items-start">
+              <svg class="flex-shrink-0 mt-0.5 w-5 h-5 {% if not has_pro_subscription %}text-gray-400{% else %}text-green-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>You maintain full control and can disable at any time</span>
+            </li>
+            <li class="flex gap-2 items-start">
+              <svg class="flex-shrink-0 mt-0.5 w-5 h-5 {% if not has_pro_subscription %}text-gray-400{% else %}text-green-600{% endif %}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+              <span>Limited to a small number of external links per post to maintain quality</span>
+            </li>
+          </ul>
+        </div>
+      </div>
     </div>
   </section>
 

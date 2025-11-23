@@ -15,6 +15,16 @@ These variables are essential for TuxSEO to function:
 
 TuxSEO uses several AI services to generate content and analyze your website. You need API keys for each service:
 
+**OPENAI_API_KEY**
+- Get your key from [OpenAI Platform](https://platform.openai.com/api-keys)
+- Used for blog post content generation via GPT-Researcher
+- Paid service with usage-based pricing
+
+**TAVILY_API_KEY**
+- Get your key from [Tavily](https://tavily.com/)
+- Used by GPT-Researcher for web research and content generation
+- Free tier available with 1,000 requests per month
+
 **GEMINI_API_KEY**
 - Get your key from [Google AI Studio](https://makersuite.google.com/app/apikey)
 - Used for content generation and analysis

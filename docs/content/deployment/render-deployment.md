@@ -13,6 +13,8 @@ Before deploying, you need to configure environment variables. See the [Environm
 
 The minimum required variables are:
 
+- OPENAI_API_KEY
+- TAVILY_API_KEY
 - GEMINI_API_KEY
 - PERPLEXITY_API_KEY
 - JINA_READER_API_KEY
