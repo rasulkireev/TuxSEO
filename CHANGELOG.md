@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - added changelog page
 - features to the pro plan on pricing page
+- Monitoring
+  - Sentry Agent Monitoring
 
 ### Fixed
 - fixed `FieldError` on publish history page

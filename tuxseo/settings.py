@@ -20,6 +20,8 @@ import sentry_sdk
 import structlog
 from sentry_sdk.integrations.django import DjangoIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.openai import OpenAIIntegration
+from sentry_sdk.integrations.pydantic_ai import PydanticAIIntegration
 from sentry_sdk.integrations.redis import RedisIntegration
 from structlog_sentry import SentryProcessor
 
@@ -495,10 +497,9 @@ if SENTRY_DSN and ENVIRONMENT == "prod":
         integrations=[
             DjangoIntegration(),
             RedisIntegration(),
+            PydanticAIIntegration(),
         ],
-        disabled_integrations=[
-            LoggingIntegration(),
-        ],
+        disabled_integrations=[LoggingIntegration(), OpenAIIntegration()],
         attach_stacktrace=True,
         include_local_variables=True,
     )
