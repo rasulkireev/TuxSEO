@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Handle link of an image in submit blog post endpoint
 - Vectors to ProjecPages and Competitors
 - Docs section
+- Automatically create a keyword from project name and mark it as used when processing project keywords
 
 ### Changed
 - using gtpr for writing posts
