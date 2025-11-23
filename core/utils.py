@@ -308,3 +308,160 @@ def get_markdown_content(url):
             url=url,
         )
         return ("", "", "")
+
+
+def validate_and_correct_article_iteratively(
+    drafted_article,
+    outline,
+    target_keywords,
+    title,
+    project_details,
+    project_pages,
+    max_iterations=3,
+):
+    """
+    Iteratively validate and correct an article until it passes validation or max iterations reached.
+
+    This function implements a quality control loop that:
+    1. Validates the drafted article against guidelines
+    2. If validation fails, corrects the article based on feedback
+    3. Re-validates the corrected article
+    4. Repeats until validation passes OR max iterations reached
+
+    Args:
+        drafted_article: GeneratedBlogPostSchema from the drafting agent
+        outline: BlogPostOutline used to create the article
+        target_keywords: list[str] of keywords to distribute
+        title: str article title
+        project_details: ProjectDetails for the project
+        project_pages: list[ProjectPageContext] for linking
+        max_iterations: int maximum correction attempts (default: 3)
+
+    Returns:
+        tuple: (final_article, validation_history)
+            - final_article: GeneratedBlogPostSchema (corrected or original)
+            - validation_history: list[dict] of validation results per iteration
+    """
+    from core.agents import create_correct_article_agent, create_validate_article_agent
+    from core.agents.schemas import ArticleCorrectionContext, ArticleValidationContext
+
+    logger.info(
+        "[Iterative Validation] Starting iterative validation-correction loop",
+        max_iterations=max_iterations,
+        target_keywords=target_keywords,
+        title=title,
+    )
+
+    current_article = drafted_article
+    validation_history = []
+
+    for iteration in range(1, max_iterations + 1):
+        logger.info(
+            f"[Iterative Validation] Iteration {iteration}/{max_iterations}: Validating article",
+            iteration=iteration,
+            max_iterations=max_iterations,
+        )
+
+        # Step 1: Validate current article
+        validation_agent = create_validate_article_agent()
+        validation_context = ArticleValidationContext(
+            article_content=current_article.content,
+            original_outline=outline,
+            target_keywords=target_keywords,
+            title=title,
+        )
+
+        validation_result = run_agent_synchronously(
+            validation_agent,
+            "Validate this article against all guidelines and requirements",
+            deps=validation_context,
+            function_name="validate_and_correct_article_iteratively",
+        )
+
+        validation = validation_result.output
+
+        # Track validation result
+        validation_history.append(
+            {
+                "iteration": iteration,
+                "passes_validation": validation.passes_validation,
+                "outline_structure_followed": validation.outline_structure_followed,
+                "keyword_distribution_adequate": validation.keyword_distribution_adequate,
+                "formatting_correct": validation.formatting_correct,
+                "content_quality_acceptable": validation.content_quality_acceptable,
+                "issues_count": len(validation.issues),
+                "critical_issues": len(
+                    [issue for issue in validation.issues if issue.severity == "critical"]
+                ),
+                "major_issues": len(
+                    [issue for issue in validation.issues if issue.severity == "major"]
+                ),
+                "minor_issues": len(
+                    [issue for issue in validation.issues if issue.severity == "minor"]
+                ),
+                "overall_feedback": validation.overall_feedback,
+            }
+        )
+
+        logger.info(
+            f"[Iterative Validation] Iteration {iteration}: Validation complete",
+            iteration=iteration,
+            passes_validation=validation.passes_validation,
+            issues_count=len(validation.issues),
+            critical_issues=validation_history[-1]["critical_issues"],
+            major_issues=validation_history[-1]["major_issues"],
+            minor_issues=validation_history[-1]["minor_issues"],
+        )
+
+        # Step 2: If validation passes, we're done!
+        if validation.passes_validation:
+            logger.info(
+                f"[Iterative Validation] SUCCESS: Article passed validation on iteration {iteration}",
+                iteration=iteration,
+                total_iterations=iteration,
+            )
+            return current_article, validation_history
+
+        # Step 3: If validation fails and we have iterations left, correct the article
+        if iteration < max_iterations:
+            logger.info(
+                f"[Iterative Validation] Iteration {iteration}: Validation failed, correcting article",
+                iteration=iteration,
+                remaining_iterations=max_iterations - iteration,
+            )
+
+            correction_agent = create_correct_article_agent()
+            correction_context = ArticleCorrectionContext(
+                article_content=current_article.content,
+                validation_result=validation,
+                original_outline=outline,
+                target_keywords=target_keywords,
+                title=title,
+                project_details=project_details,
+                project_pages=project_pages,
+            )
+
+            correction_result = run_agent_synchronously(
+                correction_agent,
+                "Correct this article based on the validation feedback provided",
+                deps=correction_context,
+                function_name="validate_and_correct_article_iteratively",
+            )
+
+            current_article = correction_result.output
+
+            logger.info(
+                f"[Iterative Validation] Iteration {iteration}: Article corrected, will re-validate",
+                iteration=iteration,
+            )
+
+        else:
+            # Max iterations reached without passing
+            logger.warning(
+                f"[Iterative Validation] FAILED: Max iterations ({max_iterations}) reached without passing validation",
+                max_iterations=max_iterations,
+                final_issues_count=len(validation.issues),
+            )
+
+    # Return the best attempt (last corrected version)
+    return current_article, validation_history
