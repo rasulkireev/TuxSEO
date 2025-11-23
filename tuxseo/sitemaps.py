@@ -24,6 +24,7 @@ class StaticViewSitemap(sitemaps.Sitemap):
             "uses",
             "pricing",
             "blog_posts",
+            "changelog",
         ]
 
     def location(self, item):

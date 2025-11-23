@@ -1,6 +1,8 @@
 import time
+from pathlib import Path
 from urllib.parse import urlencode
 
+import markdown
 import stripe
 from allauth.account.models import EmailAddress, EmailConfirmation
 from allauth.account.views import SignupView
@@ -12,7 +14,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, Prefetch, Q
 from django.http import HttpResponse
-from django.shortcuts import redirect
+from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView, UpdateView
@@ -1072,3 +1074,24 @@ def trigger_error(request):
         raise e
 
     return foo
+
+
+def changelog_view(request):
+    """
+    Render the CHANGELOG.md file as an HTML page.
+    """
+    changelog_file = Path(settings.BASE_DIR) / "CHANGELOG.md"
+
+    with open(changelog_file, encoding="utf-8") as file:
+        changelog_content = file.read()
+
+    changelog_html = markdown.markdown(
+        changelog_content, extensions=["fenced_code", "tables", "codehilite"]
+    )
+
+    context = {
+        "content": changelog_html,
+        "page_title": "Changelog",
+    }
+
+    return render(request, "pages/changelog.html", context)

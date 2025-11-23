@@ -1,0 +1,45 @@
+{% extends "base_landing.html" %}
+
+{% block meta %}
+<title>{{ page_title }} | TuxSEO</title>
+<meta name="description" content="See what's new in TuxSEO. View the complete changelog with all updates, new features, bug fixes, and improvements." />
+<meta name="robots" content="index, follow" />
+<link rel="canonical" href="https://{{ request.get_host }}{% url 'changelog' %}" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="{{ page_title }} | TuxSEO" />
+<meta property="og:url" content="https://{{ request.get_host }}{% url 'changelog' %}" />
+<meta property="og:description" content="See what's new in TuxSEO. View the complete changelog with all updates, new features, bug fixes, and improvements." />
+<meta property="og:site_name" content="TuxSEO" />
+
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="{{ page_title }} | TuxSEO" />
+<meta name="twitter:description" content="See what's new in TuxSEO. View the complete changelog with all updates, new features, bug fixes, and improvements." />
+{% endblock meta %}
+
+{% block content %}
+<div class="px-4 pt-4 pb-12 mx-auto max-w-4xl sm:px-6 lg:px-8">
+  <article class="max-w-none prose prose-lg prose-gray prose-headings:font-semibold prose-headings:text-gray-900 prose-h1:text-3xl prose-h1:mb-4 prose-h1:mt-8 prose-h2:text-2xl prose-h2:mt-6 prose-h2:mb-3 prose-h2:border-b prose-h2:border-gray-200 prose-h2:pb-2 prose-h3:text-xl prose-h3:mt-4 prose-h3:mb-2 prose-h3:font-semibold prose-p:text-gray-700 prose-p:leading-relaxed prose-a:text-red-600 prose-a:no-underline hover:prose-a:underline prose-strong:text-gray-900 prose-strong:font-semibold prose-code:text-red-600 prose-code:bg-red-50 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-sm prose-code:before:content-none prose-code:after:content-none prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:rounded-lg prose-pre:shadow-lg prose-ol:list-decimal prose-ol:pl-6 prose-ul:list-disc prose-ul:pl-6 prose-li:text-gray-700">
+    {{ content|safe }}
+  </article>
+
+  <div class="pt-8 mt-12 border-t border-gray-200">
+    <div class="flex gap-4 justify-center">
+      <a href="{% url 'landing' %}" class="inline-flex gap-x-2 items-center px-6 py-3 text-base font-medium text-gray-700 bg-white rounded-lg border border-gray-300 shadow-sm transition-colors hover:bg-gray-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+        </svg>
+        <span>Back to Home</span>
+      </a>
+      {% if user.is_authenticated %}
+      <a href="{% url 'home' %}" class="inline-flex gap-x-2 items-center px-6 py-3 text-base font-medium text-white bg-red-600 rounded-lg shadow-sm transition-colors hover:bg-red-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-600">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+        </svg>
+        <span>Go to Dashboard</span>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock content %}
