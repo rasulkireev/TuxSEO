@@ -189,6 +189,59 @@ class BlogPostGenerationContext(BaseModel):
     content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
 
 
+class OutlineSection(BaseModel):
+    """A hierarchical section in a blog post outline."""
+
+    section_title: str = Field(description="Clear, descriptive section heading")
+    subsections: list[str] = Field(
+        default_factory=list,
+        description="List of subsection topics or key points to cover in this section",
+    )
+
+
+class BlogPostOutline(BaseModel):
+    """Structured outline for a blog post."""
+
+    introduction_summary: str = Field(
+        description="Brief summary of what the introduction should cover (2-3 sentences)"
+    )
+    main_sections: list[OutlineSection] = Field(
+        description="Ordered list of main content sections with their subsections"
+    )
+    conclusion_summary: str = Field(
+        description="Brief summary of what the conclusion should cover (2-3 sentences)"
+    )
+
+
+class BlogPostOutlineContext(BaseModel):
+    """Context for generating blog post outlines."""
+
+    project_details: ProjectDetails
+    title_suggestion: TitleSuggestion
+    target_keywords: list[str] = Field(
+        default_factory=list, description="Keywords to keep in mind while creating the outline"
+    )
+    project_pages: list[ProjectPageContext] = Field(
+        default_factory=list, description="Available project pages for potential linking"
+    )
+
+
+class ArticleDraftContext(BaseModel):
+    """Context for drafting an article from an outline."""
+
+    project_details: ProjectDetails
+    title_suggestion: TitleSuggestion
+    outline: BlogPostOutline
+    target_keywords: list[str] = Field(
+        default_factory=list,
+        description="Keywords to distribute naturally throughout the article",
+    )
+    project_pages: list[ProjectPageContext] = Field(
+        default_factory=list, description="Available project pages for linking"
+    )
+    content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
+
+
 class GeneratedBlogPostSchema(BaseModel):
     description: str = Field(
         description="Meta description (150-160 characters) optimized for search engines"

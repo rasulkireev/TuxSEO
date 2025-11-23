@@ -153,6 +153,141 @@ def add_target_keywords(ctx: RunContext[BlogPostGenerationContext]) -> str:
         return ""
 
 
+def outline_generation_guidelines() -> str:
+    """Guidelines for creating structured blog post outlines."""
+    return """
+        OUTLINE GENERATION GUIDELINES
+
+        Your task is to create a logical, hierarchical outline for the blog post.
+
+        KEY PRINCIPLES:
+        - Create meaningful, relevant section titles that flow logically
+        - Keep sections concise but comprehensive
+        - Use the provided keywords only as reference, not inside the outline text
+        - Ensure the outline covers the topic thoroughly
+        - Structure should support natural keyword distribution in the final article
+        - Each section should have a clear purpose and contribute to the overall narrative
+
+        STRUCTURE REQUIREMENTS:
+        - Introduction summary: What hook/context to establish (2-3 sentences)
+        - Main sections: 4-7 major sections with clear, descriptive titles
+        - Each main section can have 0-4 subsections/key points
+        - Conclusion summary: How to wrap up and provide next steps (2-3 sentences)
+
+        AVOID:
+        - Generic section titles like "Introduction" or "Conclusion"
+        - Keyword stuffing in section titles
+        - Overly complex nested structures
+        - Filler sections that don't add value
+        - Vague or ambiguous section names
+    """
+
+
+def article_from_outline_guidelines() -> str:
+    """Guidelines for drafting articles from outlines with proper keyword distribution."""
+    return """
+        ARTICLE DRAFTING GUIDELINES
+
+        Your task is to expand the provided outline into a complete, well-structured article.
+
+        STRUCTURAL REQUIREMENTS:
+        - Each section in the outline MUST become a heading (## H2) followed by detailed content
+        - The article must strictly follow the outline structure
+        - Start with plain text introduction (no heading)
+        - Use ## (H2) for main sections only
+        - Do NOT use ### (H3) or deeper headings
+
+        KEYWORD DISTRIBUTION:
+        - The provided keywords must be distributed naturally throughout the ENTIRE article
+        - Distribution should be even: introduction, body sections, and conclusion
+        - Ensure no single section feels overloaded with keywords
+        - Maintain natural flow and readability at all times
+        - NEVER sacrifice readability for keyword placement
+        - Keywords should blend seamlessly into the content
+
+        CONTENT QUALITY:
+        - Every paragraph must add value - avoid filler content
+        - Maintain informative, coherent, and easy-to-read tone
+        - Do not repeat the same paragraph or phrase
+        - Keep formatting clean and consistently structured
+        - Ensure machine-friendly output that passes Django parsing cleanly
+
+        WHAT TO AVOID:
+        - Keyword stuffing or unnatural keyword placement
+        - Inventing specific statistics or data unless provided
+        - Placeholders like [Image], [Link], etc.
+        - Starting with a heading
+        - Repeating content across sections
+        - Generic filler phrases
+    """
+
+
+def add_outline_context(ctx: RunContext) -> str:
+    """Add the outline to the context for article drafting."""
+    if hasattr(ctx.deps, 'outline') and ctx.deps.outline:
+        outline = ctx.deps.outline
+        outline_text = f"""
+        OUTLINE TO FOLLOW:
+
+        Introduction Focus:
+        {outline.introduction_summary}
+
+        Main Sections:
+        """
+
+        for index, section in enumerate(outline.main_sections, 1):
+            outline_text += f"\n{index}. {section.section_title}"
+            if section.subsections:
+                for subsection in section.subsections:
+                    outline_text += f"\n   - {subsection}"
+
+        outline_text += f"""
+
+        Conclusion Focus:
+        {outline.conclusion_summary}
+
+        IMPORTANT: Your article must strictly follow this outline structure. Each section above must become a ## heading in your article, followed by comprehensive content that addresses the section's focus.
+        """  # noqa: E501
+
+        return outline_text
+    return ""
+
+
+def add_target_keywords_for_outline(ctx: RunContext) -> str:
+    """Add keywords context for outline generation."""
+    if hasattr(ctx.deps, 'target_keywords') and ctx.deps.target_keywords:
+        keywords_list = ", ".join(ctx.deps.target_keywords)
+        return f"""
+            REFERENCE KEYWORDS (for outline planning only):
+            {keywords_list}
+
+            Note: These keywords are for your reference. Do NOT include them in the outline section titles.
+            They will be naturally distributed when the article is written from this outline.
+        """  # noqa: E501
+    return ""
+
+
+def add_target_keywords_for_article(ctx: RunContext) -> str:
+    """Add keywords context for article drafting with distribution requirements."""
+    if hasattr(ctx.deps, 'target_keywords') and ctx.deps.target_keywords:
+        keywords_list = ", ".join(ctx.deps.target_keywords)
+        return f"""
+            KEYWORDS TO DISTRIBUTE NATURALLY:
+            {keywords_list}
+
+            DISTRIBUTION REQUIREMENTS:
+            - These keywords must appear throughout the ENTIRE article
+            - Start distributing from the introduction
+            - Continue through all main sections
+            - Include in the conclusion
+            - Ensure EVEN distribution - no section should have too many or too few
+            - Every keyword should appear multiple times across different sections
+            - Maintain natural flow - never force keywords where they don't fit
+            - Blend keywords seamlessly into sentences
+        """  # noqa: E501
+    return ""
+
+
 def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
     return (
         "Web page content:"

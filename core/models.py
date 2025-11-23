@@ -19,17 +19,22 @@ from core.agents import (
     create_analyze_project_agent,
     create_competitor_vs_blog_post_agent,
     create_content_editor_agent,
+    create_draft_article_from_outline_agent,
     create_extract_competitors_data_agent,
     create_extract_links_agent,
     create_find_competitors_agent,
     create_generate_blog_post_content_agent,
+    create_generate_outline_agent,
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
     create_validate_blog_post_ending_agent,
 )
 from core.agents.schemas import (
+    ArticleDraftContext,
     BlogPostGenerationContext,
+    BlogPostOutline,
+    BlogPostOutlineContext,
     CompetitorAnalysisContext,
     CompetitorDetails,
     GeneratedBlogPostSchema,
@@ -858,6 +863,11 @@ class GeneratedBlogPost(BaseModel):
     slug = models.SlugField(max_length=250)
     tags = models.TextField()
     content = models.TextField()
+    outline = models.JSONField(
+        null=True,
+        blank=True,
+        help_text="Structured outline used to generate the blog post content",
+    )
     icon = models.ImageField(upload_to="generated_blog_post_icons/", blank=True)
     image = models.ImageField(upload_to="generated_blog_post_images/", blank=True)
 

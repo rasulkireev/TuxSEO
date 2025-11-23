@@ -4,6 +4,9 @@ from core.agents.competitor_vs_blog_post_agent import (
     create_competitor_vs_blog_post_agent,
 )
 from core.agents.content_editor_agent import create_content_editor_agent
+from core.agents.draft_article_from_outline_agent import (
+    create_draft_article_from_outline_agent,
+)
 from core.agents.extract_competitors_data_agent import (
     create_extract_competitors_data_agent,
 )
@@ -12,6 +15,7 @@ from core.agents.find_competitors_agent import create_find_competitors_agent
 from core.agents.generate_blog_post_content_agent import (
     create_generate_blog_post_content_agent,
 )
+from core.agents.generate_outline_agent import create_generate_outline_agent
 from core.agents.populate_competitor_details_agent import (
     create_populate_competitor_details_agent,
 )
@@ -26,10 +30,12 @@ __all__ = [
     "create_analyze_project_agent",
     "create_competitor_vs_blog_post_agent",
     "create_content_editor_agent",
+    "create_draft_article_from_outline_agent",
     "create_extract_competitors_data_agent",
     "create_extract_links_agent",
     "create_find_competitors_agent",
     "create_generate_blog_post_content_agent",
+    "create_generate_outline_agent",
     "create_populate_competitor_details_agent",
     "create_summarize_page_agent",
     "create_title_suggestions_agent",
