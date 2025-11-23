@@ -394,8 +394,8 @@ class Project(BaseModel):
 
     # Agent Settings
     enable_automatic_post_submission = models.BooleanField(default=False)
-    enable_automatic_post_generation = models.BooleanField(default=True)
-    enable_automatic_og_image_generation = models.BooleanField(default=True)
+    enable_automatic_post_generation = models.BooleanField(default=False)
+    enable_automatic_og_image_generation = models.BooleanField(default=False)
     og_image_style = models.CharField(
         max_length=50,
         choices=OGImageStyle.choices,

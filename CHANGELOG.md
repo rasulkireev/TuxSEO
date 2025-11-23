@@ -20,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - using gtpr for writing posts
+- og image and automatic generation are off by default
 
 ### Fixed
 - correct link on project scan
