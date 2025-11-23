@@ -8,13 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- added changelog page
-- features to the pro plan on pricing page
+- Pages
+  - added changelog page
+  - features to the pro plan on pricing page
 - Monitoring
   - Sentry Agent Monitoring
 
 ### Fixed
 - fixed `FieldError` on publish history page
+- Posted posts should not appear on SEO Optimized and Eye Catching post pages.
 
 ## [0.0.8] - 2025-11-23
 

@@ -637,6 +637,12 @@ class ProjectEyeCatchingPostsView(LoginRequiredMixin, DetailView):
                         }
                     )
 
+            has_posted_blog_post = any(
+                blog_post.posted for blog_post in suggestion.generated_blog_posts.all()
+            )
+            if has_posted_blog_post:
+                continue
+
             if suggestion.archived:
                 archived_suggestions.append(suggestion)
             else:
@@ -692,6 +698,12 @@ class ProjectSEOPostsView(LoginRequiredMixin, DetailView):
                             "project_keyword_id": keyword_info["project_keyword_id"],
                         }
                     )
+
+            has_posted_blog_post = any(
+                blog_post.posted for blog_post in suggestion.generated_blog_posts.all()
+            )
+            if has_posted_blog_post:
+                continue
 
             if suggestion.archived:
                 archived_suggestions.append(suggestion)
