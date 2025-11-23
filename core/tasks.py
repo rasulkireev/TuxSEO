@@ -268,9 +268,10 @@ def analyze_project_competitor(competitor_id):
 def process_project_keywords(project_id: int):
     """
     Processes proposed keywords for a project:
-    1. Saves them to the Keyword model.
-    2. Fetches metrics for each keyword.
-    3. Associates keywords with the project.
+    1. Creates a keyword from the project name and marks it as used.
+    2. Saves proposed keywords to the Keyword model.
+    3. Fetches metrics for each keyword.
+    4. Associates keywords with the project.
     """
     try:
         project = Project.objects.get(id=project_id)
@@ -278,29 +279,50 @@ def process_project_keywords(project_id: int):
         logger.error(f"[KeywordProcessing] Project with id {project_id} not found.")
         return f"Project with id {project_id} not found."
 
+    processed_count = 0
+    failed_count = 0
+
+    # First, create a keyword from the project name and mark it as used
+    if project.name:
+        try:
+            project.save_keyword(keyword_text=project.name, use=True)
+            processed_count += 1
+            logger.info(
+                "[KeywordProcessing] Created keyword from project name",
+                project_id=project.id,
+                project_name=project.name,
+                keyword_text=project.name,
+            )
+        except Exception as e:
+            failed_count += 1
+            logger.error(
+                "[KeywordProcessing] Error creating keyword from project name",
+                error=str(e),
+                exc_info=True,
+                project_id=project.id,
+                project_name=project.name,
+            )
+
     if not project.proposed_keywords:
         logger.info(
             f"[KeywordProcessing] No proposed keywords for project {project.id} ({project.name})."
         )
-        return f"No proposed keywords for project {project.name}."
+    else:
+        keyword_strings = [kw.strip() for kw in project.proposed_keywords.split(",") if kw.strip()]
 
-    keyword_strings = [kw.strip() for kw in project.proposed_keywords.split(",") if kw.strip()]
-    processed_count = 0
-    failed_count = 0
-
-    for keyword_str in keyword_strings:
-        try:
-            project.save_keyword(keyword_str)
-            processed_count += 1
-        except Exception as e:
-            failed_count += 1
-            logger.error(
-                "[KeywordProcessing] Error processing keyword",
-                error=str(e),
-                exc_info=True,
-                project_id=project.id,
-                keyword_text=keyword_str,
-            )
+        for keyword_str in keyword_strings:
+            try:
+                project.save_keyword(keyword_str)
+                processed_count += 1
+            except Exception as e:
+                failed_count += 1
+                logger.error(
+                    "[KeywordProcessing] Error processing keyword",
+                    error=str(e),
+                    exc_info=True,
+                    project_id=project.id,
+                    keyword_text=keyword_str,
+                )
 
     logger.info(
         "Keyword Processing Complete",

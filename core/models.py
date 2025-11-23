@@ -676,7 +676,7 @@ class Project(BaseModel):
 
         return competitors
 
-    def save_keyword(self, keyword_text: str):
+    def save_keyword(self, keyword_text: str, use: bool = False):
         keyword_obj, created = Keyword.objects.get_or_create(
             keyword_text=keyword_text,
             country="us",
@@ -694,7 +694,14 @@ class Project(BaseModel):
                 )
 
         # Associate with project
-        ProjectKeyword.objects.get_or_create(project=self, keyword=keyword_obj)
+        project_keyword, pk_created = ProjectKeyword.objects.get_or_create(
+            project=self, keyword=keyword_obj
+        )
+
+        # Update the use field if specified
+        if use and not project_keyword.use:
+            project_keyword.use = True
+            project_keyword.save(update_fields=["use"])
 
     def get_keywords(self) -> dict:
         """
