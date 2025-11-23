@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - added changelog page
 - features to the pro plan on pricing page
 
+### Fixed
+- fixed `FieldError` on publish history page
+
 ## [0.0.8] - 2025-11-23
 
 ### Added

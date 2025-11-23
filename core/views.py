@@ -1023,10 +1023,8 @@ class PublishHistoryView(LoginRequiredMixin, DetailView):
         context = super().get_context_data(**kwargs)
         project = self.object
 
-        published_posts = (
-            GeneratedBlogPost.objects.filter(project=project, posted=True)
-            .select_related("title")
-            .order_by("-date_posted", "-updated_at")
+        published_posts = GeneratedBlogPost.objects.filter(project=project, posted=True).order_by(
+            "-date_posted", "-updated_at"
         )
 
         context["published_posts"] = published_posts
