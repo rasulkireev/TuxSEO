@@ -21,6 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - using gtpr for writing posts
 
+### Fixed
+- correct link on project scan
 
 ## [0.0.8] - 2025-11-12
 ### Changed
