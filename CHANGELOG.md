@@ -13,7 +13,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.0.8] - 2025-11-23
 
 ### Added
 - Added link exchange program for paid users
@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cloudlfare Turnstyle now actaully does stuff
 - Competitor table scrolling on mobile
 - Toggle switches on settings page now use consistent dark gray color
+- competitor links
 
 ### Removed
 - banner from app pages
