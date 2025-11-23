@@ -19,6 +19,7 @@ from core.agents import (
     create_analyze_project_agent,
     create_competitor_vs_blog_post_agent,
     create_content_editor_agent,
+    create_correct_article_agent,
     create_draft_article_from_outline_agent,
     create_extract_competitors_data_agent,
     create_extract_links_agent,
@@ -28,10 +29,14 @@ from core.agents import (
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
+    create_validate_article_agent,
     create_validate_blog_post_ending_agent,
 )
 from core.agents.schemas import (
+    ArticleCorrectionContext,
     ArticleDraftContext,
+    ArticleValidationContext,
+    ArticleValidationResult,
     BlogPostGenerationContext,
     BlogPostOutline,
     BlogPostOutlineContext,

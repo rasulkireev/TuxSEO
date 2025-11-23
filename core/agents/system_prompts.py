@@ -288,6 +288,178 @@ def add_target_keywords_for_article(ctx: RunContext) -> str:
     return ""
 
 
+def article_validation_guidelines() -> str:
+    """Guidelines for validating drafted articles."""
+    return """
+        ARTICLE VALIDATION GUIDELINES
+
+        Your task is to thoroughly validate the drafted article against all guidelines and requirements.
+
+        VALIDATION CHECKLIST:
+
+        1. OUTLINE STRUCTURE ADHERENCE:
+           - Does the article follow the provided outline structure exactly?
+           - Are all outline sections present as H2 headings?
+           - Is the content for each section relevant to the outline's intent?
+           - Are sections in the same order as the outline?
+
+        2. KEYWORD DISTRIBUTION:
+           - Are keywords distributed throughout the ENTIRE article?
+           - Is distribution EVEN across introduction, body sections, and conclusion?
+           - Are there sections overloaded with keywords (keyword stuffing)?
+           - Are there sections completely missing keywords?
+           - Do keywords appear naturally and blend seamlessly?
+
+        3. FORMATTING CORRECTNESS:
+           - Does the article start with plain text (no heading)?
+           - Are ONLY H2 (##) headings used for sections?
+           - Are there any H3 (###) or deeper headings (should not be)?
+           - Is markdown formatting clean and consistent?
+
+        4. CONTENT QUALITY:
+           - Are there any placeholders like [Image], [Link], etc.?
+           - Is there any repetitive content across sections?
+           - Does every paragraph add unique value?
+           - Is the content free from generic filler phrases?
+           - Does the content maintain coherence and flow?
+
+        5. GUIDELINE COMPLIANCE:
+           - Does the article deliver on the title's promise?
+           - Is the tone appropriate (informative, coherent, easy to read)?
+           - Is the content machine-friendly for Django parsing?
+
+        SEVERITY LEVELS:
+        - CRITICAL: Must be fixed (missing sections, starts with heading, extreme keyword stuffing)
+        - MAJOR: Should be fixed (uneven keyword distribution, minor structural issues)
+        - MINOR: Nice to fix (minor flow improvements, optional enhancements)
+
+        OUTPUT REQUIREMENTS:
+        - List ALL issues found, ordered by severity
+        - For each issue, provide specific location and actionable suggestion
+        - Mark passes_validation as False if ANY critical issues exist
+        - Provide clear, constructive overall feedback
+    """
+
+
+def article_correction_guidelines() -> str:
+    """Guidelines for correcting articles based on validation feedback."""
+    return """
+        ARTICLE CORRECTION GUIDELINES
+
+        Your task is to correct the article based on the validation feedback provided.
+
+        CORRECTION APPROACH:
+
+        1. PRIORITIZE ISSUES BY SEVERITY:
+           - Fix ALL critical issues first
+           - Address major issues next
+           - Apply minor improvements if they don't disrupt the content
+
+        2. MAINTAIN ARTICLE INTEGRITY:
+           - Keep the overall structure and flow intact
+           - Preserve good content that doesn't need changes
+           - Only modify sections that have identified issues
+           - Maintain the article's voice and tone
+
+        3. STRUCTURAL CORRECTIONS:
+           - If outline structure wasn't followed: reorganize sections to match
+           - If formatting is wrong: fix heading levels and markdown
+           - Ensure article starts with plain text introduction
+
+        4. KEYWORD DISTRIBUTION CORRECTIONS:
+           - If keywords are unevenly distributed: redistribute across all sections
+           - If keyword stuffing exists: remove forced occurrences, keep natural ones
+           - If sections lack keywords: add them naturally where they fit
+           - Never sacrifice readability for keyword placement
+
+        5. CONTENT QUALITY CORRECTIONS:
+           - Remove all placeholders with actual content
+           - Eliminate repetitive paragraphs
+           - Replace filler content with valuable information
+           - Improve flow and coherence where needed
+
+        CRITICAL RULES:
+        - Make ONLY the corrections needed to address validation issues
+        - Do NOT rewrite sections that are working well
+        - Maintain the length and depth of the original article
+        - Keep the same meta description, slug, and tags (only fix content)
+        - Ensure the corrected article would pass validation
+
+        OUTPUT:
+        Return the complete corrected article with all validation issues resolved.
+    """
+
+
+def add_validation_context(ctx: RunContext) -> str:
+    """Add validation context including original outline and keywords."""
+    if hasattr(ctx.deps, 'original_outline') and ctx.deps.original_outline:
+        outline = ctx.deps.original_outline
+        context_text = f"""
+        ORIGINAL OUTLINE (for validation reference):
+
+        Introduction Summary:
+        {outline.introduction_summary}
+
+        Main Sections:
+        """
+
+        for index, section in enumerate(outline.main_sections, 1):
+            context_text += f"\n{index}. {section.section_title}"
+            if section.subsections:
+                for subsection in section.subsections:
+                    context_text += f"\n   - {subsection}"
+
+        context_text += f"""
+
+        Conclusion Summary:
+        {outline.conclusion_summary}
+        """
+
+        if hasattr(ctx.deps, 'target_keywords') and ctx.deps.target_keywords:
+            keywords_list = ", ".join(ctx.deps.target_keywords)
+            context_text += f"""
+
+        TARGET KEYWORDS (should be distributed throughout):
+        {keywords_list}
+        """
+
+        return context_text
+    return ""
+
+
+def add_validation_issues(ctx: RunContext) -> str:
+    """Add validation issues to the correction context."""
+    if hasattr(ctx.deps, 'validation_result') and ctx.deps.validation_result:
+        validation = ctx.deps.validation_result
+        issues_text = f"""
+        VALIDATION RESULTS:
+
+        Overall: {'PASSED' if validation.passes_validation else 'FAILED'}
+
+        Checks:
+        - Outline Structure Followed: {'✓' if validation.outline_structure_followed else '✗'}
+        - Keyword Distribution Adequate: {'✓' if validation.keyword_distribution_adequate else '✗'}
+        - Formatting Correct: {'✓' if validation.formatting_correct else '✗'}
+        - Content Quality Acceptable: {'✓' if validation.content_quality_acceptable else '✗'}
+
+        Overall Feedback:
+        {validation.overall_feedback}
+        """
+
+        if validation.issues:
+            issues_text += "\n\nISSUES TO FIX (ordered by severity):\n"
+            for index, issue in enumerate(validation.issues, 1):
+                issues_text += f"""
+        {index}. [{issue.severity.upper()}] {issue.issue_type}
+           Location: {issue.location}
+           Problem: {issue.description}
+           Fix: {issue.suggestion}
+        """
+
+        return issues_text
+    return ""
+
+
 def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
     return (
         "Web page content:"

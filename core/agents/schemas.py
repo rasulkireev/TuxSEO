@@ -242,6 +242,73 @@ class ArticleDraftContext(BaseModel):
     content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
 
 
+class ArticleValidationIssue(BaseModel):
+    """A specific issue found during article validation."""
+
+    issue_type: str = Field(
+        description="Type of issue: 'outline_structure', 'keyword_distribution', 'formatting', 'content_quality', or 'guidelines'"
+    )
+    severity: str = Field(description="Severity level: 'critical', 'major', or 'minor'")
+    description: str = Field(description="Clear description of the issue")
+    location: str = Field(
+        description="Where the issue occurs (e.g., 'introduction', 'section 2', 'conclusion', 'entire article')"
+    )
+    suggestion: str = Field(description="Specific suggestion for how to fix this issue")
+
+
+class ArticleValidationResult(BaseModel):
+    """Validation results for a drafted article."""
+
+    passes_validation: bool = Field(
+        description="True if article meets all critical guidelines, False otherwise"
+    )
+    outline_structure_followed: bool = Field(
+        description="True if article follows the provided outline structure"
+    )
+    keyword_distribution_adequate: bool = Field(
+        description="True if keywords are evenly distributed throughout the article"
+    )
+    formatting_correct: bool = Field(
+        description="True if article uses correct markdown formatting (plain intro, H2 only, etc.)"
+    )
+    content_quality_acceptable: bool = Field(
+        description="True if content has no placeholders, repetition, or filler"
+    )
+    issues: list[ArticleValidationIssue] = Field(
+        default_factory=list, description="List of all issues found, ordered by severity"
+    )
+    overall_feedback: str = Field(
+        description="Summary of validation results with overall assessment (2-4 sentences)"
+    )
+
+
+class ArticleValidationContext(BaseModel):
+    """Context for validating a drafted article."""
+
+    article_content: str = Field(description="The drafted article content to validate")
+    original_outline: BlogPostOutline
+    target_keywords: list[str] = Field(
+        default_factory=list, description="Keywords that should be distributed in the article"
+    )
+    title: str = Field(description="The article title")
+
+
+class ArticleCorrectionContext(BaseModel):
+    """Context for correcting an article based on validation feedback."""
+
+    article_content: str = Field(description="The current article content to correct")
+    validation_result: ArticleValidationResult
+    original_outline: BlogPostOutline
+    target_keywords: list[str] = Field(
+        default_factory=list, description="Keywords that should be distributed in the article"
+    )
+    title: str = Field(description="The article title")
+    project_details: ProjectDetails
+    project_pages: list[ProjectPageContext] = Field(
+        default_factory=list, description="Available project pages for linking"
+    )
+
+
 class GeneratedBlogPostSchema(BaseModel):
     description: str = Field(
         description="Meta description (150-160 characters) optimized for search engines"
