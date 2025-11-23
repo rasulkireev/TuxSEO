@@ -1074,3 +1074,195 @@ def track_email_sent(email_address: str, email_type: EmailType, profile: Profile
             exc_info=True,
         )
         return None
+
+
+def send_blog_post_ready_email(blog_post_id: int):
+    """
+    Send an email notification when a blog post is ready.
+    Uses MJML template for responsive, professional email design.
+    """
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+
+    try:
+        blog_post = GeneratedBlogPost.objects.select_related(
+            "project", "project__profile", "project__profile__user"
+        ).get(id=blog_post_id)
+    except GeneratedBlogPost.DoesNotExist:
+        logger.error(
+            "[Send Blog Post Ready Email] Blog post not found",
+            blog_post_id=blog_post_id,
+        )
+        return f"Blog post {blog_post_id} not found"
+
+    profile = blog_post.project.profile
+    user = profile.user
+    project = blog_post.project
+
+    # Construct the blog post URL
+    blog_post_url = f"{settings.SITE_URL}/project/{project.id}/post/{blog_post.id}/"
+
+    # Prepare template context
+    context = {
+        "blog_post": blog_post,
+        "project": project,
+        "user": user,
+        "blog_post_url": blog_post_url,
+    }
+
+    try:
+        # Render the MJML template (includes subject, plain text, and HTML)
+        email_content = render_to_string("emails/blog_post_ready.html", context)
+
+        # Extract subject from the template
+        subject = f"Your blog post is ready: {blog_post.title}"
+
+        # Create plain text version (fallback for email clients that don't support HTML)
+        plain_text = f"""Hi there!
+
+Great news! Your blog post "{blog_post.title}" for {project.name} is ready.
+
+We've completed extensive research and generated a comprehensive blog post for you.
+
+View your blog post here:
+{blog_post_url}
+
+What's next?
+- Review and edit the content if needed
+- Post it to your blog with one click
+- Generate more content for your project
+
+Happy blogging!
+- The TuxSEO Team
+
+---
+If you have any questions or feedback, just reply to this email.
+"""
+
+        # Create email with both plain text and HTML versions
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_text,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+
+        # Attach the HTML version (rendered from MJML)
+        email.attach_alternative(email_content, "text/html")
+
+        # Send the email
+        email.send(fail_silently=False)
+
+        # Track the email
+        async_task(
+            "core.tasks.track_email_sent",
+            email_address=user.email,
+            email_type=EmailType.BLOG_POST_READY,
+            profile=profile,
+            group="Track Email Sent",
+        )
+
+        logger.info(
+            "[Send Blog Post Ready Email] Email sent successfully",
+            blog_post_id=blog_post_id,
+            user_email=user.email,
+            project_id=project.id,
+        )
+
+        return f"Email sent to {user.email}"
+
+    except Exception as error:
+        logger.error(
+            "[Send Blog Post Ready Email] Failed to send email",
+            error=str(error),
+            exc_info=True,
+            blog_post_id=blog_post_id,
+            user_email=user.email if user else "unknown",
+        )
+        return f"Failed to send email: {str(error)}"
+
+
+def generate_blog_post_content(suggestion_id: int, send_email: bool = True):
+    """
+    Generate blog post content from a title suggestion.
+    This task is queued from the API endpoint to avoid timeout issues.
+    The content generation process can take 2-5 minutes to complete.
+
+    Args:
+        suggestion_id: ID of the blog post title suggestion
+        send_email: Whether to send completion email (default True).
+                   Set to False when called from generate_and_post_blog_post.
+    """
+    try:
+        suggestion = BlogPostTitleSuggestion.objects.select_related(
+            "project", "project__profile"
+        ).get(id=suggestion_id)
+    except BlogPostTitleSuggestion.DoesNotExist:
+        logger.error(
+            "[Generate Blog Post Content] Title suggestion not found",
+            suggestion_id=suggestion_id,
+        )
+        return f"Title suggestion {suggestion_id} not found"
+
+    logger.info(
+        "[Generate Blog Post Content] Starting content generation",
+        suggestion_id=suggestion_id,
+        project_id=suggestion.project.id,
+        project_name=suggestion.project.name,
+        suggestion_title=suggestion.title,
+        send_email=send_email,
+    )
+
+    try:
+        blog_post = suggestion.generate_content(content_type=suggestion.content_type)
+
+        if not blog_post or not blog_post.content:
+            logger.error(
+                "[Generate Blog Post Content] Failed to generate content",
+                suggestion_id=suggestion_id,
+                project_id=suggestion.project.id,
+            )
+            return f"Failed to generate content for suggestion {suggestion_id}"
+
+        logger.info(
+            "[Generate Blog Post Content] Content generated successfully",
+            suggestion_id=suggestion_id,
+            project_id=suggestion.project.id,
+            blog_post_id=blog_post.id,
+            content_length=len(blog_post.content),
+        )
+
+        # Send email notification if requested (i.e., manually triggered, not auto-posting)
+        if send_email:
+            async_task(
+                "core.tasks.send_blog_post_ready_email",
+                blog_post.id,
+                group="Send Blog Post Ready Email",
+            )
+            logger.info(
+                "[Generate Blog Post Content] Email notification queued",
+                blog_post_id=blog_post.id,
+                suggestion_id=suggestion_id,
+            )
+
+        return f"Successfully generated blog post {blog_post.id} for {suggestion.project.name}"
+
+    except ValueError as error:
+        logger.error(
+            "[Generate Blog Post Content] Validation error",
+            error=str(error),
+            exc_info=True,
+            suggestion_id=suggestion_id,
+            project_id=suggestion.project.id,
+        )
+        return f"Validation error: {str(error)}"
+    except Exception as error:
+        logger.error(
+            "[Generate Blog Post Content] Unexpected error",
+            error=str(error),
+            exc_info=True,
+            suggestion_id=suggestion_id,
+            project_id=suggestion.project.id if suggestion.project else None,
+        )
+        return f"Unexpected error: {str(error)}"

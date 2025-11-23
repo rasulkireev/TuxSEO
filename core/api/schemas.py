@@ -77,13 +77,20 @@ class GenerateTitleSuggestionsOut(Schema):
 
 
 class GeneratedContentOut(Schema):
-    status: str = "success"
-    message: str | None = None
+    status: str
+    task_id: str | None = None
+    message: str = ""
+
+
+class TaskStatusOut(Schema):
+    status: str
+    message: str = ""
+    task_id: str | None = None
+    blog_post_id: int | None = None
     content: str | None = None
     slug: str | None = None
     tags: str | None = None
     description: str | None = None
-    id: int | None = None
 
 
 class UpdateTitleScoreIn(Schema):

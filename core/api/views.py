@@ -5,7 +5,8 @@ from django.http import HttpRequest
 from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.utils import timezone
-from django_q.tasks import async_task
+from django_q.models import Task
+from django_q.tasks import async_task, result
 from ninja import NinjaAPI
 
 from core.api.auth import session_auth, superuser_api_auth
@@ -36,6 +37,7 @@ from core.api.schemas import (
     ProjectScanOut,
     SubmitFeedbackIn,
     SubmitSitemapIn,
+    TaskStatusOut,
     ToggleAutoSubmissionOut,
     ToggleLinkExchangeOut,
     ToggleOGImageGenerationOut,
@@ -380,44 +382,171 @@ def generate_blog_content(request: HttpRequest, suggestion_id: int):
         message = f"Content generation limit reached ({current_count}/{limit} blog posts this month on Free plan). <a class='underline' href='/settings'>Upgrade to Pro</a> for unlimited content."  # noqa: E501
         return {
             "status": "error",
+            "task_id": None,
             "message": message,
         }
 
     try:
-        blog_post = suggestion.generate_content(content_type=suggestion.content_type)
-
-        if not blog_post or not blog_post.content:
-            return {"status": "error", "message": "Failed to generate content. Please try again."}
-
-        return {
-            "status": "success",
-            "id": blog_post.id,
-            "content": blog_post.content,
-            "slug": blog_post.slug,
-            "tags": blog_post.tags,
-            "description": blog_post.description,
-        }
-
-    except ValueError as e:
-        logger.error(
-            "Failed to generate blog content",
-            error=str(e),
-            exc_info=True,
+        logger.info(
+            "[Generate Blog Content] Queuing blog content generation task",
             suggestion_id=suggestion_id,
             profile_id=profile.id,
+            project_id=suggestion.project.id,
         )
-        return {"status": "error", "message": str(e)}
-    except Exception as e:
+
+        task_id = async_task(
+            "core.tasks.generate_blog_post_content",
+            suggestion_id,
+            group="Generate Blog Content",
+        )
+
+        logger.info(
+            "[Generate Blog Content] Task queued successfully",
+            suggestion_id=suggestion_id,
+            task_id=task_id,
+            profile_id=profile.id,
+        )
+
+        return {
+            "status": "processing",
+            "task_id": task_id,
+            "message": "Content generation started. This may take 2-5 minutes.",
+        }
+
+    except ValueError as error:
         logger.error(
-            "Unexpected error generating blog content",
-            error=str(e),
+            "[Generate Blog Content] Validation error",
+            error=str(error),
             exc_info=True,
             suggestion_id=suggestion_id,
             profile_id=profile.id,
         )
         return {
             "status": "error",
+            "task_id": None,
+            "message": str(error),
+        }
+    except Exception as error:
+        logger.error(
+            "[Generate Blog Content] Unexpected error queuing task",
+            error=str(error),
+            exc_info=True,
+            suggestion_id=suggestion_id,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "task_id": None,
             "message": "An unexpected error occurred. Please try again later.",
+        }
+
+
+@api.get("/task-status/{task_id}", response=TaskStatusOut, auth=[session_auth])
+def get_task_status(request: HttpRequest, task_id: str):
+    """
+    Check the status of an async task (e.g., blog content generation).
+
+    Returns:
+    - processing: Task is still running or not yet in database
+    - completed: Task finished successfully, returns the generated blog post data
+    - failed: Task failed with error message
+    """
+
+    profile = request.auth
+
+    try:
+        # Use result() to check task status
+        # Returns None if task is still running or not yet in database
+        task_result = result(task_id)
+
+        if task_result is None:
+            # Task is still processing or queued
+            return {
+                "status": "processing",
+                "message": "Content generation in progress. Please check again in a few seconds.",
+                "task_id": task_id,
+            }
+
+        # Task has completed, get the suggestion_id from the result
+        # The task returns a string like "Successfully generated blog post X for Project Y"
+        # We need to get the blog post from the database
+
+        # Get the task from database to access args
+        try:
+            task = Task.objects.get(id=task_id)
+            suggestion_id = task.args[0] if task.args else None
+
+            if not suggestion_id:
+                logger.error(
+                    "[Task Status] No suggestion_id in task args",
+                    task_id=task_id,
+                    profile_id=profile.id,
+                )
+                return {
+                    "status": "error",
+                    "message": "Task completed but missing suggestion information",
+                }
+
+            suggestion = get_object_or_404(
+                BlogPostTitleSuggestion,
+                id=suggestion_id,
+                project__profile=profile,
+            )
+
+            blog_post = suggestion.generated_blog_posts.first()
+
+            if not blog_post:
+                logger.error(
+                    "[Task Status] Task succeeded but no blog post found",
+                    task_id=task_id,
+                    suggestion_id=suggestion_id,
+                    profile_id=profile.id,
+                )
+                return {
+                    "status": "error",
+                    "message": "Content generation completed but blog post not found",
+                }
+
+            logger.info(
+                "[Task Status] Task completed successfully",
+                task_id=task_id,
+                suggestion_id=suggestion_id,
+                blog_post_id=blog_post.id,
+                profile_id=profile.id,
+            )
+
+            return {
+                "status": "completed",
+                "message": "Content generated successfully",
+                "blog_post_id": blog_post.id,
+                "content": blog_post.content,
+                "slug": blog_post.slug,
+                "tags": blog_post.tags,
+                "description": blog_post.description,
+            }
+
+        except Task.DoesNotExist:
+            logger.warning(
+                "[Task Status] Task not found in database",
+                task_id=task_id,
+                profile_id=profile.id,
+            )
+            return {
+                "status": "processing",
+                "message": "Content generation in progress. Please check again in a few seconds.",
+            }
+
+    except Exception as error:
+        logger.error(
+            "[Task Status] Unexpected error checking task status",
+            task_id=task_id,
+            error=str(error),
+            exc_info=True,
+            profile_id=profile.id,
+        )
+        return {
+            "status": "error",
+            "message": "Failed to check task status",
         }
 
 
