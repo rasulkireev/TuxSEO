@@ -22,6 +22,64 @@ export default class extends Controller {
 
   connect() {
     this.expandedValue = false;
+    this.pollingTimeoutId = null;
+
+    // Check if there's an ongoing task for this suggestion
+    this._checkForOngoingTask();
+  }
+
+  _checkForOngoingTask() {
+    const taskKey = `blog_generation_task_${this.suggestionIdValue}`;
+    const taskData = localStorage.getItem(taskKey);
+
+    if (taskData) {
+      try {
+        const { taskId, startTime } = JSON.parse(taskData);
+        const elapsedMinutes = (Date.now() - startTime) / 1000 / 60;
+
+        // Only resume if task started less than 10 minutes ago
+        if (elapsedMinutes < 10) {
+          // Update UI to show generating state
+          this.buttonContainerTarget.innerHTML = `
+            <button
+              disabled
+              class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 opacity-75 cursor-not-allowed">
+              <svg class="mr-2 w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Generating...
+            </button>
+          `;
+
+          if (this.hasStatusTarget) {
+            this.statusTarget.innerHTML = `
+              <div class="flex gap-1.5 items-center">
+                <div class="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+                <span class="text-sm font-medium text-amber-700">Generating...</span>
+              </div>
+            `;
+          }
+
+          // Resume polling
+          this._pollTaskStatus(taskId);
+        } else {
+          // Task too old, clean up
+          localStorage.removeItem(taskKey);
+        }
+      } catch (error) {
+        // Invalid data, clean up
+        localStorage.removeItem(taskKey);
+      }
+    }
+  }
+
+  disconnect() {
+    // Clean up any ongoing polling when controller is disconnected
+    if (this.pollingTimeoutId) {
+      clearTimeout(this.pollingTimeoutId);
+      this.pollingTimeoutId = null;
+    }
   }
 
   toggle() {
@@ -63,6 +121,7 @@ export default class extends Controller {
         `;
       }
 
+      // Start the content generation task
       const response = await fetch(`/api/generate-blog-content/${this.suggestionIdValue}`, {
         method: "POST",
         headers: {
@@ -82,55 +141,156 @@ export default class extends Controller {
         throw new Error(data.message || "Generation failed");
       }
 
-      // Update button to "View Post"
-      this.buttonContainerTarget.innerHTML = `
-        <a
-          href="/project/${this.projectIdValue}/post/${data.id}/"
-          class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
-          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-          </svg>
-          View Post
-        </a>
-      `;
+      // Check if task was queued successfully
+      if (data.status === "processing" && data.task_id) {
+        // Save task info to localStorage for persistence across reloads
+        const taskKey = `blog_generation_task_${this.suggestionIdValue}`;
+        localStorage.setItem(taskKey, JSON.stringify({
+          taskId: data.task_id,
+          startTime: Date.now()
+        }));
 
-      // Update status to show completed state
-      if (this.hasStatusTarget) {
-        this.statusTarget.innerHTML = `
-          <div class="flex gap-1.5 items-center">
-            <div class="w-3 h-3 bg-green-500 rounded-full"></div>
-            <span class="text-sm font-medium text-green-700">Generated</span>
-          </div>
-        `;
+        // Show informative message to user
+        showMessage(
+          "Blog post generation started! We're doing extensive research which can take several minutes. We'll send you an email once it's ready.",
+          "success"
+        );
+
+        // Start polling for task completion
+        await this._pollTaskStatus(data.task_id);
+      } else {
+        throw new Error("Unexpected response status");
       }
-
-      // Handle the post button
-      this._appendPostButton(this.postButtonContainerTarget, data.id);
 
     } catch (error) {
-      showMessage(error.message || "Failed to generate content. Please try again later.", 'error');
-      // Reset the button to original state
-      this.buttonContainerTarget.innerHTML = `
-        <button
-          data-action="generate-content#generate"
-          class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
-          <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-          </svg>
-          Generate
-        </button>
-      `;
+      showMessage(error.message || "Failed to generate content. Please try again later.", "error");
+      this._resetToInitialState();
+    }
+  }
 
-      // Reset status if available
-      if (this.hasStatusTarget) {
-        this.statusTarget.innerHTML = `
-          <div class="flex gap-1.5 items-center">
-            <div class="w-3 h-3 bg-gray-400 rounded-full"></div>
-            <span class="text-sm text-gray-600">Ready to generate</span>
-          </div>
-        `;
+  async _pollTaskStatus(taskId) {
+    const pollInterval = 3000; // Poll every 3 seconds
+    const initialDelay = 2000; // Wait 2 seconds before first poll
+    const maxAttempts = 100; // 5 minutes maximum (100 * 3 seconds)
+    let attempts = 0;
+
+    const poll = async () => {
+      attempts++;
+
+      try {
+        const response = await fetch(`/api/task-status/${taskId}`, {
+          headers: {
+            "X-CSRFToken": document.querySelector("[name=csrfmiddlewaretoken]").value
+          }
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to check task status");
+        }
+
+        const statusData = await response.json();
+
+        if (statusData.status === "completed") {
+          // Success! Update UI with the generated content
+          this._updateToCompletedState(statusData.blog_post_id);
+          return;
+        } else if (statusData.status === "failed") {
+          throw new Error(statusData.message || "Content generation failed");
+        } else if (statusData.status === "processing") {
+          // Still processing, continue polling
+          if (attempts >= maxAttempts) {
+            throw new Error("Content generation is taking longer than expected. Please refresh the page to check status.");
+          }
+
+          // Update status message to show progress
+          if (this.hasStatusTarget) {
+            const minutes = Math.floor((attempts * pollInterval) / 60000);
+            const seconds = Math.floor(((attempts * pollInterval) % 60000) / 1000);
+            const timeElapsed = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+
+            this.statusTarget.innerHTML = `
+              <div class="flex gap-1.5 items-center">
+                <div class="w-3 h-3 bg-amber-500 rounded-full animate-pulse"></div>
+                <span class="text-sm font-medium text-amber-700">Generating... (${timeElapsed})</span>
+              </div>
+            `;
+          }
+
+          // Schedule next poll
+          this.pollingTimeoutId = setTimeout(poll, pollInterval);
+        } else if (statusData.status === "error") {
+          throw new Error(statusData.message || "Content generation encountered an error");
+        }
+      } catch (error) {
+        showMessage(error.message || "Failed to check generation status", "error");
+        this._resetToInitialState();
       }
+    };
+
+    // Wait a bit before starting to poll to allow task to be created in DB
+    this.pollingTimeoutId = setTimeout(poll, initialDelay);
+  }
+
+  _updateToCompletedState(blogPostId) {
+    // Clean up localStorage - task is complete
+    const taskKey = `blog_generation_task_${this.suggestionIdValue}`;
+    localStorage.removeItem(taskKey);
+
+    // Update button to "View Post"
+    this.buttonContainerTarget.innerHTML = `
+      <a
+        href="/project/${this.projectIdValue}/post/${blogPostId}/"
+        class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
+        <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+        </svg>
+        View Post
+      </a>
+    `;
+
+    // Update status to show completed state
+    if (this.hasStatusTarget) {
+      this.statusTarget.innerHTML = `
+        <div class="flex gap-1.5 items-center">
+          <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+          <span class="text-sm font-medium text-green-700">Generated</span>
+        </div>
+      `;
+    }
+
+    // Handle the post button
+    this._appendPostButton(this.postButtonContainerTarget, blogPostId);
+
+    // Show success message
+    showMessage("Content generated successfully!", "success");
+  }
+
+  _resetToInitialState() {
+    // Clean up localStorage - task failed or was cancelled
+    const taskKey = `blog_generation_task_${this.suggestionIdValue}`;
+    localStorage.removeItem(taskKey);
+
+    // Reset the button to original state
+    this.buttonContainerTarget.innerHTML = `
+      <button
+        data-action="generate-content#generate"
+        class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500">
+        <svg class="mr-2 w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+        </svg>
+        Generate
+      </button>
+    `;
+
+    // Reset status if available
+    if (this.hasStatusTarget) {
+      this.statusTarget.innerHTML = `
+        <div class="flex gap-1.5 items-center">
+          <div class="w-3 h-3 bg-gray-400 rounded-full"></div>
+          <span class="text-sm text-gray-600">Ready to generate</span>
+        </div>
+      `;
     }
   }
 

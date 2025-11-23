@@ -123,6 +123,7 @@ class EmailType(models.TextChoices):
     EMAIL_CONFIRMATION = "EMAIL_CONFIRMATION", "Email Confirmation"
     WELCOME = "WELCOME", "Welcome"
     FEEDBACK_NOTIFICATION = "FEEDBACK_NOTIFICATION", "Feedback Notification"
+    BLOG_POST_READY = "BLOG_POST_READY", "Blog Post Ready"
 
 
 class AIModel(models.TextChoices):
