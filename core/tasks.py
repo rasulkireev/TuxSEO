@@ -1202,6 +1202,126 @@ If you have any questions or feedback, just reply to this email.
             blog_post_id=blog_post_id,
             user_email=user.email if user else "unknown",
         )
+
+
+def send_feedback_request_email(profile_id: int):
+    """
+    Send a feedback request email to a user profile.
+    Asks about their experience with TuxSEO and Black Friday upgrade offer.
+    """
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.urls import reverse
+
+    try:
+        profile = Profile.objects.select_related("user").get(id=profile_id)
+    except Profile.DoesNotExist:
+        logger.error(
+            "[Send Feedback Request Email] Profile not found",
+            profile_id=profile_id,
+        )
+        return f"Profile {profile_id} not found"
+
+    user = profile.user
+
+    # Check if this profile has already received a feedback request email
+    from core.models import EmailSent
+
+    if EmailSent.objects.filter(profile=profile, email_type=EmailType.FEEDBACK_REQUEST).exists():
+        logger.info(
+            "[Send Feedback Request Email] Email already sent to this profile, skipping",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+        return f"Email already sent to {user.email}, skipping"
+
+    # Construct the pricing URL
+    pricing_url = f"{settings.SITE_URL}{reverse('pricing')}"
+
+    # Prepare template context
+    context = {
+        "user": user,
+        "profile": profile,
+        "pricing_url": pricing_url,
+    }
+
+    try:
+        # Render the MJML template
+        email_content = render_to_string("emails/feedback_request.html", context)
+
+        # Extract subject from the template
+        subject = "I'd love your feedback on TuxSEO"
+
+        # Create plain text version
+        plain_text = f"""Hi {user.first_name or user.username}!
+
+My name is Rasul, and I'm the founder of TuxSEO. I hope you're enjoying the product! I'm constantly working to improve it, and your feedback would be incredibly valuable to me.
+
+I'd love to hear from you about:
+• How are you finding TuxSEO? (ease of usage, quality of content generated)
+• What's working well for you?
+• What could I improve?
+
+🎉 Black Friday Special Offer
+
+I'm also running a special Black Friday promotion! Would you consider upgrading to Pro with my exclusive discount?
+
+Use code BF2025-85OFF for 85% off your subscription.
+
+If you're not interested in upgrading right now, I'd love to know why. Your feedback helps me understand what features matter most to you.
+
+View Pricing & Upgrade: {pricing_url}
+
+Please reply to this email with your feedback. I read every response and use your input to make TuxSEO better.
+
+Thank you for being part of the TuxSEO community!
+- Rasul
+
+---
+Just reply to this email to share your feedback.
+"""  # noqa: E501
+
+        # Create email with both plain text and HTML versions
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_text,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+
+        # Attach the HTML version (rendered from MJML)
+        email.attach_alternative(email_content, "text/html")
+
+        # Send the email
+        email.send(fail_silently=False)
+
+        # Track the email
+        async_task(
+            "core.tasks.track_email_sent",
+            email_address=user.email,
+            email_type=EmailType.FEEDBACK_REQUEST,
+            profile=profile,
+            group="Track Email Sent",
+        )
+
+        logger.info(
+            "[Send Feedback Request Email] Email sent successfully",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+
+        return f"Email sent to {user.email}"
+
+    except Exception as error:
+        logger.error(
+            "[Send Feedback Request Email] Failed to send email",
+            error=str(error),
+            exc_info=True,
+            profile_id=profile_id,
+            user_email=user.email if user else "unknown",
+        )
+        return f"Failed to send email to {user.email if user else 'unknown'}"
         return f"Failed to send email: {str(error)}"
 
 

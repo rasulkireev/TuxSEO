@@ -124,6 +124,7 @@ class EmailType(models.TextChoices):
     WELCOME = "WELCOME", "Welcome"
     FEEDBACK_NOTIFICATION = "FEEDBACK_NOTIFICATION", "Feedback Notification"
     BLOG_POST_READY = "BLOG_POST_READY", "Blog Post Ready"
+    FEEDBACK_REQUEST = "FEEDBACK_REQUEST", "Feedback Request"
 
 
 class AIModel(models.TextChoices):
