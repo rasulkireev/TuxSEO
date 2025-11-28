@@ -13,10 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - features to the pro plan on pricing page
 - Monitoring
   - Sentry Agent Monitoring
+- Emails
+  - Feedback email (for profiles with one product)
+  - create project reminder for signed up users without project
+  - project successfully created email
 
 ### Fixed
 - fixed `FieldError` on publish history page
 - Posted posts should not appear on SEO Optimized and Eye Catching post pages.
+- emails
+  - nudge to add sitemap in the first blog post generated email
 
 ## [0.0.8] - 2025-11-23
 

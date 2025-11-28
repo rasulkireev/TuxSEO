@@ -271,6 +271,8 @@ ACCOUNT_FORMS = {
     "signup": "core.forms.CustomSignUpForm",
     "login": "core.forms.CustomLoginForm",
 }
+ACCOUNT_EMAIL_SUBJECT_PREFIX = ""
+ACCOUNT_EMAIL_UNKNOWN_ACCOUNTS = False
 
 SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_ADAPTER = "core.adapters.CustomSocialAccountAdapter"
@@ -542,3 +544,9 @@ CLOUDFLARE_TURNSTILE_SITEKEY = env("CLOUDFLARE_TURNSTILE_SITEKEY", default="")
 CLOUDFLARE_TURNSTILE_SECRET_KEY = env("CLOUDFLARE_TURNSTILE_SECRET_KEY", default="")
 
 REPLICATE_API_TOKEN = env("REPLICATE_API_TOKEN", default="")
+
+SHELL_PLUS_IMPORTS = [
+    "from django_q.tasks import async_task",
+    "from core.scheduled_tasks import *",
+    "from core.tasks import *",
+]

@@ -1,0 +1,237 @@
+{% load mjml %}
+{% load markdown_extras %}
+
+{% mjml_configured as has_mjml %}
+{% if has_mjml %}
+{% mjml %}
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-text font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" padding="0" />
+      <mj-section padding="0" />
+    </mj-attributes>
+    <mj-style>
+      .text-link {
+        color: #3b82f6;
+        text-decoration: none;
+      }
+      .text-link:hover {
+        text-decoration: underline;
+      }
+    </mj-style>
+  </mj-head>
+
+  <mj-body background-color="#f3f4f6">
+    <!-- Header -->
+    <mj-section background-color="#ffffff" padding="40px 25px 30px">
+      <mj-column>
+        <mj-text
+          font-size="28px"
+          font-weight="bold"
+          color="#111827"
+          align="center"
+        >
+          TuxSEO
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Main Content -->
+    <mj-section background-color="#ffffff" padding="0 25px 20px">
+      <mj-column>
+        <mj-text
+          font-size="24px"
+          font-weight="600"
+          color="#111827"
+          line-height="32px"
+          padding-bottom="20px"
+        >
+          Hi {{ user.first_name|default:user.username }}! 👋
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="16px"
+        >
+          My name is Rasul, and I'm the founder of TuxSEO. I hope you're enjoying the product! I'm constantly working to improve it, and your feedback would be incredibly valuable to me.
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="16px"
+        >
+          I'd love to hear from you about:
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-left="20px"
+          padding-bottom="16px"
+        >
+          • How are you finding TuxSEO? (ease of usage, quality of content generated)<br/>
+          • What's working well for you?<br/>
+          • What could I improve?
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Black Friday Offer Section -->
+    <mj-section background-color="#fef3c7" padding="20px 25px">
+      <mj-column>
+        <mj-text
+          font-size="18px"
+          font-weight="600"
+          color="#92400e"
+          line-height="28px"
+          padding-bottom="12px"
+        >
+          🎉 Black Friday Special Offer
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#78350f"
+          line-height="24px"
+          padding-bottom="16px"
+        >
+          I'm also running a special Black Friday promotion! Would you consider upgrading to Pro with my exclusive discount?
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#78350f"
+          line-height="24px"
+          padding-bottom="16px"
+        >
+          Use code <strong>BF2025-85OFF</strong> for 85% off your subscription.
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#78350f"
+          line-height="24px"
+        >
+          If you're not interested in upgrading right now, I'd love to know why. Your feedback helps me understand what features matter most to you.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- CTA Buttons -->
+    <mj-section background-color="#ffffff" padding="30px 25px">
+      <mj-column>
+        <mj-button
+          background-color="#1f2937"
+          color="#ffffff"
+          font-size="16px"
+          font-weight="600"
+          border-radius="6px"
+          padding="12px 32px"
+          href="{{ pricing_url }}"
+        >
+          View Pricing & Upgrade
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" padding="0 25px 30px">
+      <mj-column>
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="20px"
+        >
+          Please reply to this email with your feedback. I read every response and use your input to make TuxSEO better.
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+        >
+          Thank you for being part of the TuxSEO community!<br/>
+          <strong>- Rasul</strong>
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Divider -->
+    <mj-section background-color="#ffffff" padding="0 25px">
+      <mj-column>
+        <mj-divider border-color="#e5e7eb" border-width="1px" />
+      </mj-column>
+    </mj-section>
+
+    <!-- Help Text -->
+    <mj-section background-color="#ffffff" padding="20px 25px 40px">
+      <mj-column>
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          line-height="20px"
+          align="center"
+        >
+          Just reply to this email to share your feedback.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section background-color="#f9fafb" padding="30px 25px">
+      <mj-column>
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          align="center"
+          line-height="20px"
+        >
+          This email was sent by TuxSEO
+        </mj-text>
+        <mj-text
+          font-size="12px"
+          color="#9ca3af"
+          align="center"
+          line-height="18px"
+          padding-top="10px"
+        >
+          © {% now 'Y' %} TuxSEO. All rights reserved.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
+{% endmjml %}
+{% else %}
+Hi {{ user.first_name|default:user.username }}!
+
+My name is Rasul, and I'm the founder of TuxSEO. I hope you're enjoying the product! I'm constantly working to improve it, and your feedback would be incredibly valuable to me.
+
+I'd love to hear from you about:
+• How are you finding TuxSEO? (ease of usage, quality of content generated)
+• What's working well for you?
+• What could I improve?
+
+🎉 Black Friday Special Offer
+
+I'm also running a special Black Friday promotion! Would you consider upgrading to Pro with my exclusive discount?
+
+Use code BF2025-85OFF for 85% off your subscription.
+
+If you're not interested in upgrading right now, I'd love to know why. Your feedback helps me understand what features matter most to you.
+
+View Pricing & Upgrade: {{ pricing_url }}
+
+Please reply to this email with your feedback. I read every response and use your input to make TuxSEO better.
+
+Thank you for being part of the TuxSEO community!
+- Rasul
+
+---
+Just reply to this email to share your feedback.
+{% endif %}

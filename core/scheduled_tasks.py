@@ -1,16 +1,21 @@
 import calendar
+from datetime import timedelta
 
+from allauth.account.models import EmailAddress
 from django.conf import settings
-from django.db.models import Q
+from django.contrib.auth import get_user_model
+from django.db.models import Count, Q
 from django.utils import timezone
 from django_q.tasks import async_task
 
-from core.choices import ProjectPageSource
-from core.models import Competitor, Project, ProjectPage
+from core.choices import EmailType, ProjectPageSource
+from core.models import Competitor, EmailSent, Profile, Project, ProjectPage
 from core.utils import get_jina_embedding
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
+
+User = get_user_model()
 
 
 def analyze_project_sitemap_pages():
@@ -256,3 +261,72 @@ def backfill_competitor_embeddings():
     Successfully processed: {processed_count}
     Failed: {failed_count}
     Remaining: {remaining_count}"""
+
+
+def schedule_create_project_reminder_emails():
+    """
+    Daily scheduled task that finds profiles who have:
+    - Registered at least 1 day ago
+    - Verified their email
+    - Not created any projects
+    - Not received this email yet
+
+    Schedules email sending task for each eligible profile.
+    """
+    now = timezone.now()
+    one_day_ago = now - timedelta(days=1)
+
+    # Get profiles that have verified emails and registered at least 1 day ago
+    # Filter out profiles that have projects using annotation
+    eligible_profiles = (
+        Profile.objects.filter(
+            user__emailaddress__verified=True,
+            user__date_joined__lte=one_day_ago,
+        )
+        .annotate(project_count=Count("projects"))
+        .filter(project_count=0)
+    )
+
+    # Exclude profiles that have already received this email
+    sent_profile_ids = EmailSent.objects.filter(
+        email_type=EmailType.CREATE_PROJECT_REMINDER
+    ).values_list("profile_id", flat=True)
+
+    eligible_profiles = eligible_profiles.exclude(id__in=sent_profile_ids)
+
+    scheduled_count = 0
+
+    for profile in eligible_profiles.select_related("user"):
+        # Double-check email is verified
+        email_address = EmailAddress.objects.filter(
+            user=profile.user, email=profile.user.email, verified=True
+        ).first()
+
+        if not email_address:
+            continue
+
+        # Double-check no projects exist
+        if profile.projects.exists():
+            continue
+
+        logger.info(
+            "[Schedule Create Project Reminder] Scheduling email",
+            profile_id=profile.id,
+            user_email=profile.user.email,
+            days_since_registration=(now - profile.user.date_joined).days,
+        )
+
+        async_task(
+            "core.tasks.send_create_project_reminder_email",
+            profile.id,
+            group="Create Project Reminder",
+        )
+        scheduled_count += 1
+
+    logger.info(
+        "[Schedule Create Project Reminder] Completed scheduling",
+        scheduled_profiles=scheduled_count,
+    )
+
+    return f"""Create project reminder email scheduling completed:
+    Profiles scheduled: {scheduled_count}"""
