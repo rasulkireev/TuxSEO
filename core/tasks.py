@@ -1,6 +1,6 @@
 import json
 import random
-from urllib.parse import unquote
+from urllib.parse import unquote, urlencode
 
 import posthog
 import requests
@@ -208,6 +208,9 @@ def schedule_project_competitor_analysis(project_id):
         for competitor in competitors:
             async_task(analyze_project_competitor, competitor.id)
 
+    # Check if we should send the setup complete email
+    async_task(check_and_send_project_setup_complete_email, project_id)
+
     return f"Saved competitors and scheduled content fetching for {project.name}"
 
 
@@ -335,11 +338,228 @@ def process_project_keywords(project_id: int):
     async_task(get_and_save_related_keywords, project_id, group="Get Related Keywords")
     async_task(get_and_save_pasf_keywords, project_id, group="Get PASF Keywords")
 
+    # Check if we should send the setup complete email
+    async_task(check_and_send_project_setup_complete_email, project_id)
+
     return f"""
     Keyword processing for project {project.name} (ID: {project.id})
     Processed {processed_count} keywords
     Failed: {failed_count}
     """
+
+
+def check_and_send_project_setup_complete_email(project_id: int):
+    """
+    Check if all project setup conditions are met and send the setup complete email if so.
+    This function is idempotent - it will only send the email once per project.
+    Uses atomic transaction with get_or_create to prevent race conditions.
+    """
+    from allauth.account.models import EmailAddress
+    from django.db import transaction
+
+    logger.info(
+        "[Check Project Setup Complete] Checking and sending project setup complete email",
+        project_id=project_id,
+    )
+
+    try:
+        project = Project.objects.select_related("profile", "profile__user").get(id=project_id)
+    except Project.DoesNotExist:
+        logger.error(
+            "[Check Project Setup Complete] Project not found",
+            project_id=project_id,
+        )
+        return f"Project {project_id} not found"
+
+    profile = project.profile
+
+    # Check if email is verified
+    email_address = EmailAddress.objects.filter(user=profile.user, email=profile.user.email).first()
+
+    if not email_address:
+        logger.warning(
+            "[Check Project Setup Complete] Email not found",
+            project_id=project_id,
+            project_name=project.name,
+            user=profile.user,
+        )
+        return
+
+    # Check if project has been analyzed
+    if not project.date_analyzed:
+        logger.warning(
+            "[Check Project Setup Complete] Project not analyzed",
+            project_id=project_id,
+            project_name=project.name,
+        )
+        return f"Project {project_id} not analyzed"
+
+    # Check if project has blog post title suggestions
+    blog_post_suggestions_count = project.blog_post_title_suggestions.count()
+    if blog_post_suggestions_count == 0:
+        logger.warning(
+            "[Check Project Setup Complete] No blog post title suggestions found",
+            project_id=project_id,
+            project_name=project.name,
+        )
+        return
+
+    # Check if project has keywords
+    keywords_count = project.project_keywords.count()
+    if keywords_count == 0:
+        logger.warning(
+            "[Check Project Setup Complete] No keywords found",
+            project_id=project_id,
+            project_name=project.name,
+        )
+        return
+
+    # Check if project has competitors
+    competitors_count = project.competitors.count()
+    if competitors_count == 0:
+        logger.warning(
+            "[Check Project Setup Complete] No competitors found",
+            project_id=project_id,
+            project_name=project.name,
+        )
+        return
+
+    # Use atomic transaction with get_or_create to prevent race conditions
+    # This ensures only one task can successfully create the EmailSent record
+    with transaction.atomic():
+        email_sent, created = EmailSent.objects.get_or_create(
+            profile=profile,
+            email_type=EmailType.PROJECT_SETUP_COMPLETE,
+            defaults={"email_address": profile.user.email},
+        )
+
+        if not created:
+            logger.warning(
+                "[Check Project Setup Complete] Email already sent, skipping",
+                project_id=project_id,
+                project_name=project.name,
+                user_email=profile.user.email,
+            )
+            return
+
+    # All conditions met and we successfully created the EmailSent record - send the email
+    logger.info(
+        "[Check Project Setup Complete] All conditions met, sending email",
+        project_id=project_id,
+        project_name=project.name,
+        user_email=profile.user.email,
+        blog_post_suggestions_count=blog_post_suggestions_count,
+        keywords_count=keywords_count,
+        competitors_count=competitors_count,
+    )
+
+    # Send the email
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.urls import reverse
+
+    user = profile.user
+
+    # Construct URLs
+    pages_url = f"{settings.SITE_URL}{reverse('project_pages', kwargs={'pk': project.id})}"
+    project_posts_url = (
+        f"{settings.SITE_URL}{reverse('project_seo_posts', kwargs={'pk': project.id})}"
+    )
+
+    # Prepare template context
+    context = {
+        "user": user,
+        "profile": profile,
+        "project": project,
+        "blog_post_suggestions_count": blog_post_suggestions_count,
+        "keywords_count": keywords_count,
+        "competitors_count": competitors_count,
+        "pages_url": pages_url,
+        "project_posts_url": project_posts_url,
+    }
+
+    try:
+        # Render the MJML template
+        email_content = render_to_string("emails/project_setup_complete.html", context)
+
+        # Extract subject from the template
+        subject = f"🎉 Your project {project.name} is ready!"
+
+        # Create plain text version
+        plain_text = f"""Congratulations, {user.first_name or user.username}! 🎉
+
+You've successfully created your first project {project.name}! We've been hard at work analyzing your website and gathering insights to help you create amazing content.
+
+Here's what we've accomplished so far:
+
+✅ Created {blog_post_suggestions_count} Blog Post Suggestions
+✅ Found {keywords_count} Keywords to consider tracking and using in posts
+✅ Found {competitors_count} Competitors to learn from
+
+💡 Pro Tip: Add a sitemap to your project so we can correctly get all your pages to insert into blog posts.
+
+Add Sitemap: {pages_url}
+
+Ready to generate your first blog post?
+
+Choose from your {blog_post_suggestions_count} blog post suggestions and let our AI create a comprehensive, SEO-optimized article for you.
+
+Generate Your First Post: {project_posts_url}
+
+If you have any questions or need help, just reply to this email. I'm here to help!
+
+Best regards,
+- Rasul
+Founder, TuxSEO
+
+---
+This email was sent by TuxSEO
+"""  # noqa: E501
+
+        # Create email with both plain text and HTML versions
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_text,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+
+        # Attach the HTML version (rendered from MJML)
+        email.attach_alternative(email_content, "text/html")
+
+        # Send the email
+        email.send(fail_silently=False)
+
+        # Track the email
+        async_task(
+            "core.tasks.track_email_sent",
+            email_address=user.email,
+            email_type=EmailType.PROJECT_SETUP_COMPLETE,
+            profile=profile,
+            group="Track Email Sent",
+        )
+
+        logger.info(
+            "[Check Project Setup Complete] Email sent successfully",
+            project_id=project_id,
+            user_email=user.email,
+            blog_post_suggestions_count=blog_post_suggestions_count,
+            keywords_count=keywords_count,
+            competitors_count=competitors_count,
+        )
+
+        return f"Email sent to {user.email}"
+
+    except Exception as error:
+        logger.error(
+            "[Check Project Setup Complete] Failed to send email",
+            error=str(error),
+            exc_info=True,
+            project_id=project_id,
+            user_email=user.email if user else "unknown",
+        )
+        return f"Failed to send email to {user.email if user else 'unknown'}"
 
 
 def generate_blog_post_suggestions(project_id: int):
@@ -351,6 +571,10 @@ def generate_blog_post_suggestions(project_id: int):
 
     project.generate_title_suggestions(content_type=ContentType.SHARING, num_titles=3)
     project.generate_title_suggestions(content_type=ContentType.SEO, num_titles=3)
+
+    # Check if we should send the setup complete email
+    async_task(check_and_send_project_setup_complete_email, project_id)
+
     return "Blog post suggestions generated"
 
 
@@ -1106,6 +1330,7 @@ def send_blog_post_ready_email(blog_post_id: int):
     from django.conf import settings
     from django.core.mail import EmailMultiAlternatives
     from django.template.loader import render_to_string
+    from django.urls import reverse
 
     try:
         blog_post = GeneratedBlogPost.objects.select_related(
@@ -1122,8 +1347,20 @@ def send_blog_post_ready_email(blog_post_id: int):
     user = profile.user
     project = blog_post.project
 
-    # Construct the blog post URL
+    # Check if this is the first blog post ready email sent to this profile
+    is_first_blog_post_email = not EmailSent.objects.filter(
+        profile=profile, email_type=EmailType.BLOG_POST_READY
+    ).exists()
+
+    # Check if project already has a sitemap
+    has_sitemap = bool(project.sitemap_url and project.sitemap_url.strip())
+
+    # Only show sitemap nudge if it's the first email AND project doesn't have a sitemap
+    show_sitemap_nudge = is_first_blog_post_email and not has_sitemap
+
+    # Construct URLs
     blog_post_url = f"{settings.SITE_URL}/project/{project.id}/post/{blog_post.id}/"
+    pages_url = f"{settings.SITE_URL}{reverse('project_pages', kwargs={'pk': project.id})}"
 
     # Prepare template context
     context = {
@@ -1131,6 +1368,9 @@ def send_blog_post_ready_email(blog_post_id: int):
         "project": project,
         "user": user,
         "blog_post_url": blog_post_url,
+        "pages_url": pages_url,
+        "is_first_blog_post_email": is_first_blog_post_email,
+        "show_sitemap_nudge": show_sitemap_nudge,
     }
 
     try:
@@ -1153,14 +1393,23 @@ View your blog post here:
 What's next?
 - Review and edit the content if needed
 - Post it to your blog with one click
-- Generate more content for your project
+- Generate more content for your project"""
+
+        if show_sitemap_nudge:
+            plain_text += f"""
+
+💡 Pro Tip: Add a sitemap to your project so we can correctly get all your pages to insert into blog posts.
+
+Add Sitemap: {pages_url}"""  # noqa: E501
+
+        plain_text += """
 
 Happy blogging!
 - The TuxSEO Team
 
 ---
 If you have any questions or feedback, just reply to this email.
-"""
+"""  # noqa: E501
 
         # Create email with both plain text and HTML versions
         email = EmailMultiAlternatives(
@@ -1322,7 +1571,130 @@ Just reply to this email to share your feedback.
             user_email=user.email if user else "unknown",
         )
         return f"Failed to send email to {user.email if user else 'unknown'}"
-        return f"Failed to send email: {str(error)}"
+
+
+def send_create_project_reminder_email(profile_id: int):
+    """
+    Send a reminder email to a profile who has verified their email
+    but hasn't created a project yet.
+    Encourages them to create their first project.
+    """
+    from django.conf import settings
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from django.urls import reverse
+
+    try:
+        profile = Profile.objects.select_related("user").get(id=profile_id)
+    except Profile.DoesNotExist:
+        logger.error(
+            "[Send Create Project Reminder Email] Profile not found",
+            profile_id=profile_id,
+        )
+        return f"Profile {profile_id} not found"
+
+    user = profile.user
+
+    # Check if this profile has already received this email
+    if EmailSent.objects.filter(
+        profile=profile, email_type=EmailType.CREATE_PROJECT_REMINDER
+    ).exists():
+        logger.info(
+            "[Send Create Project Reminder Email] Email already sent to this profile, skipping",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+        return f"Email already sent to {user.email}, skipping"
+
+    # Double-check that profile has no projects
+    if profile.projects.exists():
+        logger.info(
+            "[Send Create Project Reminder Email] Profile has projects, skipping",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+        return f"Profile {profile_id} has projects, skipping"
+
+    # Construct URLs with onboarding flag
+    home_url = f"{settings.SITE_URL}{reverse('home')}?{urlencode({'welcome': 'true'})}"
+
+    # Prepare template context
+    context = {
+        "user": user,
+        "profile": profile,
+        "home_url": home_url,
+    }
+
+    try:
+        # Render the MJML template
+        email_content = render_to_string("emails/create_project_reminder.html", context)
+
+        # Extract subject from the template
+        subject = "Ready to create your first project?"
+
+        # Create plain text version
+        plain_text = f"""Hi {user.first_name or user.username}!
+
+Thanks for verifying your email! I noticed you haven't created your first project yet.
+
+TuxSEO helps you generate SEO-optimized blog posts by analyzing your website and competitors. Here's how easy it is to get started:
+
+1. Add your website URL
+2. Let TuxSEO analyze your content
+3. Get AI-generated blog post suggestions tailored to your site
+
+Create your first project: {home_url}
+
+If you have any questions or need help getting started, just reply to this email. I'm here to help!
+
+Best regards,
+- Rasul
+Founder, TuxSEO
+
+---
+Ready to get started? {home_url}
+"""  # noqa: E501
+
+        # Create email with both plain text and HTML versions
+        email = EmailMultiAlternatives(
+            subject=subject,
+            body=plain_text,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            to=[user.email],
+        )
+
+        # Attach the HTML version (rendered from MJML)
+        email.attach_alternative(email_content, "text/html")
+
+        # Send the email
+        email.send(fail_silently=False)
+
+        # Track the email
+        async_task(
+            "core.tasks.track_email_sent",
+            email_address=user.email,
+            email_type=EmailType.CREATE_PROJECT_REMINDER,
+            profile=profile,
+            group="Track Email Sent",
+        )
+
+        logger.info(
+            "[Send Create Project Reminder Email] Email sent successfully",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+
+        return f"Email sent to {user.email}"
+
+    except Exception as error:
+        logger.error(
+            "[Send Create Project Reminder Email] Failed to send email",
+            error=str(error),
+            exc_info=True,
+            profile_id=profile_id,
+            user_email=user.email if user else "unknown",
+        )
+        return f"Failed to send email to {user.email if user else 'unknown'}"
 
 
 def generate_blog_post_content(suggestion_id: int, send_email: bool = True):

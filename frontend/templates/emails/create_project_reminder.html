@@ -46,7 +46,7 @@
           line-height="32px"
           padding-bottom="20px"
         >
-          Hi there! 👋
+          Hi {{ user.first_name|default:user.username }}! 👋
         </mj-text>
 
         <mj-text
@@ -55,22 +55,34 @@
           line-height="24px"
           padding-bottom="16px"
         >
-          Great news! Your blog post <strong>"{{ blog_post.title }}"</strong> for <strong>{{ project.name }}</strong> is ready.
+          Thanks for verifying your email! I noticed you haven't created your first project yet.
         </mj-text>
 
         <mj-text
           font-size="16px"
           color="#374151"
           line-height="24px"
-          padding-bottom="30px"
+          padding-bottom="16px"
         >
-          We've completed extensive research and generated a comprehensive blog post for you.
+          TuxSEO helps you generate SEO-optimized blog posts by analyzing your website and competitors. Here's how easy it is to get started:
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-left="20px"
+          padding-bottom="16px"
+        >
+          1. Add your website URL<br/>
+          2. Let TuxSEO analyze your content<br/>
+          3. Get AI-generated blog post suggestions tailored to your site
         </mj-text>
       </mj-column>
     </mj-section>
 
     <!-- CTA Button -->
-    <mj-section background-color="#ffffff" padding="0 25px 30px">
+    <mj-section background-color="#ffffff" padding="30px 25px">
       <mj-column>
         <mj-button
           background-color="#1f2937"
@@ -79,76 +91,35 @@
           font-weight="600"
           border-radius="6px"
           padding="12px 32px"
-          href="{{ blog_post_url }}"
+          href="{{ home_url }}"
         >
-          View Your Blog Post
+          Create Your First Project
         </mj-button>
       </mj-column>
     </mj-section>
 
-    <!-- What's Next Section -->
-    <mj-section background-color="#ffffff" padding="0 25px 40px">
-      <mj-column>
-        <mj-text
-          font-size="18px"
-          font-weight="600"
-          color="#111827"
-          line-height="28px"
-          padding-bottom="16px"
-        >
-          What's next?
-        </mj-text>
-
-        <mj-text
-          font-size="16px"
-          color="#374151"
-          line-height="24px"
-          padding-left="20px"
-        >
-          • Review and edit the content if needed<br/>
-          • Post it to your blog with one click<br/>
-          • Generate more content for your project
-        </mj-text>
-
-        <mj-text
-          font-size="16px"
-          color="#374151"
-          line-height="24px"
-          padding-top="30px"
-        >
-          Happy blogging!<br/>
-          <strong>- The TuxSEO Team</strong>
-        </mj-text>
-      </mj-column>
-    </mj-section>
-
-    {% if show_sitemap_nudge %}
-    <!-- Sitemap Suggestion (only for first blog post email and if no sitemap exists) -->
-    <mj-section background-color="#f9fafb" padding="25px">
+    <mj-section background-color="#ffffff" padding="0 25px 30px">
       <mj-column>
         <mj-text
           font-size="16px"
           color="#374151"
           line-height="24px"
-          padding-bottom="12px"
+          padding-bottom="20px"
         >
-          <strong>💡 Pro Tip:</strong> Add a sitemap to your project so we can correctly get all your pages to insert into blog posts.
+          If you have any questions or need help getting started, just reply to this email. I'm here to help!
         </mj-text>
 
-        <mj-button
-          background-color="#3b82f6"
-          color="#ffffff"
-          font-size="14px"
-          font-weight="600"
-          border-radius="6px"
-          padding="10px 24px"
-          href="{{ pages_url }}"
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
         >
-          Add Sitemap
-        </mj-button>
+          Best regards,<br/>
+          <strong>- Rasul</strong><br/>
+          Founder, TuxSEO
+        </mj-text>
       </mj-column>
     </mj-section>
-    {% endif %}
 
     <!-- Divider -->
     <mj-section background-color="#ffffff" padding="0 25px">
@@ -166,7 +137,7 @@
           line-height="20px"
           align="center"
         >
-          If you have any questions or feedback, just reply to this email.
+          Ready to get started? <a href="{{ home_url }}" class="text-link">Create your first project</a>
         </mj-text>
       </mj-column>
     </mj-section>
@@ -197,29 +168,24 @@
 </mjml>
 {% endmjml %}
 {% else %}
-Hi there!
+Hi {{ user.first_name|default:user.username }}!
 
-Great news! Your blog post "{{ blog_post.title }}" for {{ project.name }} is ready.
+Thanks for verifying your email! I noticed you haven't created your first project yet.
 
-We've completed extensive research and generated a comprehensive blog post for you.
+TuxSEO helps you generate SEO-optimized blog posts by analyzing your website and competitors. Here's how easy it is to get started:
 
-View your blog post here:
-{{ blog_post_url }}
+1. Add your website URL
+2. Let TuxSEO analyze your content
+3. Get AI-generated blog post suggestions tailored to your site
 
-What's next?
-- Review and edit the content if needed
-- Post it to your blog with one click
-- Generate more content for your project
-{% if show_sitemap_nudge %}
+Create your first project: {{ home_url }}
 
-💡 Pro Tip: Add a sitemap to your project so we can correctly get all your pages to insert into blog posts.
+If you have any questions or need help getting started, just reply to this email. I'm here to help!
 
-Add Sitemap: {{ pages_url }}
-{% endif %}
-
-Happy blogging!
-- The TuxSEO Team
+Best regards,
+- Rasul
+Founder, TuxSEO
 
 ---
-If you have any questions or feedback, just reply to this email.
+Ready to get started? {{ home_url }}
 {% endif %}

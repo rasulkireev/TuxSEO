@@ -20,4 +20,5 @@ class CoreConfig(AppConfig):
             posthog.host = "https://us.i.posthog.com"
 
             if settings.ENVIRONMENT == "dev":
+                posthog.disabled = True
                 posthog.debug = True

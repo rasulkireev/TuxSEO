@@ -1,0 +1,237 @@
+{% load mjml %}
+{% load markdown_extras %}
+
+{% mjml_configured as has_mjml %}
+{% if has_mjml %}
+{% mjml %}
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-text font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" padding="0" />
+      <mj-section padding="0" />
+    </mj-attributes>
+    <mj-style>
+      .text-link {
+        color: #3b82f6;
+        text-decoration: none;
+      }
+      .text-link:hover {
+        text-decoration: underline;
+      }
+      .stat-number {
+        font-size: 32px;
+        font-weight: bold;
+        color: #1f2937;
+      }
+      .stat-label {
+        font-size: 14px;
+        color: #6b7280;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+    </mj-style>
+  </mj-head>
+
+  <mj-body background-color="#f3f4f6">
+    <!-- Header -->
+    <mj-section background-color="#ffffff" padding="40px 25px 30px">
+      <mj-column>
+        <mj-text
+          font-size="28px"
+          font-weight="bold"
+          color="#111827"
+          align="center"
+        >
+          TuxSEO
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Main Content -->
+    <mj-section background-color="#ffffff" padding="0 25px 20px">
+      <mj-column>
+        <mj-text
+          font-size="24px"
+          font-weight="600"
+          color="#111827"
+          line-height="32px"
+          padding-bottom="20px"
+        >
+          Congratulations, {{ user.first_name|default:user.username }}! 🎉
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="20px"
+        >
+          You've successfully created your first project <strong>{{ project.name }}</strong>! We've been hard at work analyzing your website and gathering insights to help you create amazing content.
+        </mj-text>
+
+        <mj-text
+          font-size="18px"
+          font-weight="600"
+          color="#111827"
+          line-height="24px"
+          padding-bottom="16px"
+        >
+          Here's what we've accomplished so far:
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Stats Section -->
+    <mj-section background-color="#ffffff" padding="0 25px 30px">
+      <mj-column>
+        <!-- Blog Post Suggestions -->
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="12px"
+        >
+          ✅ Created <strong>{{ blog_post_suggestions_count }} Blog Post Suggestions</strong>
+        </mj-text>
+
+        <!-- Keywords -->
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="12px"
+        >
+          ✅ Found <strong>{{ keywords_count }} Keywords</strong> to consider tracking and using in posts
+        </mj-text>
+
+        <!-- Competitors -->
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="20px"
+        >
+          ✅ Found <strong>{{ competitors_count }} Competitors</strong> to learn from
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Generate First Post CTA -->
+    <mj-section background-color="#ffffff" padding="30px 25px">
+      <mj-column>
+        <mj-text
+          font-size="18px"
+          font-weight="600"
+          color="#111827"
+          line-height="24px"
+          padding-bottom="16px"
+        >
+          Ready to generate your first blog post?
+        </mj-text>
+
+        <mj-text
+          font-size="16px"
+          color="#374151"
+          line-height="24px"
+          padding-bottom="20px"
+        >
+          Choose from your {{ blog_post_suggestions_count }} blog post suggestions and let our AI create a comprehensive, SEO-optimized article for you.
+        </mj-text>
+
+        <mj-button
+          background-color="#1f2937"
+          color="#ffffff"
+          font-size="16px"
+          font-weight="600"
+          border-radius="6px"
+          padding="12px 32px"
+          href="{{ project_posts_url }}"
+        >
+          Generate Your First Post
+        </mj-button>
+      </mj-column>
+    </mj-section>
+
+    <!-- Divider -->
+    <mj-section background-color="#ffffff" padding="0 25px">
+      <mj-column>
+        <mj-divider border-color="#e5e7eb" border-width="1px" />
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section background-color="#ffffff" padding="20px 25px 40px">
+      <mj-column>
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          line-height="20px"
+        >
+          If you have any questions or need help, just reply to this email. I'm here to help!
+        </mj-text>
+
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          line-height="20px"
+          padding-top="16px"
+        >
+          Best regards,<br/>
+          <strong>- Rasul</strong><br/>
+          Founder, TuxSEO
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <!-- Footer -->
+    <mj-section background-color="#f9fafb" padding="30px 25px">
+      <mj-column>
+        <mj-text
+          font-size="14px"
+          color="#6b7280"
+          align="center"
+          line-height="20px"
+        >
+          This email was sent by TuxSEO
+        </mj-text>
+        <mj-text
+          font-size="12px"
+          color="#9ca3af"
+          align="center"
+          line-height="18px"
+          padding-top="10px"
+        >
+          © {% now 'Y' %} TuxSEO. All rights reserved.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
+{% endmjml %}
+{% else %}
+Congratulations, {{ user.first_name|default:user.username }}! 🎉
+
+You've successfully created your first project {{ project.name }}! We've been hard at work analyzing your website and gathering insights to help you create amazing content.
+
+Here's what we've accomplished so far:
+
+✅ Created {{ blog_post_suggestions_count }} Blog Post Suggestions
+✅ Found {{ keywords_count }} Keywords to consider tracking and using in posts
+✅ Found {{ competitors_count }} Competitors to learn from
+
+Ready to generate your first blog post?
+
+Choose from your {{ blog_post_suggestions_count }} blog post suggestions and let our AI create a comprehensive, SEO-optimized article for you.
+
+Generate Your First Post: {{ project_posts_url }}
+
+If you have any questions or need help, just reply to this email. I'm here to help!
+
+Best regards,
+- Rasul
+Founder, TuxSEO
+
+---
+This email was sent by TuxSEO
+© {% now 'Y' %} TuxSEO. All rights reserved.
+{% endif %}

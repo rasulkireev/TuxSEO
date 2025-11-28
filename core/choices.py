@@ -125,6 +125,8 @@ class EmailType(models.TextChoices):
     FEEDBACK_NOTIFICATION = "FEEDBACK_NOTIFICATION", "Feedback Notification"
     BLOG_POST_READY = "BLOG_POST_READY", "Blog Post Ready"
     FEEDBACK_REQUEST = "FEEDBACK_REQUEST", "Feedback Request"
+    CREATE_PROJECT_REMINDER = "CREATE_PROJECT_REMINDER", "Create Project Reminder"
+    PROJECT_SETUP_COMPLETE = "PROJECT_SETUP_COMPLETE", "Project Setup Complete"
 
 
 class AIModel(models.TextChoices):

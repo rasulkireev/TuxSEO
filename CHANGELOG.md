@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - features to the pro plan on pricing page
 - Monitoring
   - Sentry Agent Monitoring
+- Emails
+  - Feedback email (for profiles with one product)
 
 ### Fixed
 - fixed `FieldError` on publish history page
