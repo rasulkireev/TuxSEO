@@ -31,20 +31,32 @@ def create_insert_links_agent(model=None):
         1. DO NOT edit, rewrite, or change ANY of the existing blog post content
         2. DO NOT add new paragraphs or sentences
         3. DO NOT remove any existing content
-        4. ONLY insert markdown links into existing text where appropriate
-        5. Insert links by wrapping relevant existing text with markdown link syntax: [text](url)
-        6. Each project page should be linked AT MOST ONCE in the entire post
-        7. Only insert links where they are contextually relevant and add value
-        8. Return the EXACT same blog post with only the links inserted
-        9. Return ONLY the markdown content, no JSON or structured output
+        4. DO NOT remove any existing links from the document
+        5. DO NOT change, update, or correct ANY URLs of existing links - URLs must remain EXACTLY the same
+        6. ONLY insert NEW markdown links from the provided project pages into existing text where appropriate
+        7. Insert links by wrapping relevant existing text with markdown link syntax: [text](url)
+        8. Each project page should be linked AT MOST ONCE in the entire post
+        9. Only insert links where they are contextually relevant and add value
+        10. Return ONLY the markdown content, no JSON or structured output
 
-        HANDLING EXISTING REFERENCE LINKS:
-        - If the blog post contains reference-style links like "text [Source, Year](link)" or "text [1](link)"
-        - Convert them to inline links by integrating them naturally into the text
-        - Example: "This is a fact [Source, 2024](https://example.com)" → "This is [a fact](https://example.com)"
-        - Example: "According to research [1](https://example.com)" → "According to [research](https://example.com)"
-        - DO NOT keep the reference format like [Source, Year] or [1], [2], etc.
-        - Make the links flow naturally within the sentence
+        HANDLING EXISTING LINKS - FORMATTING CORRECTION ONLY:
+        - You MAY convert reference-style links to inline links for better formatting
+        - Example: "Machine learning improves accuracy [Study, 2024](https://example.com)."
+          → "Machine learning [improves accuracy](https://example.com)."
+        - Example: "According to research [1](https://example.com)"
+          → "According to [research](https://example.com)"
+        - CRITICAL: The URL must remain EXACTLY the same - do NOT change, update, or correct the URL
+        - You may change the anchor text to be more natural, but the URL must stay identical
+        - Do NOT remove reference-style links without converting them to inline links
+        - Do NOT keep reference format like [Source, Year] or [1], [2], etc. - convert to natural inline links
+
+        PRESERVING EXISTING LINK URLS:
+        - ALL existing link URLs in the document must remain EXACTLY as they are
+        - Do NOT update or correct URLs of existing links
+        - Do NOT change URLs to fix broken links or update them
+        - If a link URL is "https://old-url.com", it must stay "https://old-url.com" exactly
+        - Only the formatting (reference-style to inline) and anchor text can change, never the URL
+        - Only insert links from the provided project pages that are NOT already in the document
 
         Link Insertion Guidelines:
         - Look for phrases or sentences where linking would naturally enhance the content
@@ -52,20 +64,29 @@ def create_insert_links_agent(model=None):
         - Ensure the anchor text is descriptive and natural
         - Distribute links throughout the post (not all in one section)
         - Prefer linking in body paragraphs over headers or introduction
+        - Only insert links from the provided project pages list
 
-        Example of what TO DO:
+        Example of what TO DO - Inserting new links:
         Original: "This feature helps you track your website performance."
         With Link: "This feature helps you [track your website performance](https://example.com/analytics)."
 
-        Converting Reference Links:
+        Example of what TO DO - Formatting correction (URL stays the same):
         Original: "Machine learning improves accuracy [Study, 2024](https://example.com)."
         Converted: "Machine learning [improves accuracy](https://example.com)."
+        Note: URL "https://example.com" remains EXACTLY the same, only formatting changed
+
+        Example of what TO DO - Both formatting correction and new link insertion:
+        Original: "According to research [1](https://existing-link.com), this is important."
+        Result: "According to [research](https://existing-link.com), this is [important](https://new-provided-link.com)."
+        Note: Existing link URL "https://existing-link.com" stays the same, only formatting changed. New link added.
 
         Example of what NOT TO DO:
         - DO NOT add: "Learn more about our features [here](url)" if that sentence wasn't there
         - DO NOT change: "This is great" to "This is amazing" even with a link
         - DO NOT restructure or reformat the content
-        - DO NOT keep reference-style citations like [Source, Year](url) or [1](url)
+        - DO NOT change URLs: "[text](https://old-url.com)" → "[text](https://new-url.com)" (WRONG!)
+        - DO NOT update or correct broken URLs - leave them exactly as they are
+        - DO NOT remove existing links without converting them to inline format
         """,  # noqa: E501
         retries=2,
         model_settings={"max_tokens": 65500, "temperature": 0.1},
@@ -94,9 +115,13 @@ def create_insert_links_agent(model=None):
 
             INSTRUCTIONS:
             1. Insert links from the project pages above organically into the blog post
-            2. Convert any existing reference-style links (like "text [Source, Year](url)" or "text [1](url)") to natural inline links (like "[text](url)")
-            3. Do not change the content, only insert/convert links
-            4. Return only the markdown content with links properly inserted
+            2. Convert reference-style links (like "text [Source, Year](url)" or "text [1](url)") to natural inline links (like "[text](url)")
+            3. CRITICAL: When converting reference-style links, the URL must remain EXACTLY the same - do NOT change, update, or correct the URL
+            4. DO NOT remove any existing links from the document
+            5. DO NOT change, update, or correct ANY URLs of existing links - URLs must stay identical
+            6. Only insert NEW links from the provided project pages that are not already present
+            7. Do not change the content, only format existing links and insert new links from the provided project pages
+            8. Return only the markdown content with links properly formatted and new links inserted
         """  # noqa: E501
 
     return agent
