@@ -842,6 +842,7 @@ class ProjectPagesView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         from urllib.parse import urlparse
+        from django.core.paginator import Paginator
 
         context = super().get_context_data(**kwargs)
         project = self.object
@@ -865,13 +866,19 @@ class ProjectPagesView(LoginRequiredMixin, DetailView):
                 page.url_path = page_parsed_url.path or "/"
                 filtered_pages.append(page)
 
-        # Calculate statistics (based on filtered pages)
+        # Calculate statistics (based on all filtered pages)
         total_pages_count = len(filtered_pages)
         analyzed_pages_count = sum(1 for page in filtered_pages if page.date_analyzed)
         ai_pages_count = sum(1 for page in filtered_pages if page.source == "AI")
         sitemap_pages_count = sum(1 for page in filtered_pages if page.source == "SITEMAP")
 
-        context["pages"] = filtered_pages
+        # Paginate the filtered pages
+        paginator = Paginator(filtered_pages, 50)
+        page_number = self.request.GET.get("page", 1)
+        page_obj = paginator.get_page(page_number)
+
+        context["page_obj"] = page_obj
+        context["pages"] = page_obj.object_list
         context["project_base_url"] = project_base_url
         context["total_pages_count"] = total_pages_count
         context["analyzed_pages_count"] = analyzed_pages_count
