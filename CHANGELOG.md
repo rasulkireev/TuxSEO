@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Posted posts should not appear on SEO Optimized and Eye Catching post pages.
 - emails
   - nudge to add sitemap in the first blog post generated email
+- GeneratedBlogPost description should suggested_meta_description not description
 
 ## [0.0.8] - 2025-11-23
 

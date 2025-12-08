@@ -852,7 +852,7 @@ class BlogPostTitleSuggestion(BaseModel):
             project=self.project,
             title_suggestion=self,
             title=self.title,  # Temporary title, will be updated after processing
-            description=self.description,
+            description=self.suggested_meta_description,
             slug=slug,
             tags=tags,
             content=result,  # Raw content from GPTResearcher
