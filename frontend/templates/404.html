@@ -1,0 +1,147 @@
+{% load static %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  
+  <link rel="apple-touch-icon" href="{% static 'vendors/images/logo.png' %}" />
+  <link rel="icon" type="image/png" sizes="16x16 32x32 500x500" href="{% static 'vendors/images/logo.png' %}" />
+  
+  <title>404 - Page Not Found | TuxSEO</title>
+  <meta name="description" content="Sorry, we couldn't find the page you're looking for." />
+  <meta name="robots" content="noindex, nofollow" />
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body>
+  <div class="bg-white dark:bg-gray-900">
+    <main class="mx-auto w-full max-w-7xl px-6 pb-16 pt-10 sm:pb-24 lg:px-8">
+      <img src="{% static 'vendors/images/logo.png' %}" alt="TuxSEO" class="mx-auto h-10 w-auto sm:h-12 dark:hidden" />
+      <img src="{% static 'vendors/images/logo.png' %}" alt="TuxSEO" class="mx-auto hidden h-10 w-auto sm:h-12 dark:block" />
+      <div class="mx-auto mt-20 max-w-2xl text-center sm:mt-24">
+        <p class="text-base/8 font-semibold text-red-600 dark:text-red-400">404</p>
+        <h1 class="mt-4 text-balance text-5xl font-semibold tracking-tight text-gray-900 sm:text-6xl dark:text-white">This page does not exist</h1>
+        <p class="mt-6 text-pretty text-lg font-medium text-gray-500 sm:text-xl/8 dark:text-gray-400">Sorry, we couldn't find the page you're looking for.</p>
+      </div>
+      <div class="mx-auto mt-16 flow-root max-w-lg sm:mt-20">
+        <h2 class="sr-only">Popular pages</h2>
+        <ul role="list" class="-mt-6 divide-y divide-gray-900/5 border-b border-gray-900/5 dark:divide-white/10 dark:border-white/10">
+          <li class="relative flex gap-x-6 py-6">
+            <div class="flex size-10 flex-none items-center justify-center rounded-lg shadow-sm outline outline-1 outline-gray-900/10 dark:bg-gray-800/50 dark:-outline-offset-1 dark:outline-white/10">
+              <svg viewBox="0 0 24 24" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-6 text-red-600 dark:text-red-400">
+                <path d="M11.47 3.841a.75.75 0 0 1 1.06 0l8.69 8.69a.75.75 0 1 0 1.06-1.061l-8.689-8.69a2.25 2.25 0 0 0-3.182 0l-8.69 8.69a.75.75 0 1 0 1.061 1.06l8.69-8.689Z" />
+                <path d="m12 5.432 8.159 8.159c.03.03.06.058.091.086v6.198c0 1.035-.84 1.875-1.875 1.875H15a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 0-.75-.75h-3a.75.75 0 0 0-.75.75V21a.75.75 0 0 1-.75.75H5.625a1.875 1.875 0 0 1-1.875-1.875v-6.198a2.29 2.29 0 0 0 .091-.086L12 5.432Z" />
+              </svg>
+            </div>
+            <div class="flex-auto">
+              <h3 class="text-sm/6 font-semibold text-gray-900 dark:text-white">
+                <a href="{% url 'landing' %}">
+                  <span aria-hidden="true" class="absolute inset-0"></span>
+                  Home
+                </a>
+              </h3>
+              <p class="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">Return to the TuxSEO homepage to start fresh.</p>
+            </div>
+            <div class="flex-none self-center">
+              <svg viewBox="0 0 20 20" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-5 text-gray-400 dark:text-gray-500">
+                <path d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
+              </svg>
+            </div>
+          </li>
+          <li class="relative flex gap-x-6 py-6">
+            <div class="flex size-10 flex-none items-center justify-center rounded-lg shadow-sm outline outline-1 outline-gray-900/10 dark:bg-gray-800/50 dark:-outline-offset-1 dark:outline-white/10">
+              <svg viewBox="0 0 24 24" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-6 text-red-600 dark:text-red-400">
+                <path d="M11.25 4.533A9.707 9.707 0 0 0 6 3a9.735 9.735 0 0 0-3.25.555.75.75 0 0 0-.5.707v14.25a.75.75 0 0 0 1 .707A8.237 8.237 0 0 1 6 18.75c1.995 0 3.823.707 5.25 1.886V4.533ZM12.75 20.636A8.214 8.214 0 0 1 18 18.75c.966 0 1.89.166 2.75.47a.75.75 0 0 0 1-.708V4.262a.75.75 0 0 0-.5-.707A9.735 9.735 0 0 0 18 3a9.707 9.707 0 0 0-5.25 1.533v16.103Z" />
+              </svg>
+            </div>
+            <div class="flex-auto">
+              <h3 class="text-sm/6 font-semibold text-gray-900 dark:text-white">
+                <a href="{% url 'docs_page' category='getting-started' page='introduction' %}">
+                  <span aria-hidden="true" class="absolute inset-0"></span>
+                  Documentation
+                </a>
+              </h3>
+              <p class="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">Learn how to integrate TuxSEO with your website.</p>
+            </div>
+            <div class="flex-none self-center">
+              <svg viewBox="0 0 20 20" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-5 text-gray-400 dark:text-gray-500">
+                <path d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
+              </svg>
+            </div>
+          </li>
+          <li class="relative flex gap-x-6 py-6">
+            <div class="flex size-10 flex-none items-center justify-center rounded-lg shadow-sm outline outline-1 outline-gray-900/10 dark:bg-gray-800/50 dark:-outline-offset-1 dark:outline-white/10">
+              <svg viewBox="0 0 24 24" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-6 text-red-600 dark:text-red-400">
+                <path d="M3.75 4.5a.75.75 0 0 1 .75-.75h.75c8.284 0 15 6.716 15 15v.75a.75.75 0 0 1-.75.75h-.75a.75.75 0 0 1-.75-.75v-.75C18 11.708 12.292 6 5.25 6H4.5a.75.75 0 0 1-.75-.75V4.5Zm0 6.75a.75.75 0 0 1 .75-.75h.75a8.25 8.25 0 0 1 8.25 8.25v.75a.75.75 0 0 1-.75.75H12a.75.75 0 0 1-.75-.75v-.75a6 6 0 0 0-6-6H4.5a.75.75 0 0 1-.75-.75v-.75Zm0 7.5a1.5 1.5 0 1 1 3 0 1.5 1.5 0 0 1-3 0Z" clip-rule="evenodd" fill-rule="evenodd" />
+              </svg>
+            </div>
+            <div class="flex-auto">
+              <h3 class="text-sm/6 font-semibold text-gray-900 dark:text-white">
+                <a href="{% url 'blog_posts' %}">
+                  <span aria-hidden="true" class="absolute inset-0"></span>
+                  Blog
+                </a>
+              </h3>
+              <p class="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">Read our latest news and articles about SEO.</p>
+            </div>
+            <div class="flex-none self-center">
+              <svg viewBox="0 0 20 20" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-5 text-gray-400 dark:text-gray-500">
+                <path d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
+              </svg>
+            </div>
+          </li>
+          {% if user.is_authenticated %}
+          <li class="relative flex gap-x-6 py-6">
+            <div class="flex size-10 flex-none items-center justify-center rounded-lg shadow-sm outline outline-1 outline-gray-900/10 dark:bg-gray-800/50 dark:-outline-offset-1 dark:outline-white/10">
+              <svg viewBox="0 0 24 24" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-6 text-red-600 dark:text-red-400">
+                <path d="M18.375 2.25c-1.035 0-1.875.84-1.875 1.875v15.75c0 1.035.84 1.875 1.875 1.875h.75c1.035 0 1.875-.84 1.875-1.875V4.125c0-1.036-.84-1.875-1.875-1.875h-.75ZM9.75 8.625c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v11.25c0 1.035-.84 1.875-1.875 1.875h-.75a1.875 1.875 0 0 1-1.875-1.875V8.625ZM3 13.125c0-1.036.84-1.875 1.875-1.875h.75c1.036 0 1.875.84 1.875 1.875v6.75c0 1.035-.84 1.875-1.875 1.875h-.75A1.875 1.875 0 0 1 3 19.875v-6.75Z" />
+              </svg>
+            </div>
+            <div class="flex-auto">
+              <h3 class="text-sm/6 font-semibold text-gray-900 dark:text-white">
+                <a href="{% url 'home' %}">
+                  <span aria-hidden="true" class="absolute inset-0"></span>
+                  Dashboard
+                </a>
+              </h3>
+              <p class="mt-2 text-sm/6 text-gray-600 dark:text-gray-400">Access your projects and manage your content.</p>
+            </div>
+            <div class="flex-none self-center">
+              <svg viewBox="0 0 20 20" fill="currentColor" data-slot="icon" aria-hidden="true" class="size-5 text-gray-400 dark:text-gray-500">
+                <path d="M8.22 5.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.75.75 0 0 1-1.06-1.06L11.94 10 8.22 6.28a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" fill-rule="evenodd" />
+              </svg>
+            </div>
+          </li>
+          {% endif %}
+        </ul>
+        <div class="mt-10 flex justify-center">
+          <a href="{% url 'landing' %}" class="text-sm/6 font-semibold text-red-600 dark:text-red-400"><span aria-hidden="true">&larr;</span> Back to home</a>
+        </div>
+      </div>
+    </main>
+    <footer class="border-t border-gray-100 py-6 sm:py-10 dark:border-white/10">
+      <div class="mx-auto flex max-w-7xl flex-col items-center justify-center gap-8 px-6 sm:flex-row lg:px-8">
+        <p class="text-sm/7 text-gray-400 dark:text-gray-500">&copy; 2025 <a href="https://lvtd.dev?ref={{ request.get_host }}" class="hover:text-gray-600 dark:hover:text-gray-300">LVTD, LLC</a>. All rights reserved.</p>
+        <div class="hidden sm:block sm:h-7 sm:w-px sm:flex-none sm:bg-gray-200 dark:sm:bg-gray-700"></div>
+        <div class="flex gap-x-4">
+          <a href="{% url 'changelog' %}" class="text-sm text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">
+            Changelog
+          </a>
+          <a href="{% url 'privacy_policy' %}" class="text-sm text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">
+            Privacy Policy
+          </a>
+          <a href="{% url 'terms_of_service' %}" class="text-sm text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300">
+            Terms of Service
+          </a>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+
+</html>
