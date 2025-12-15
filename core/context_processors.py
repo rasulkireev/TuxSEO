@@ -75,20 +75,20 @@ def referrer_banner(request):
             pass
 
     try:
-        black_friday_banner = ReferrerBanner.objects.get(
-            referrer_printable_name__icontains="Black Friday"
-        )
-        if black_friday_banner.should_display:
-            return {"referrer_banner": black_friday_banner}
+        always_on_banner = ReferrerBanner.objects.filter(
+            referrer_printable_name__icontains__in=["Black Friday", "Christmas Special"]
+        ).first()
+        if always_on_banner.should_display:
+            return {"referrer_banner": always_on_banner}
     except ReferrerBanner.DoesNotExist:
         pass
     except ReferrerBanner.MultipleObjectsReturned:
-        black_friday_banner = (
+        always_on_banner = (
             ReferrerBanner.objects.filter(referrer_printable_name__icontains="Black Friday")
             .filter(is_active=True)
             .first()
         )
-        if black_friday_banner and black_friday_banner.should_display:
-            return {"referrer_banner": black_friday_banner}
+        if always_on_banner and always_on_banner.should_display:
+            return {"referrer_banner": always_on_banner}
 
     return {}
