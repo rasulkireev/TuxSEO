@@ -62,6 +62,7 @@ def referrer_banner(request):
     2. Black Friday banner as fallback (if it exists and is active)
     Only displays one banner at most.
     """
+    from django.db.models import Q
     from core.models import ReferrerBanner
 
     referrer_code = request.GET.get("ref") or request.GET.get("utm_source")
@@ -76,9 +77,10 @@ def referrer_banner(request):
 
     try:
         always_on_banner = ReferrerBanner.objects.filter(
-            referrer_printable_name__icontains__in=["Black Friday", "Christmas Special"]
+            Q(referrer_printable_name__icontains="Black Friday") | 
+            Q(referrer_printable_name__icontains="Christmas Special")
         ).first()
-        if always_on_banner.should_display:
+        if always_on_banner and always_on_banner.should_display:
             return {"referrer_banner": always_on_banner}
     except ReferrerBanner.DoesNotExist:
         pass
