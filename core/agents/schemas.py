@@ -14,6 +14,10 @@ class WebPageContent(BaseModel):
     markdown_content: str
 
 
+class TextSummary(BaseModel):
+    summary: str = Field(description="A concise summary of the provided content")
+
+
 class ProjectDetails(BaseModel):
     name: str = Field(description="Official name of the project or organization")
     type: str = Field(
@@ -187,6 +191,15 @@ class BlogPostGenerationContext(BaseModel):
     project_keywords: list[str] = []
     project_pages: list[ProjectPageContext] = []
     content_type: str = Field(description="Type of content to generate (SEO or SHARING)")
+
+
+class ResearchLinkContextualSummaryContext(BaseModel):
+    url: str = Field(description="Source URL of the research page")
+    web_page_content: WebPageContent
+    blog_post_generation_context: BlogPostGenerationContext
+    blog_post_title: str = Field(description="Title of the blog post being written")
+    section_title: str = Field(description="Title of the blog post section being written")
+    research_question: str = Field(description="Research question we are trying to answer")
 
 
 class GeneratedBlogPostSchema(BaseModel):

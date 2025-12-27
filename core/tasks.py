@@ -1780,3 +1780,15 @@ def generate_blog_post_content(suggestion_id: int, send_email: bool = True):
             project_id=suggestion.project.id if suggestion.project else None,
         )
         return f"Unexpected error: {str(error)}"
+
+
+def generate_research_questions_for_section_task(section_id: int):
+    """
+    Generate research questions for one blog post section, then queue Exa research link tasks for
+    each created question.
+    """
+    from core.content_generator.tasks import (
+        generate_research_questions_for_section_task as delegated_task,
+    )
+
+    return delegated_task(section_id=section_id)

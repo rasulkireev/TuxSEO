@@ -10,9 +10,7 @@ from django.core.files.base import ContentFile
 from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.text import slugify
 from django_q.tasks import async_task
-from gpt_researcher import GPTResearcher
 from pgvector.django import HnswIndex, VectorField
 
 from core.agents import (
@@ -60,9 +58,7 @@ from core.utils import (
     get_og_image_prompt,
     get_relevant_external_pages_for_blog_post,
     get_relevant_pages_for_blog_post,
-    process_generated_blog_content,
     run_agent_synchronously,
-    run_gptr_synchronously,
 )
 from tuxseo.utils import get_tuxseo_logger
 
@@ -805,84 +801,18 @@ class BlogPostTitleSuggestion(BaseModel):
         return keywords_to_use
 
     def generate_content(self, content_type=ContentType.SHARING):
-        # query defines the research question researcher will analyze
-        # custom_prompt controls how the research findings are presented
+        """
+        Backward-compatible wrapper around the content generation pipeline.
 
-        # Suggestion Instructions
-        query = "Write a post from the following suggestion:\n"
-        query += f"{self.title_suggestion_string_for_ai}\n\n"
+        Historically, this method created the blog post content directly. It is now kept
+        as a thin wrapper to preserve existing call sites while the pipeline evolves.
+        """
+        from core.content_generator.pipeline import init_blog_post_content_generation
 
-        # Get keywords to use in the blog post
-        project_keywords = list(
-            self.project.project_keywords.filter(use=True).select_related("keyword")
-        )
-        project_keyword_texts = [keyword.keyword.keyword_text for keyword in project_keywords]
-        post_suggestion_keywords = self.target_keywords or []
-        keywords_to_use = list(set(project_keyword_texts + post_suggestion_keywords))
-        newline_separator = "\n"
-        keywords_list = newline_separator.join([f"- {keyword}" for keyword in keywords_to_use])
-        query += "The following keywords should be used (organically) in the blog post:\n"
-        query += keywords_list
-        query += "\n\n"
-
-        query += "Quick reminder. You are writing a blog post for this company."
-        query += self.project.project_desctiption_string_for_ai
-        query += ". Make it look good, as the best solution for anyone reading the post."
-        query += "\n\n"
-
-        # # Writing Instructions
-        # query += GENERATE_CONTENT_SYSTEM_PROMPTS[content_type]
-        # query += "\n"
-        query += GeneratedBlogPost.blog_post_structure_rules()
-
-        agent = GPTResearcher(
-            query,
-            report_type="deep",
-            tone="Simple (written for young readers, using basic vocabulary and clear explanations)",  # noqa: E501
-            report_format="markdown",
-        )
-
-        result = run_gptr_synchronously(agent)
-
-        # Create blog post with raw content first
-        slug = slugify(self.title)
-        tags = ", ".join(self.target_keywords) if self.target_keywords else ""
-
-        blog_post = GeneratedBlogPost.objects.create(
-            project=self.project,
+        return init_blog_post_content_generation(
             title_suggestion=self,
-            title=self.title,  # Temporary title, will be updated after processing
-            description=self.suggested_meta_description,
-            slug=slug,
-            tags=tags,
-            content=result,  # Raw content from GPTResearcher
+            content_type=content_type,
         )
-
-        # Insert links into the blog post content
-        blog_post.insert_links_into_post()
-
-        # Process content after link insertion (extract title, clean up sections)
-        blog_post_title, blog_post_content = process_generated_blog_content(
-            generated_content=blog_post.content,  # Use content after link insertion
-            fallback_title=self.title,
-            title_suggestion_id=self.id,
-            project_id=self.project.id,
-        )
-
-        # Update blog post with processed content and extracted title
-        blog_post.title = blog_post_title
-        blog_post.slug = slugify(blog_post_title)
-        blog_post.content = blog_post_content
-        blog_post.save(update_fields=["title", "slug", "content"])
-
-        if self.project.enable_automatic_og_image_generation:
-            async_task(
-                "core.tasks.generate_og_image_for_blog_post",
-                blog_post.id,
-                group="Generate OG Image",
-            )
-
-        return blog_post
 
 
 class AutoSubmissionSetting(BaseModel):
@@ -930,6 +860,8 @@ class GeneratedBlogPost(BaseModel):
         on_delete=models.CASCADE,
         related_name="generated_blog_posts",
     )
+
+    # Final Output Items
     title = models.CharField(max_length=250)
     description = models.TextField(blank=True)
     slug = models.SlugField(max_length=250)
@@ -938,6 +870,10 @@ class GeneratedBlogPost(BaseModel):
     icon = models.ImageField(upload_to="generated_blog_post_icons/", blank=True)
     image = models.ImageField(upload_to="generated_blog_post_images/", blank=True)
 
+    # Preparation
+    # GeneratedBlogPostSection model
+
+    # Other
     posted = models.BooleanField(default=False)
     date_posted = models.DateTimeField(null=True, blank=True)
 
@@ -1248,6 +1184,72 @@ class GeneratedBlogPost(BaseModel):
         )
 
         return content_with_links
+
+
+class GeneratedBlogPostSection(BaseModel):
+    blog_post = models.ForeignKey(
+        GeneratedBlogPost,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="blog_post_sections",
+    )
+    title = models.CharField(max_length=250)
+    content = models.TextField(blank=True, default="")
+    order = models.IntegerField(default=0)
+    # GeneratedBlogPostResearchQuestion model
+
+
+class GeneratedBlogPostResearchQuestion(BaseModel):
+    blog_post = models.ForeignKey(
+        GeneratedBlogPost,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="research_questions",
+    )
+    section = models.ForeignKey(
+        GeneratedBlogPostSection,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="research_questions",
+    )
+    question = models.CharField(max_length=250)
+
+
+class GeneratedBlogPostResearchLink(BaseModel):
+    blog_post = models.ForeignKey(
+        GeneratedBlogPost,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="research_links",
+    )
+    research_question = models.ForeignKey(
+        GeneratedBlogPostResearchQuestion,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="research_links",
+    )
+
+    # initial data
+    url = models.URLField(max_length=200)
+    title = models.CharField(max_length=500, blank=True, default="")
+    author = models.CharField(max_length=250, blank=True, default="")
+    published_date = models.DateTimeField(null=True, blank=True)
+
+    # jina augmentation
+    date_scraped = models.DateTimeField(auto_now_add=True)
+    content = models.TextField(blank=True, default="")
+    description = models.TextField(blank=True, default="")
+
+    # ai augmentation
+    date_analyzed = models.DateTimeField(null=True, blank=True)
+    summary_for_question_research = models.TextField(blank=True, default="")
+    general_summary = models.TextField(blank=True)
+    embedding = VectorField(dimensions=1024, default=None, null=True, blank=True)
 
 
 class ProjectPage(BaseModel):
@@ -1998,3 +2000,22 @@ class EmailSent(BaseModel):
 
     def __str__(self):
         return f"{self.email_type} to {self.email_address}"
+
+
+class Backlink(BaseModel):
+    linked_to_project_page = models.ForeignKey(
+        Project, null=True, blank=True, on_delete=models.CASCADE, related_name="backlinks_to"
+    )
+    linkning_to_project_page = models.ForeignKey(
+        ProjectPage, null=True, blank=True, on_delete=models.CASCADE, related_name="backlinks"
+    )
+
+    linked_from_project_page = models.ForeignKey(
+        Project, null=True, blank=True, on_delete=models.CASCADE, related_name="backlinks_from"
+    )
+    linking_from_blog_post = models.ForeignKey(
+        GeneratedBlogPost, null=True, blank=True, on_delete=models.CASCADE, related_name="backlinks"
+    )
+
+    def __str__(self):
+        return f"{self.linking_from_blog_post.title} -> {self.linked_to_project_page.url}"

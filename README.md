@@ -39,9 +39,8 @@
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rasulkireev/tuxseo)
 
 The only required env vars are:
-- OPENAI_API_KEY
-- TAVILY_API_KEY
 - GEMINI_API_KEY
+- EXA_API_KEY
 - PERPLEXITY_API_KEY
 - JINA_READER_API_KEY
 - KEYWORDS_EVERYWHERE_API_KEY
