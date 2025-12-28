@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -12,13 +13,25 @@ from core.agents.blog_post_outline_agent import (
     create_blog_post_outline_agent,
     create_blog_post_section_research_questions_agent,
 )
+from core.agents.generate_blog_post_intro_conclusion_agent import (
+    create_generate_blog_post_intro_conclusion_agent,
+)
+from core.agents.generate_blog_post_section_content_agent import (
+    create_generate_blog_post_section_content_agent,
+)
 from core.agents.research_link_summary_agent import (
-    create_contextual_research_link_summary_agent,
-    create_general_research_link_summary_agent,
+    create_research_link_analysis_agent,
 )
 from core.agents.schemas import (
     BlogPostGenerationContext,
+    BlogPostIntroConclusionGenerationContext,
+    BlogPostSectionContentGenerationContext,
+    GeneratedBlogPostIntroConclusionSchema,
+    GeneratedBlogPostSectionContentSchema,
+    PriorSectionContext,
+    ResearchLinkAnswerSnippet,
     ResearchLinkContextualSummaryContext,
+    ResearchQuestionWithAnsweredLinks,
     WebPageContent,
 )
 from core.choices import ContentType
@@ -39,6 +52,8 @@ INTRODUCTION_SECTION_TITLE = "Introduction"
 CONCLUSION_SECTION_TITLE = "Conclusion"
 NON_RESEARCH_SECTION_TITLES = {INTRODUCTION_SECTION_TITLE, CONCLUSION_SECTION_TITLE}
 MAX_RESEARCH_LINK_MARKDOWN_CHARS_FOR_SUMMARY = 25_000
+LOCAL_MAX_RESEARCH_QUESTIONS_PER_SECTION = 1
+SECTION_SYNTHESIS_RETRY_CACHE_TTL_SECONDS = 6 * 60 * 60
 
 
 def _create_blog_post_generation_context(
@@ -297,6 +312,11 @@ def populate_research_links_for_question_from_exa(
         months_back=months_back,
     )
 
+    # If Exa returned no links for this question, nothing will trigger scrape/analyze kicks.
+    # This "kick" is safe (it will only queue synthesis when the overall blog post is ready).
+    if num_links_upserted == 0:
+        maybe_queue_section_content_synthesis_for_blog_post(blog_post_id=blog_post.id)
+
     return num_links_upserted
 
 
@@ -403,6 +423,7 @@ def analyze_research_link_content(*, research_link_id: int) -> int:
     Step 4b: For a single research link (that already has content), generate:
     - a general page summary
     - a blog-post-contextual summary for the research question/section
+    - an answer to the research question (answer_to_question)
 
     Returns: number of fields updated on the research link.
     """
@@ -434,16 +455,25 @@ def analyze_research_link_content(*, research_link_id: int) -> int:
             blog_post_id=blog_post.id,
             url=url,
         )
+        research_link.date_analyzed = timezone.now()
+        research_link.save(update_fields=["date_analyzed"])
+        maybe_queue_section_content_synthesis_for_blog_post(blog_post_id=blog_post.id)
         return 0
 
     should_run_general_summary = not (research_link.general_summary or "").strip()
     should_run_contextual_summary = not (research_link.summary_for_question_research or "").strip()
-    if not should_run_general_summary and not should_run_contextual_summary:
+    should_run_answer_to_question = not (research_link.answer_to_question or "").strip()
+    if (
+        not should_run_general_summary
+        and not should_run_contextual_summary
+        and not should_run_answer_to_question
+    ):
         logger.info(
             "[ContentGenerator] Research link already analyzed; skipping",
             research_link_id=research_link.id,
             blog_post_id=blog_post.id,
         )
+        maybe_queue_section_content_synthesis_for_blog_post(blog_post_id=blog_post.id)
         return 0
 
     webpage_content = WebPageContent(
@@ -454,52 +484,49 @@ def analyze_research_link_content(*, research_link_id: int) -> int:
 
     update_fields: list[str] = []
 
+    title_suggestion = blog_post.title_suggestion
+    if not title_suggestion:
+        raise ValueError(f"GeneratedBlogPost missing title_suggestion: {blog_post.id}")
+
+    content_type_to_use = title_suggestion.content_type or ContentType.SHARING
+    blog_post_generation_context = _create_blog_post_generation_context(
+        title_suggestion=title_suggestion,
+        content_type_to_use=content_type_to_use,
+    )
+
+    section_title = (getattr(research_question.section, "title", "") or "").strip()
+    research_question_text = (research_question.question or "").strip()
+
+    analysis_agent = create_research_link_analysis_agent()
+    analysis_deps = ResearchLinkContextualSummaryContext(
+        url=url,
+        web_page_content=webpage_content,
+        blog_post_generation_context=blog_post_generation_context,
+        blog_post_title=(blog_post.title or title_suggestion.title or "").strip(),
+        section_title=section_title,
+        research_question=research_question_text,
+    )
+    analysis_result = run_agent_synchronously(
+        analysis_agent,
+        "Analyze this page for blog-post research.",
+        deps=analysis_deps,
+        function_name="analyze_research_link_content.research_link_analysis",
+        model_name="GeneratedBlogPostResearchLink",
+    )
+
     if should_run_general_summary:
-        general_summary_agent = create_general_research_link_summary_agent()
-        general_summary_result = run_agent_synchronously(
-            general_summary_agent,
-            "Summarize this page.",
-            deps=webpage_content,
-            function_name="analyze_research_link_content.general_summary",
-            model_name="GeneratedBlogPostResearchLink",
-        )
-        research_link.general_summary = (general_summary_result.output.summary or "").strip()
+        research_link.general_summary = (analysis_result.output.general_summary or "").strip()
         update_fields.append("general_summary")
 
     if should_run_contextual_summary:
-        title_suggestion = blog_post.title_suggestion
-        if not title_suggestion:
-            raise ValueError(f"GeneratedBlogPost missing title_suggestion: {blog_post.id}")
-
-        content_type_to_use = title_suggestion.content_type or ContentType.SHARING
-        blog_post_generation_context = _create_blog_post_generation_context(
-            title_suggestion=title_suggestion,
-            content_type_to_use=content_type_to_use,
-        )
-
-        section_title = (getattr(research_question.section, "title", "") or "").strip()
-        research_question_text = (research_question.question or "").strip()
-
-        contextual_summary_agent = create_contextual_research_link_summary_agent()
-        contextual_summary_deps = ResearchLinkContextualSummaryContext(
-            url=url,
-            web_page_content=webpage_content,
-            blog_post_generation_context=blog_post_generation_context,
-            blog_post_title=(blog_post.title or title_suggestion.title or "").strip(),
-            section_title=section_title,
-            research_question=research_question_text,
-        )
-        contextual_summary_result = run_agent_synchronously(
-            contextual_summary_agent,
-            "Summarize this page specifically to help answer the research question for the blog post section.",  # noqa: E501
-            deps=contextual_summary_deps,
-            function_name="analyze_research_link_content.contextual_summary",
-            model_name="GeneratedBlogPostResearchLink",
-        )
         research_link.summary_for_question_research = (
-            contextual_summary_result.output.summary or ""
+            analysis_result.output.summary_for_question_research or ""
         ).strip()
         update_fields.append("summary_for_question_research")
+
+    if should_run_answer_to_question:
+        research_link.answer_to_question = (analysis_result.output.answer_to_question or "").strip()
+        update_fields.append("answer_to_question")
 
     research_link.date_analyzed = timezone.now()
     update_fields.append("date_analyzed")
@@ -514,6 +541,8 @@ def analyze_research_link_content(*, research_link_id: int) -> int:
         updated_fields=update_fields,
         url=url,
     )
+
+    maybe_queue_section_content_synthesis_for_blog_post(blog_post_id=blog_post.id)
 
     return len(set(update_fields))
 
@@ -583,6 +612,9 @@ def generate_research_questions_for_section(*, section_id: int) -> list[int]:
             )
         )
 
+    if settings.DEBUG:
+        questions_to_create = questions_to_create[:LOCAL_MAX_RESEARCH_QUESTIONS_PER_SECTION]
+
     created_questions = GeneratedBlogPostResearchQuestion.objects.bulk_create(questions_to_create)
     created_question_ids = [
         created_question.id for created_question in created_questions if created_question.id
@@ -595,4 +627,637 @@ def generate_research_questions_for_section(*, section_id: int) -> list[int]:
         num_questions_created=len(created_question_ids),
     )
 
+    # If no questions were created, nothing else will trigger Exa/scrape/analysis tasks.
+    # In that case, kick section synthesis so the pipeline can still proceed.
+    if not created_question_ids:
+        maybe_queue_section_content_synthesis_for_blog_post(blog_post_id=blog_post.id)
+
     return created_question_ids
+
+
+def _build_research_questions_with_answered_links_for_section(
+    *, section: GeneratedBlogPostSection
+) -> list[ResearchQuestionWithAnsweredLinks]:
+    research_questions_with_answered_links: list[ResearchQuestionWithAnsweredLinks] = []
+
+    section_questions = list(section.research_questions.all())
+    for research_question in section_questions:
+        question_text = (research_question.question or "").strip()
+        if not question_text:
+            continue
+
+        research_links = list(research_question.research_links.all())
+        answered_links = [
+            research_link
+            for research_link in research_links
+            if (research_link.answer_to_question or "").strip()
+        ]
+
+        research_link_snippets = []
+        if answered_links:
+            research_link_snippets = [
+                ResearchLinkAnswerSnippet(
+                    summary_for_question_research=(
+                        (research_link.summary_for_question_research or "").strip()
+                    ),
+                    general_summary=(research_link.general_summary or "").strip(),
+                    answer_to_question=(research_link.answer_to_question or "").strip(),
+                )
+                for research_link in answered_links
+            ]
+
+        research_questions_with_answered_links.append(
+            ResearchQuestionWithAnsweredLinks(
+                question=question_text,
+                research_links=research_link_snippets,
+            )
+        )
+
+    return research_questions_with_answered_links
+
+
+def _build_prior_section_contexts(
+    *, sections_in_order: list[GeneratedBlogPostSection], current_section_order: int
+) -> list[PriorSectionContext]:
+    prior_sections: list[PriorSectionContext] = []
+    for section in sections_in_order:
+        if section.order >= current_section_order:
+            continue
+        if (section.title or "").strip() in NON_RESEARCH_SECTION_TITLES:
+            continue
+        content = (section.content or "").strip()
+        if not content:
+            continue
+        prior_sections.append(
+            PriorSectionContext(title=(section.title or "").strip(), content=content)
+        )
+    return prior_sections
+
+
+def synthesize_section_contents_for_blog_post(*, blog_post_id: int) -> int:
+    """
+    Step 5: Synthesize content for each middle section sequentially (excluding Introduction/Conclusion).
+
+    Context passed to the model:
+    - Project details
+    - Title suggestion details
+    - Current section info
+    - Research link results (only for links with non-empty answer_to_question)
+    - Other section titles
+    - Section order + previous section content for coherence
+    """
+    blog_post = (
+        GeneratedBlogPost.objects.select_related(
+            "title_suggestion",
+            "project",
+        )
+        .prefetch_related(
+            "blog_post_sections__research_questions__research_links",
+        )
+        .filter(id=blog_post_id)
+        .first()
+    )
+    if not blog_post:
+        raise ValueError(f"GeneratedBlogPost not found: {blog_post_id}")
+
+    title_suggestion = blog_post.title_suggestion
+    if not title_suggestion:
+        raise ValueError(f"GeneratedBlogPost missing title_suggestion: {blog_post_id}")
+
+    content_type_to_use = title_suggestion.content_type or ContentType.SHARING
+    blog_post_generation_context = _create_blog_post_generation_context(
+        title_suggestion=title_suggestion,
+        content_type_to_use=content_type_to_use,
+    )
+
+    sections_in_order = sorted(
+        list(blog_post.blog_post_sections.all()),
+        key=lambda section: (section.order, section.id),
+    )
+
+    all_section_titles = [
+        (section.title or "").strip()
+        for section in sections_in_order
+        if (section.title or "").strip()
+    ]
+    total_sections = len(sections_in_order)
+
+    middle_sections_in_order = [
+        section
+        for section in sections_in_order
+        if (section.title or "").strip() not in NON_RESEARCH_SECTION_TITLES
+    ]
+    total_research_sections = len(middle_sections_in_order)
+
+    section_agent = create_generate_blog_post_section_content_agent(
+        content_type=content_type_to_use
+    )
+
+    num_sections_generated = 0
+    for research_section_index, section in enumerate(middle_sections_in_order, start=1):
+        section_title = (section.title or "").strip()
+        if not section_title:
+            continue
+
+        existing_content = (section.content or "").strip()
+        if existing_content:
+            continue
+
+        research_questions = _build_research_questions_with_answered_links_for_section(
+            section=section
+        )
+        prior_sections = _build_prior_section_contexts(
+            sections_in_order=sections_in_order,
+            current_section_order=section.order,
+        )
+
+        section_context = BlogPostSectionContentGenerationContext(
+            blog_post_generation_context=blog_post_generation_context,
+            blog_post_title=(blog_post.title or title_suggestion.title or "").strip(),
+            section_title=section_title,
+            section_order=section.order,
+            total_sections=total_sections,
+            research_section_order=research_section_index,
+            total_research_sections=total_research_sections,
+            other_section_titles=all_section_titles,
+            previous_sections=prior_sections,
+            research_questions=research_questions,
+        )
+
+        prompt = f"Write the section body content for: {section_title}"
+        generation_result = run_agent_synchronously(
+            section_agent,
+            prompt,
+            deps=section_context,
+            function_name="synthesize_section_contents_for_blog_post.section_content",
+            model_name="GeneratedBlogPostSection",
+        )
+
+        generated_schema: GeneratedBlogPostSectionContentSchema | None = (
+            generation_result.output if generation_result and generation_result.output else None
+        )
+        generated_content = (generated_schema.content if generated_schema else "").strip()
+        if not generated_content:
+            logger.warning(
+                "[ContentGenerator] Section content generation returned empty content",
+                blog_post_id=blog_post.id,
+                section_id=section.id,
+                section_title=section_title,
+            )
+            continue
+
+        section.content = generated_content
+        section.save(update_fields=["content"])
+        num_sections_generated += 1
+
+        logger.info(
+            "[ContentGenerator] Section content synthesized",
+            blog_post_id=blog_post.id,
+            section_id=section.id,
+            section_title=section_title,
+            section_order=section.order,
+            research_section_order=research_section_index,
+            total_research_sections=total_research_sections,
+            content_length=len(generated_content),
+        )
+
+    maybe_queue_intro_conclusion_generation_for_blog_post(blog_post_id=blog_post.id)
+    maybe_queue_section_content_synthesis_retry_for_blog_post(blog_post_id=blog_post.id)
+    return num_sections_generated
+
+
+def _get_section_synthesis_retry_cache_key(*, blog_post_id: int) -> str:
+    return f"content_generator:section_synthesis_retry_count:{blog_post_id}"
+
+
+def maybe_queue_section_content_synthesis_retry_for_blog_post(*, blog_post_id: int) -> bool:
+    """
+    Retry mechanism for Step 5:
+
+    If research is "done enough" (all links are in a terminal analyzed/attempted state),
+    but some middle sections still have empty content (e.g. a model returned empty output
+    or a task was missed), re-queue section synthesis a bounded number of times.
+    """
+    blog_post = (
+        GeneratedBlogPost.objects.prefetch_related("blog_post_sections")
+        .filter(id=blog_post_id)
+        .first()
+    )
+    if not blog_post:
+        return False
+
+    sections_in_order = _get_sections_in_order_for_blog_post(blog_post)
+    middle_sections = [
+        section
+        for section in sections_in_order
+        if (section.title or "").strip() not in NON_RESEARCH_SECTION_TITLES
+    ]
+    has_any_middle_section_missing_content = any(
+        not (section.content or "").strip() for section in middle_sections
+    )
+    if not has_any_middle_section_missing_content:
+        return False
+
+    # Only retry when link processing is "complete" (including failures).
+    # If there are links still being processed, let the normal kicks handle it.
+    links_queryset = GeneratedBlogPostResearchLink.objects.filter(blog_post_id=blog_post_id)
+    has_any_pending_link = links_queryset.filter(date_analyzed__isnull=True).exists()
+    if has_any_pending_link:
+        return False
+
+    max_retries = 5 if settings.DEBUG else 2
+    retry_cache_key = _get_section_synthesis_retry_cache_key(blog_post_id=blog_post_id)
+    retry_count = cache.get(retry_cache_key, 0) or 0
+    if retry_count >= max_retries:
+        logger.warning(
+            "[ContentGenerator] Not retrying section synthesis; max retries reached",
+            blog_post_id=blog_post_id,
+            retry_count=retry_count,
+            max_retries=max_retries,
+            num_middle_sections=len(middle_sections),
+            num_links_total=links_queryset.count(),
+        )
+        return False
+
+    cache.set(retry_cache_key, retry_count + 1, timeout=SECTION_SYNTHESIS_RETRY_CACHE_TTL_SECONDS)
+    async_task(
+        "core.content_generator.tasks.synthesize_section_contents_for_blog_post_task",
+        blog_post_id,
+        group="Synthesize Section Content (Retry)",
+    )
+    logger.info(
+        "[ContentGenerator] Queued section content synthesis retry task",
+        blog_post_id=blog_post_id,
+        retry_count=retry_count + 1,
+        max_retries=max_retries,
+        num_middle_sections=len(middle_sections),
+        num_links_total=links_queryset.count(),
+    )
+    return True
+
+
+def maybe_queue_section_content_synthesis_for_blog_post(*, blog_post_id: int) -> bool:
+    """
+    Queue Step 5 once research work is in a terminal state for all required inputs.
+
+    This is intentionally best-effort + idempotent:
+    - It may queue more than once, but the synthesis step skips sections that already have content.
+    """
+    blog_post = (
+        GeneratedBlogPost.objects.prefetch_related(
+            "blog_post_sections__research_questions__research_links"
+        )
+        .filter(id=blog_post_id)
+        .first()
+    )
+    if not blog_post:
+        return False
+
+    sections_in_order = _get_sections_in_order_for_blog_post(blog_post)
+    middle_sections_missing_content = [
+        section
+        for section in sections_in_order
+        if (section.title or "").strip() not in NON_RESEARCH_SECTION_TITLES
+        and not (section.content or "").strip()
+    ]
+
+    num_pending_links = 0
+    num_scrape_tasks_queued = 0
+    num_analyze_tasks_queued = 0
+
+    for section in middle_sections_missing_content:
+        section_questions = list(section.research_questions.all())
+        for research_question in section_questions:
+            research_links = list(research_question.research_links.all())
+            for research_link in research_links:
+                # Terminal state: we attempted analysis for this link (even if it failed).
+                if research_link.date_analyzed is not None:
+                    continue
+
+                num_pending_links += 1
+
+                link_content = (research_link.content or "").strip()
+                if not link_content:
+                    # If we haven't scraped content yet (or it failed previously but wasn't marked),
+                    # re-queue a scrape attempt. The scrape task will always queue analysis next.
+                    async_task(
+                        "core.content_generator.tasks.scrape_research_link_content_task",
+                        research_link.id,
+                        group="Scrape Research Links (Retry/Kick)",
+                    )
+                    num_scrape_tasks_queued += 1
+                    continue
+
+                # Content exists, but analysis hasn't run yet: queue AI augmentation.
+                async_task(
+                    "core.content_generator.tasks.analyze_research_link_content_task",
+                    research_link.id,
+                    group="Analyze Research Links (Retry/Kick)",
+                )
+                num_analyze_tasks_queued += 1
+
+    if num_pending_links > 0:
+        logger.info(
+            "[ContentGenerator] Not queuing section synthesis; research links still pending",
+            blog_post_id=blog_post_id,
+            num_middle_sections_missing_content=len(middle_sections_missing_content),
+            num_pending_links=num_pending_links,
+            num_scrape_tasks_queued=num_scrape_tasks_queued,
+            num_analyze_tasks_queued=num_analyze_tasks_queued,
+        )
+        return False
+
+    async_task(
+        "core.content_generator.tasks.synthesize_section_contents_for_blog_post_task",
+        blog_post_id,
+        group="Synthesize Section Content",
+    )
+    logger.info(
+        "[ContentGenerator] Queued section content synthesis task",
+        blog_post_id=blog_post_id,
+        num_middle_sections_missing_content=len(middle_sections_missing_content),
+    )
+    return True
+
+
+def _get_sections_in_order_for_blog_post(
+    blog_post: GeneratedBlogPost,
+) -> list[GeneratedBlogPostSection]:
+    return sorted(
+        list(blog_post.blog_post_sections.all()),
+        key=lambda section: (section.order, section.id),
+    )
+
+
+def generate_intro_and_conclusion_for_blog_post(*, blog_post_id: int) -> int:
+    """
+    Step 6: Generate Introduction + Conclusion in a single model call.
+
+    Runs only when all middle sections have content.
+    """
+    blog_post = (
+        GeneratedBlogPost.objects.select_related(
+            "title_suggestion",
+            "project",
+        )
+        .prefetch_related("blog_post_sections")
+        .filter(id=blog_post_id)
+        .first()
+    )
+    if not blog_post:
+        raise ValueError(f"GeneratedBlogPost not found: {blog_post_id}")
+
+    title_suggestion = blog_post.title_suggestion
+    if not title_suggestion:
+        raise ValueError(f"GeneratedBlogPost missing title_suggestion: {blog_post_id}")
+
+    content_type_to_use = title_suggestion.content_type or ContentType.SHARING
+    blog_post_generation_context = _create_blog_post_generation_context(
+        title_suggestion=title_suggestion,
+        content_type_to_use=content_type_to_use,
+    )
+
+    sections_in_order = _get_sections_in_order_for_blog_post(blog_post)
+    section_titles_in_order = [
+        (section.title or "").strip()
+        for section in sections_in_order
+        if (section.title or "").strip()
+    ]
+
+    intro_section = next(
+        (
+            section
+            for section in sections_in_order
+            if (section.title or "").strip() == INTRODUCTION_SECTION_TITLE
+        ),
+        None,
+    )
+    conclusion_section = next(
+        (
+            section
+            for section in sections_in_order
+            if (section.title or "").strip() == CONCLUSION_SECTION_TITLE
+        ),
+        None,
+    )
+    if not intro_section or not conclusion_section:
+        raise ValueError(f"Blog post is missing Introduction/Conclusion sections: {blog_post_id}")
+
+    should_generate_intro = not (intro_section.content or "").strip()
+    should_generate_conclusion = not (conclusion_section.content or "").strip()
+    if not should_generate_intro and not should_generate_conclusion:
+        return 0
+
+    middle_sections = [
+        section
+        for section in sections_in_order
+        if (section.title or "").strip() not in NON_RESEARCH_SECTION_TITLES
+    ]
+    has_any_middle_section_missing_content = any(
+        not (section.content or "").strip() for section in middle_sections
+    )
+    if has_any_middle_section_missing_content:
+        logger.info(
+            "[ContentGenerator] Skipping intro/conclusion generation; middle sections not ready",
+            blog_post_id=blog_post.id,
+            num_middle_sections=len(middle_sections),
+        )
+        return 0
+
+    existing_sections_context = [
+        PriorSectionContext(
+            title=(section.title or "").strip(),
+            content=(section.content or "").strip(),
+        )
+        for section in sections_in_order
+        if (section.title or "").strip() and (section.content or "").strip()
+    ]
+
+    intro_conclusion_context = BlogPostIntroConclusionGenerationContext(
+        blog_post_generation_context=blog_post_generation_context,
+        blog_post_title=(blog_post.title or title_suggestion.title or "").strip(),
+        section_titles_in_order=section_titles_in_order,
+        sections_in_order=existing_sections_context,
+    )
+
+    agent = create_generate_blog_post_intro_conclusion_agent(content_type=content_type_to_use)
+    result = run_agent_synchronously(
+        agent,
+        "Write the Introduction and Conclusion for this blog post.",
+        deps=intro_conclusion_context,
+        function_name="generate_intro_and_conclusion_for_blog_post.intro_conclusion",
+        model_name="GeneratedBlogPostSection",
+    )
+
+    output: GeneratedBlogPostIntroConclusionSchema | None = (
+        result.output if result and result.output else None
+    )
+    if not output:
+        return 0
+
+    num_sections_updated = 0
+    if should_generate_intro:
+        introduction_content = (output.introduction or "").strip()
+        if introduction_content:
+            intro_section.content = introduction_content
+            intro_section.save(update_fields=["content"])
+            num_sections_updated += 1
+
+    if should_generate_conclusion:
+        conclusion_content = (output.conclusion or "").strip()
+        if conclusion_content:
+            conclusion_section.content = conclusion_content
+            conclusion_section.save(update_fields=["content"])
+            num_sections_updated += 1
+
+    logger.info(
+        "[ContentGenerator] Intro/conclusion generated",
+        blog_post_id=blog_post.id,
+        intro_generated=bool((intro_section.content or "").strip()),
+        conclusion_generated=bool((conclusion_section.content or "").strip()),
+        num_sections_updated=num_sections_updated,
+    )
+
+    maybe_populate_generated_blog_post_content(blog_post_id=blog_post.id)
+    return num_sections_updated
+
+
+def maybe_queue_intro_conclusion_generation_for_blog_post(*, blog_post_id: int) -> bool:
+    """
+    Queue Step 6 only when all middle sections have content.
+
+    Best-effort + idempotent: if it queues multiple times, the generation step skips when already present.
+    """
+    blog_post = (
+        GeneratedBlogPost.objects.prefetch_related("blog_post_sections")
+        .filter(id=blog_post_id)
+        .first()
+    )
+    if not blog_post:
+        return False
+
+    sections_in_order = _get_sections_in_order_for_blog_post(blog_post)
+    middle_sections = [
+        section
+        for section in sections_in_order
+        if (section.title or "").strip() not in NON_RESEARCH_SECTION_TITLES
+    ]
+
+    if any(not (section.content or "").strip() for section in middle_sections):
+        return False
+
+    async_task(
+        "core.content_generator.tasks.generate_intro_and_conclusion_for_blog_post_task",
+        blog_post_id,
+        group="Generate Intro and Conclusion",
+    )
+    logger.info(
+        "[ContentGenerator] Queued intro/conclusion generation task",
+        blog_post_id=blog_post_id,
+        num_middle_sections=len(middle_sections),
+    )
+    return True
+
+
+def _build_full_blog_post_markdown(*, blog_post: GeneratedBlogPost) -> str:
+    blog_post_title = (blog_post.title or "").strip()
+    if not blog_post_title:
+        return ""
+
+    sections_in_order = _get_sections_in_order_for_blog_post(blog_post)
+    markdown_chunks = [f"# {blog_post_title}", ""]
+
+    for section in sections_in_order:
+        section_title = (section.title or "").strip()
+        section_content = (section.content or "").strip()
+        if not section_title or not section_content:
+            continue
+
+        markdown_chunks.append(f"## {section_title}")
+        markdown_chunks.append("")
+        markdown_chunks.append(section_content)
+        markdown_chunks.append("")
+
+    full_markdown = "\n".join(markdown_chunks).strip() + "\n"
+    return full_markdown
+
+
+def populate_generated_blog_post_content(*, blog_post_id: int) -> bool:
+    """
+    Step 7: Populate GeneratedBlogPost.content from the generated section contents.
+
+    Runs only when:
+    - All sections (including Introduction + Conclusion) have non-empty content
+    - GeneratedBlogPost.content is currently empty
+    """
+    blog_post = (
+        GeneratedBlogPost.objects.prefetch_related("blog_post_sections")
+        .filter(id=blog_post_id)
+        .first()
+    )
+    if not blog_post:
+        raise ValueError(f"GeneratedBlogPost not found: {blog_post_id}")
+
+    if (blog_post.content or "").strip():
+        return False
+
+    sections_in_order = _get_sections_in_order_for_blog_post(blog_post)
+    if any(not (section.content or "").strip() for section in sections_in_order):
+        logger.info(
+            "[ContentGenerator] Skipping blog_post.content population; not all sections have content",
+            blog_post_id=blog_post.id,
+            num_sections=len(sections_in_order),
+        )
+        return False
+
+    full_markdown = _build_full_blog_post_markdown(blog_post=blog_post)
+    if not full_markdown.strip():
+        logger.warning(
+            "[ContentGenerator] Skipping blog_post.content population; built markdown is empty",
+            blog_post_id=blog_post.id,
+        )
+        return False
+
+    blog_post.content = full_markdown
+    blog_post.save(update_fields=["content"])
+
+    logger.info(
+        "[ContentGenerator] Populated GeneratedBlogPost.content from sections",
+        blog_post_id=blog_post.id,
+        content_length=len(full_markdown),
+    )
+    return True
+
+
+def maybe_populate_generated_blog_post_content(*, blog_post_id: int) -> bool:
+    """
+    Queue Step 7 when the whole pipeline is done.
+
+    Best-effort + idempotent: population skips if blog_post.content is already non-empty.
+    """
+    blog_post = (
+        GeneratedBlogPost.objects.prefetch_related("blog_post_sections")
+        .filter(id=blog_post_id)
+        .first()
+    )
+    if not blog_post:
+        return False
+
+    if (blog_post.content or "").strip():
+        return False
+
+    sections_in_order = _get_sections_in_order_for_blog_post(blog_post)
+    if any(not (section.content or "").strip() for section in sections_in_order):
+        return False
+
+    async_task(
+        "core.content_generator.tasks.populate_generated_blog_post_content_task",
+        blog_post_id,
+        group="Finalize Generated Blog Post Content",
+    )
+    logger.info(
+        "[ContentGenerator] Queued blog_post.content population task",
+        blog_post_id=blog_post_id,
+        num_sections=len(sections_in_order),
+    )
+    return True

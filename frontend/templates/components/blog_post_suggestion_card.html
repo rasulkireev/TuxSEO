@@ -164,8 +164,18 @@
         </button>
       </div>
 
-      <!-- Archive Action -->
-      <div>
+      <div class="flex gap-2 items-center">
+        <a
+          href="{% url 'blog_post_research_process' project_pk=suggestion.project.id pk=suggestion.id %}"
+          class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-600 bg-white rounded border border-gray-300 transition-colors hover:bg-gray-50"
+        >
+          <svg class="mr-1 w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h7l5 5v11a2 2 0 01-2 2z"></path>
+          </svg>
+          Research
+        </a>
+
+        <!-- Archive Action -->
         <button data-action="archive-suggestion#archive"
                 data-archive-suggestion-target="archiveButton"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-300 rounded hover:bg-gray-50 transition-colors {% if suggestion.archived %}hidden{% endif %}">

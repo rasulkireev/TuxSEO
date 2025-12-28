@@ -1249,7 +1249,8 @@ class GeneratedBlogPostResearchLink(BaseModel):
     date_analyzed = models.DateTimeField(null=True, blank=True)
     summary_for_question_research = models.TextField(blank=True, default="")
     general_summary = models.TextField(blank=True)
-    embedding = VectorField(dimensions=1024, default=None, null=True, blank=True)
+    general_summary_embedding = VectorField(dimensions=1024, default=None, null=True, blank=True)
+    answer_to_question = models.TextField(blank=True, default="")
 
 
 class ProjectPage(BaseModel):

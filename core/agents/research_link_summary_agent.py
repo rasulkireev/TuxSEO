@@ -2,6 +2,7 @@ from django.utils import timezone
 from pydantic_ai import Agent, RunContext
 
 from core.agents.schemas import (
+    ResearchLinkAnalysis,
     ResearchLinkContextualSummaryContext,
     TextSummary,
     WebPageContent,
@@ -81,6 +82,38 @@ def create_contextual_research_link_summary_agent(model=None):
             "- A short paragraph summary\n"
             "- 'Key takeaways' as 3-7 bullet points\n"
             "- 'How this helps our section' as 1-3 bullet points\n"
+        ),
+        retries=2,
+        model_settings={"temperature": 0.3},
+    )
+    agent.system_prompt(_add_blog_post_research_context)
+    agent.system_prompt(_add_webpage_content_from_contextual_deps)
+    return agent
+
+
+def create_research_link_analysis_agent(model=None):
+    """
+    Analyze a research link in a single model call and return:
+    - a general page summary
+    - a contextual summary tailored to the blog post section's research question
+    - a direct answer to the research question (if possible from the page)
+    """
+    agent = Agent(
+        model or get_default_ai_model(),
+        output_type=ResearchLinkAnalysis,
+        deps_type=ResearchLinkContextualSummaryContext,
+        system_prompt=(
+            "You are a research assistant helping write a blog post.\n"
+            "Using only the web page content provided, produce three outputs:\n"
+            "1) general_summary: a context-free 2-3 sentence summary of what the page is about.\n"
+            "2) summary_for_question_research: a markdown summary tailored to the research question. "
+            "Include: a short paragraph summary, 'Key takeaways' (3-7 bullets), and "
+            "'How this helps our section' (1-3 bullets).\n"
+            "3) answer_to_question: directly answer the research question in 1-6 sentences. "
+            "If the page does not answer it (or is irrelevant), say so clearly.\n"
+            "\n"
+            "Be concrete and avoid speculation. Prefer facts, definitions, steps, examples, and stats "
+            "that are present in the page.\n"
         ),
         retries=2,
         model_settings={"temperature": 0.3},

@@ -18,6 +18,27 @@ class TextSummary(BaseModel):
     summary: str = Field(description="A concise summary of the provided content")
 
 
+class ResearchLinkAnalysis(BaseModel):
+    general_summary: str = Field(
+        description=(
+            "A general, context-free summary of the page content. Keep it to 2-3 sentences."
+        )
+    )
+    summary_for_question_research: str = Field(
+        description=(
+            "A markdown summary tailored to the blog post's research question. Include: "
+            "a short paragraph summary, 'Key takeaways' (3-7 bullets), and "
+            "'How this helps our section' (1-3 bullets)."
+        )
+    )
+    answer_to_question: str = Field(
+        description=(
+            "A direct answer to the research question, based strictly on the page content. "
+            "If the page does not answer the question, say so clearly."
+        )
+    )
+
+
 class ProjectDetails(BaseModel):
     name: str = Field(description="Official name of the project or organization")
     type: str = Field(
@@ -200,6 +221,83 @@ class ResearchLinkContextualSummaryContext(BaseModel):
     blog_post_title: str = Field(description="Title of the blog post being written")
     section_title: str = Field(description="Title of the blog post section being written")
     research_question: str = Field(description="Research question we are trying to answer")
+
+
+class ResearchLinkAnswerSnippet(BaseModel):
+    summary_for_question_research: str = Field(
+        description="A markdown summary tailored to the research question"
+    )
+    general_summary: str = Field(description="A general, context-free 2-3 sentence page summary")
+    answer_to_question: str = Field(description="A direct answer to the research question")
+
+
+class ResearchQuestionWithAnsweredLinks(BaseModel):
+    question: str = Field(description="The research question we were answering")
+    research_links: list[ResearchLinkAnswerSnippet] = Field(
+        default_factory=list,
+        description="Only research links that include a non-empty answer_to_question",
+    )
+
+
+class PriorSectionContext(BaseModel):
+    title: str = Field(description="Section title")
+    content: str = Field(description="Section content (markdown)")
+
+
+class BlogPostSectionContentGenerationContext(BaseModel):
+    blog_post_generation_context: BlogPostGenerationContext
+    blog_post_title: str = Field(description="Title of the blog post being written")
+    section_title: str = Field(description="Title of the section to write")
+    section_order: int = Field(description="Order of this section in the overall outline")
+    total_sections: int = Field(description="Total number of sections in the outline")
+    research_section_order: int = Field(
+        description="1-based order of this section among the middle (non-intro/non-conclusion) sections"
+    )
+    total_research_sections: int = Field(
+        description="Total number of middle (non-intro/non-conclusion) sections"
+    )
+    other_section_titles: list[str] = Field(
+        default_factory=list,
+        description="Titles of the other sections in the blog post (for coherence)",
+    )
+    previous_sections: list[PriorSectionContext] = Field(
+        default_factory=list,
+        description="Previously generated section content (in order) to keep the narrative coherent",
+    )
+    research_questions: list[ResearchQuestionWithAnsweredLinks] = Field(
+        default_factory=list,
+        description="Research questions for this section, with only answered research links included",
+    )
+
+
+class GeneratedBlogPostSectionContentSchema(BaseModel):
+    content: str = Field(
+        description=(
+            "Markdown content for the section body only (do not include the section title as a header)"
+        )
+    )
+
+
+class BlogPostIntroConclusionGenerationContext(BaseModel):
+    blog_post_generation_context: BlogPostGenerationContext
+    blog_post_title: str = Field(description="Title of the blog post being written")
+    section_titles_in_order: list[str] = Field(
+        default_factory=list,
+        description="All section titles in outline order (including Introduction and Conclusion)",
+    )
+    sections_in_order: list[PriorSectionContext] = Field(
+        default_factory=list,
+        description="All existing section contents in order (including middle sections) to base intro/conclusion on",
+    )
+
+
+class GeneratedBlogPostIntroConclusionSchema(BaseModel):
+    introduction: str = Field(
+        description="Markdown content for the Introduction section body only (no heading)"
+    )
+    conclusion: str = Field(
+        description="Markdown content for the Conclusion section body only (no heading)"
+    )
 
 
 class GeneratedBlogPostSchema(BaseModel):

@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     "mjml",
     "core.apps.CoreConfig",
     "docs.apps.DocsConfig",
+    "content_generation.apps.ContentGenerationConfig",
 ]
 
 MIDDLEWARE = [
