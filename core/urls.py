@@ -57,6 +57,11 @@ urlpatterns = [
         name="generated_blog_post_detail",
     ),
     path(
+        "project/<int:project_pk>/title-suggestion/<int:pk>/research/",
+        views.BlogPostResearchProcessView.as_view(),
+        name="blog_post_research_process",
+    ),
+    path(
         "project/<int:project_pk>/post/<int:pk>/download-pdf/",
         views.download_blog_post_pdf,
         name="download_blog_post_pdf",

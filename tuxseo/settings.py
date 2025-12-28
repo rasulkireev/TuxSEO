@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     "mjml",
     "core.apps.CoreConfig",
     "docs.apps.DocsConfig",
+    "content_generation.apps.ContentGenerationConfig",
 ]
 
 MIDDLEWARE = [
@@ -549,4 +550,7 @@ SHELL_PLUS_IMPORTS = [
     "from django_q.tasks import async_task",
     "from core.scheduled_tasks import *",
     "from core.tasks import *",
+    "from exa_py import Exa",
 ]
+
+EXA_API_KEY = env("EXA_API_KEY", default="")

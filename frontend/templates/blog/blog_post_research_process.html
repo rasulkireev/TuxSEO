@@ -1,0 +1,336 @@
+{% extends "base_project.html" %}
+{% load static %}
+
+{% block meta %}
+<title>Research Process - {{ title_suggestion.title }} - TuxSEO</title>
+{% endblock meta %}
+
+{% block project_content %}
+<div class="max-w-5xl">
+  <div class="flex flex-col gap-4 justify-between mb-8 sm:flex-row sm:items-start">
+    <div>
+      <nav class="flex items-center mb-3 space-x-2 text-sm text-gray-500">
+        <a href="{% url 'project_seo_posts' project.id %}" class="hover:text-gray-700">
+          Posts
+        </a>
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+        </svg>
+        <span>Research Process</span>
+      </nav>
+
+      <h2 class="text-2xl font-bold text-gray-900">{{ title_suggestion.title }}</h2>
+      {% if title_suggestion.description %}
+        <p class="mt-1 text-gray-600">{{ title_suggestion.description }}</p>
+      {% endif %}
+    </div>
+
+    <div class="flex gap-2 items-center">
+      {% if jina_api_key_configured %}
+        {% if should_compute_links %}
+          <a
+            href="{% url 'blog_post_research_process' project_pk=project.id pk=title_suggestion.id %}"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white rounded-md border border-gray-300 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-500"
+          >
+            Hide computed links
+          </a>
+        {% else %}
+          <a
+            href="{% url 'blog_post_research_process' project_pk=project.id pk=title_suggestion.id %}?compute_links=true"
+            class="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-gray-500"
+          >
+            Compute links
+          </a>
+        {% endif %}
+      {% else %}
+        <span class="inline-flex items-center px-3 py-2 text-sm text-gray-500 bg-gray-50 rounded-md border border-gray-200">
+          Link computation requires Jina API key
+        </span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="space-y-6">
+    <div class="p-6 bg-white rounded-lg border border-gray-200">
+      <h3 class="mb-4 text-lg font-semibold text-gray-900">Title Suggestion</h3>
+
+      <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <div class="text-sm font-medium text-gray-700">Suggestion ID</div>
+          <div class="mt-1 font-mono text-sm text-gray-900">{{ title_suggestion.id }}</div>
+        </div>
+        <div>
+          <div class="text-sm font-medium text-gray-700">Content type</div>
+          <div class="mt-1 text-sm text-gray-900">{{ title_suggestion.content_type }}</div>
+        </div>
+        <div>
+          <div class="text-sm font-medium text-gray-700">Category</div>
+          <div class="mt-1 text-sm text-gray-900">{{ title_suggestion.category }}</div>
+        </div>
+        <div>
+          <div class="text-sm font-medium text-gray-700">Created</div>
+          <div class="mt-1 text-sm text-gray-900">{{ title_suggestion.created_at|date:"F j, Y g:i A" }}</div>
+        </div>
+      </div>
+
+      {% if title_suggestion.target_keywords %}
+        <div class="pt-5 mt-5 border-t border-gray-100">
+          <div class="mb-2 text-sm font-medium text-gray-700">Target keywords</div>
+          <div class="flex flex-wrap gap-2">
+            {% for keyword_data in title_suggestion.keywords_with_usage %}
+              {% include "components/keyword_chip.html" with keyword=keyword_data.text project_id=project.id keyword_in_use=keyword_data.in_use %}
+            {% endfor %}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if title_suggestion.suggested_meta_description %}
+        <div class="pt-5 mt-5 border-t border-gray-100">
+          <div class="mb-2 text-sm font-medium text-gray-700">Suggested meta description</div>
+          <div class="p-4 text-sm text-gray-700 bg-gray-50 rounded-md border border-gray-200">
+            {{ title_suggestion.suggested_meta_description }}
+          </div>
+        </div>
+      {% endif %}
+
+      {% if title_suggestion.prompt %}
+        <div class="pt-5 mt-5 border-t border-gray-100">
+          <div class="mb-2 text-sm font-medium text-gray-700">Prompt</div>
+          <div class="p-4 font-mono text-xs whitespace-pre-wrap bg-gray-50 rounded-md border border-gray-200">{{ title_suggestion.prompt }}</div>
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="p-6 bg-white rounded-lg border border-gray-200">
+      <div class="flex flex-col gap-2 justify-between mb-4 sm:flex-row sm:items-center">
+        <h3 class="text-lg font-semibold text-gray-900">Derived inputs</h3>
+        <div class="text-sm text-gray-500">
+          {% if should_compute_links %}
+            Computed links are enabled.
+          {% else %}
+            Computed links are disabled (fast mode).
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="space-y-6">
+        <div>
+          <div class="mb-2 text-sm font-medium text-gray-700">Keywords to use ({{ keywords_to_use|length }})</div>
+          {% if keywords_to_use %}
+            <div class="flex flex-wrap gap-2">
+              {% for keyword_text in keywords_to_use %}
+                <span class="inline-flex items-center px-2.5 py-1 text-xs font-medium text-gray-700 bg-gray-100 rounded-full">
+                  {{ keyword_text }}
+                </span>
+              {% endfor %}
+            </div>
+          {% else %}
+            <div class="text-sm text-gray-500">No keywords computed.</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <div class="mb-2 text-sm font-medium text-gray-700">Internal links ({{ internal_links|length }})</div>
+          {% if internal_links %}
+            <div class="overflow-hidden rounded-md border border-gray-200">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50">
+                  <tr class="text-left text-gray-600">
+                    <th class="px-4 py-2 font-medium">Title</th>
+                    <th class="px-4 py-2 font-medium">URL</th>
+                    <th class="px-4 py-2 font-medium">Always use</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100">
+                  {% for project_page in internal_links %}
+                    <tr>
+                      <td class="px-4 py-2 text-gray-900">{{ project_page.title }}</td>
+                      <td class="px-4 py-2">
+                        <a href="{{ project_page.url }}" target="_blank" rel="noopener noreferrer" class="text-gray-700 underline hover:text-gray-900">
+                          {{ project_page.url }}
+                        </a>
+                      </td>
+                      <td class="px-4 py-2 text-gray-700">{{ project_page.always_use|yesno:"Yes,No" }}</td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-sm text-gray-500">No internal links available.</div>
+          {% endif %}
+        </div>
+
+        <div>
+          <div class="mb-2 text-sm font-medium text-gray-700">External links ({{ external_links|length }})</div>
+          {% if external_links %}
+            <div class="overflow-hidden rounded-md border border-gray-200">
+              <table class="min-w-full text-sm">
+                <thead class="bg-gray-50">
+                  <tr class="text-left text-gray-600">
+                    <th class="px-4 py-2 font-medium">Project</th>
+                    <th class="px-4 py-2 font-medium">Title</th>
+                    <th class="px-4 py-2 font-medium">URL</th>
+                  </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-100">
+                  {% for project_page in external_links %}
+                    <tr>
+                      <td class="px-4 py-2 text-gray-900">{{ project_page.project.name }}</td>
+                      <td class="px-4 py-2 text-gray-900">{{ project_page.title }}</td>
+                      <td class="px-4 py-2">
+                        <a href="{{ project_page.url }}" target="_blank" rel="noopener noreferrer" class="text-gray-700 underline hover:text-gray-900">
+                          {{ project_page.url }}
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="text-sm text-gray-500">No external links available.</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <div class="p-6 bg-white rounded-lg border border-gray-200">
+      <h3 class="mb-4 text-lg font-semibold text-gray-900">Generated blog posts ({{ generated_blog_posts|length }})</h3>
+
+      {% if generated_blog_posts %}
+        <div class="space-y-4">
+          {% for blog_post in generated_blog_posts %}
+            <details class="overflow-hidden rounded-lg border border-gray-200">
+              <summary class="flex gap-3 justify-between items-start px-4 py-3 bg-gray-50 cursor-pointer hover:bg-gray-100">
+                <div>
+                  <div class="text-sm font-semibold text-gray-900">#{{ blog_post.id }} — {{ blog_post.title }}</div>
+                  <div class="mt-1 text-xs text-gray-600">
+                    content_length={{ blog_post.content_length }} · posted={{ blog_post.posted|yesno:"true,false" }}
+                    {% if blog_post.slug %} · slug={{ blog_post.slug }}{% endif %}
+                  </div>
+                </div>
+                <div class="flex gap-2 items-center">
+                  {% if blog_post.content_length > 0 %}
+                    <a
+                      href="{% url 'generated_blog_post_detail' project_pk=project.id pk=blog_post.id %}"
+                      class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-gray-900 rounded-md border border-gray-900 hover:bg-gray-800"
+                    >
+                      View post
+                    </a>
+                  {% endif %}
+                </div>
+              </summary>
+
+              <div class="p-4 space-y-5 bg-white">
+                {% if blog_post.description %}
+                  <div>
+                    <div class="mb-1 text-sm font-medium text-gray-700">Description</div>
+                    <div class="text-sm text-gray-700">{{ blog_post.description }}</div>
+                  </div>
+                {% endif %}
+
+                {% if blog_post.sections %}
+                  <div>
+                    <div class="mb-2 text-sm font-medium text-gray-700">Sections ({{ blog_post.sections|length }})</div>
+                    <div class="space-y-3">
+                      {% for section in blog_post.sections %}
+                        <details class="overflow-hidden rounded-md border border-gray-200">
+                          <summary class="px-4 py-2 text-sm font-medium text-gray-900 bg-gray-50 cursor-pointer hover:bg-gray-100">
+                            [{{ section.order }}] {{ section.title }}
+                          </summary>
+                          <div class="p-4 space-y-3">
+                            {% if section.content %}
+                              <div class="p-3 font-mono text-xs whitespace-pre-wrap bg-gray-50 rounded-md border border-gray-200">{{ section.content }}</div>
+                            {% endif %}
+
+                            <div>
+                              <div class="mb-2 text-sm font-medium text-gray-700">Research questions ({{ section.questions|length }})</div>
+                              {% if section.questions %}
+                                <div class="space-y-3">
+                                  {% for research_question in section.questions %}
+                                    <div class="p-3 rounded-md border border-gray-200">
+                                      <div class="text-sm font-medium text-gray-900">Q{{ research_question.id }}: {{ research_question.question }}</div>
+                                      <div class="mt-2">
+                                        <div class="mb-1 text-xs font-medium text-gray-600">Links ({{ research_question.links|length }})</div>
+                                        {% if research_question.links %}
+                                          <ul class="space-y-2 text-sm text-gray-700">
+                                            {% for research_link in research_question.links %}
+                                              <li class="p-2 bg-gray-50 rounded border border-gray-200">
+                                                <div class="font-medium text-gray-900">{{ research_link.title|default:"(no title)" }}</div>
+                                                <a href="{{ research_link.url }}" target="_blank" rel="noopener noreferrer" class="text-gray-700 underline hover:text-gray-900">
+                                                  {{ research_link.url }}
+                                                </a>
+                                                <div class="mt-1 text-xs text-gray-600">
+                                                  author={{ research_link.author|default:"" }}
+                                                  {% if research_link.published_date %} · published={{ research_link.published_date|date:"Y-m-d" }}{% endif %}
+                                                  {% if research_link.date_scraped %} · scraped={{ research_link.date_scraped|date:"Y-m-d H:i" }}{% endif %}
+                                                  {% if research_link.date_analyzed %} · analyzed={{ research_link.date_analyzed|date:"Y-m-d H:i" }}{% endif %}
+                                                </div>
+                                              </li>
+                                            {% endfor %}
+                                          </ul>
+                                        {% else %}
+                                          <div class="text-sm text-gray-500">No links.</div>
+                                        {% endif %}
+                                      </div>
+                                    </div>
+                                  {% endfor %}
+                                </div>
+                              {% else %}
+                                <div class="text-sm text-gray-500">No research questions.</div>
+                              {% endif %}
+                            </div>
+                          </div>
+                        </details>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endif %}
+
+                {% if blog_post.blog_level_questions %}
+                  <div>
+                    <div class="mb-2 text-sm font-medium text-gray-700">Blog-level research questions ({{ blog_post.blog_level_questions|length }})</div>
+                    <div class="space-y-3">
+                      {% for research_question in blog_post.blog_level_questions %}
+                        <div class="p-3 rounded-md border border-gray-200">
+                          <div class="text-sm font-medium text-gray-900">Q{{ research_question.id }}: {{ research_question.question }}</div>
+                          <div class="mt-2">
+                            <div class="mb-1 text-xs font-medium text-gray-600">Links ({{ research_question.links|length }})</div>
+                            {% if research_question.links %}
+                              <ul class="space-y-2 text-sm text-gray-700">
+                                {% for research_link in research_question.links %}
+                                  <li class="p-2 bg-gray-50 rounded border border-gray-200">
+                                    <div class="font-medium text-gray-900">{{ research_link.title|default:"(no title)" }}</div>
+                                    <a href="{{ research_link.url }}" target="_blank" rel="noopener noreferrer" class="text-gray-700 underline hover:text-gray-900">
+                                      {{ research_link.url }}
+                                    </a>
+                                    <div class="mt-1 text-xs text-gray-600">
+                                      author={{ research_link.author|default:"" }}
+                                      {% if research_link.published_date %} · published={{ research_link.published_date|date:"Y-m-d" }}{% endif %}
+                                      {% if research_link.date_scraped %} · scraped={{ research_link.date_scraped|date:"Y-m-d H:i" }}{% endif %}
+                                      {% if research_link.date_analyzed %} · analyzed={{ research_link.date_analyzed|date:"Y-m-d H:i" }}{% endif %}
+                                    </div>
+                                  </li>
+                                {% endfor %}
+                              </ul>
+                            {% else %}
+                              <div class="text-sm text-gray-500">No links.</div>
+                            {% endif %}
+                          </div>
+                        </div>
+                      {% endfor %}
+                    </div>
+                  </div>
+                {% endif %}
+              </div>
+            </details>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="text-sm text-gray-500">No generated blog posts found for this title suggestion yet.</div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock project_content %}

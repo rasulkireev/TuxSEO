@@ -19,9 +19,44 @@
 
 ***
 
+## Technical Details
+
+### Content Generation Pipeline
+
+```mermaid
+flowchart TD
+  A["BlogPostTitleSuggestion.generate_content()"] --> B["init_blog_post_content_generation()"]
+  B --> C["AI: generate outline section titles<br/>(Introduction + middle sections + Conclusion)"]
+  C --> D["DB: create GeneratedBlogPost + GeneratedBlogPostSection rows"]
+
+  D --> E{"For each middle section"}
+  E --> F["Task: generate research questions for section<br/>(local: 1 question)"]
+
+  F --> G{"For each research question"}
+  G --> H["Task: Exa search for links<br/>(local: 2 links)"]
+
+  H --> I{"For each research link"}
+  I --> J["Task: scrape link with Jina Reader"]
+  J --> K["Task: analyze link (AI)<br/>summary + contextual summary + answer"]
+
+  K --> L{"All links attempted/analyzed?"}
+  L -- no --> K
+  L -- yes --> M["Task: synthesize middle section contents (AI)"]
+
+  M --> N{"All middle sections have content?"}
+  N -- yes --> O["Task: generate Introduction + Conclusion (AI)"]
+  N -- no --> M
+
+  O --> P{"All sections (incl. intro/conclusion) have content?"}
+  P -- yes --> Q["Task: populate GeneratedBlogPost.content<br/>(code: combine sections into final markdown)"]
+  P -- no --> O
+```
+
 ## TOC
 
 - [Overview](#overview)
+- [Technical Details](#technical-details)
+  - [Content Generation Pipeline](#content-generation-pipeline)
 - [TOC](#toc)
 - [Deployment](#deployment)
   - [Render](#render)
@@ -39,9 +74,8 @@
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/rasulkireev/tuxseo)
 
 The only required env vars are:
-- OPENAI_API_KEY
-- TAVILY_API_KEY
 - GEMINI_API_KEY
+- EXA_API_KEY
 - PERPLEXITY_API_KEY
 - JINA_READER_API_KEY
 - KEYWORDS_EVERYWHERE_API_KEY
