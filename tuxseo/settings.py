@@ -492,7 +492,7 @@ if SENTRY_DSN and ENVIRONMENT == "prod":
         debug=DEBUG,
         dsn=SENTRY_DSN,
         environment=ENVIRONMENT,
-        send_default_pii=False,
+        send_default_pii=True,
         traces_sample_rate=1,
         profile_session_sample_rate=1,
         profile_lifecycle="trace",
