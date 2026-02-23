@@ -330,3 +330,73 @@ def schedule_create_project_reminder_emails():
 
     return f"""Create project reminder email scheduling completed:
     Profiles scheduled: {scheduled_count}"""
+
+
+def schedule_project_feedback_checkin_emails():
+    """
+    Daily scheduled task that finds profiles who have:
+    - Registered in the last 2 days
+    - Verified their email
+    - Created at least 1 project
+    - Not received this email type yet
+
+    Schedules a plain-text check-in email from Rasul.
+    """
+    now = timezone.now()
+    registration_window_start_date = now - timedelta(days=2)
+
+    eligible_profiles = (
+        Profile.objects.filter(
+            user__emailaddress__verified=True,
+            user__date_joined__gte=registration_window_start_date,
+            user__date_joined__lte=now,
+        )
+        .annotate(project_count=Count("projects"))
+        .filter(project_count__gte=1)
+        .distinct()
+    )
+
+    sent_profile_ids = EmailSent.objects.filter(
+        email_type=EmailType.PROJECT_FEEDBACK_CHECKIN
+    ).values_list("profile_id", flat=True)
+
+    eligible_profiles = eligible_profiles.exclude(id__in=sent_profile_ids)
+
+    scheduled_count = 0
+
+    for profile in eligible_profiles.select_related("user"):
+        verified_email_address = EmailAddress.objects.filter(
+            user=profile.user,
+            email=profile.user.email,
+            verified=True,
+        ).first()
+
+        if not verified_email_address:
+            continue
+
+        if not profile.projects.exists():
+            continue
+
+        logger.info(
+            "[Schedule Project Feedback Check-in] Scheduling email",
+            profile_id=profile.id,
+            user_email=profile.user.email,
+            days_since_registration=(now - profile.user.date_joined).days,
+            project_count=profile.projects.count(),
+        )
+
+        async_task(
+            "core.tasks.send_project_feedback_checkin_email",
+            profile.id,
+            group="Project Feedback Check-in",
+        )
+        scheduled_count += 1
+
+    logger.info(
+        "[Schedule Project Feedback Check-in] Completed scheduling",
+        scheduled_profiles=scheduled_count,
+        registration_window_start_date=registration_window_start_date.isoformat(),
+    )
+
+    return f"""Project feedback check-in email scheduling completed:
+    Profiles scheduled: {scheduled_count}"""
