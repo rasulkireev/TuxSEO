@@ -20,15 +20,18 @@ class CustomSignUpForm(SignupForm):
     def clean(self):
         cleaned_data = super().clean()
 
-        if settings.CLOUDFLARE_TURNSTILE_SECRET_KEY:
+        if settings.CLOUDFLARE_TURNSTILE_SITEKEY:
             turnstile_token = self.data.get("cf-turnstile-response", "")
 
             if not turnstile_token:
                 logger.warning("[Turnstile Validation] Missing Turnstile token in signup form")
                 raise forms.ValidationError("Please complete the verification challenge.")
 
-            user_ip = self.request.META.get("REMOTE_ADDR", "")
-            is_valid = self._verify_turnstile_token(turnstile_token, user_ip)
+            remote_ip_address = ""
+            if getattr(self, "request", None):
+                remote_ip_address = self.request.META.get("REMOTE_ADDR", "")
+
+            is_valid = self._verify_turnstile_token(turnstile_token, remote_ip_address)
 
             if not is_valid:
                 logger.warning("[Turnstile Validation] Invalid Turnstile token in signup form")
@@ -36,14 +39,24 @@ class CustomSignUpForm(SignupForm):
 
         return cleaned_data
 
-    def _verify_turnstile_token(self, token):
+    def _verify_turnstile_token(self, token, remote_ip_address=""):
+        if not settings.CLOUDFLARE_TURNSTILE_SECRET_KEY:
+            logger.error(
+                "[Turnstile Validation] Secret key missing while Turnstile site key is configured"
+            )
+            return False
+
+        verification_payload = {
+            "secret": settings.CLOUDFLARE_TURNSTILE_SECRET_KEY,
+            "response": token,
+        }
+        if remote_ip_address:
+            verification_payload["remoteip"] = remote_ip_address
+
         try:
             response = requests.post(
                 TURNSTILE_VERIFY_URL,
-                data={
-                    "secret": settings.CLOUDFLARE_TURNSTILE_SECRET_KEY,
-                    "response": token,
-                },
+                data=verification_payload,
                 timeout=10,
             )
 
