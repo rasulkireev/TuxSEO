@@ -12,7 +12,6 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from django_q.tasks import async_task
-from gpt_researcher import GPTResearcher
 from pgvector.django import HnswIndex, VectorField
 
 from core.agents import (
@@ -22,12 +21,14 @@ from core.agents import (
     create_extract_competitors_data_agent,
     create_extract_links_agent,
     create_find_competitors_agent,
+    create_generate_blog_post_content_agent,
     create_insert_links_agent,
     create_populate_competitor_details_agent,
     create_summarize_page_agent,
     create_title_suggestions_agent,
 )
 from core.agents.schemas import (
+    BlogPostGenerationContext,
     CompetitorAnalysisContext,
     CompetitorDetails,
     GeneratedBlogPostSchema,
@@ -62,7 +63,6 @@ from core.utils import (
     get_relevant_pages_for_blog_post,
     process_generated_blog_content,
     run_agent_synchronously,
-    run_gptr_synchronously,
 )
 from tuxseo.utils import get_tuxseo_logger
 
@@ -785,14 +785,21 @@ class BlogPostTitleSuggestion(BaseModel):
         )
 
     def get_internal_links(self, max_pages=2):
-        # Get pages to insert into the blog post
         manually_selected_project_pages = list(self.project.project_pages.filter(always_use=True))
         relevant_project_pages = list(
             get_relevant_pages_for_blog_post(
                 self.project, self.suggested_meta_description, max_pages=max_pages
             )
         )
-        return manually_selected_project_pages + relevant_project_pages
+
+        all_internal_project_pages = manually_selected_project_pages + relevant_project_pages
+        unique_pages_by_url = {}
+
+        for project_page in all_internal_project_pages:
+            if project_page.url not in unique_pages_by_url:
+                unique_pages_by_url[project_page.url] = project_page
+
+        return list(unique_pages_by_url.values())
 
     def get_blog_post_keywords(self):
         project_keywords = list(
@@ -804,72 +811,188 @@ class BlogPostTitleSuggestion(BaseModel):
 
         return keywords_to_use
 
+    def get_blog_post_generation_context(self, content_type=ContentType.SHARING):
+        internal_project_pages = self.get_internal_links()
+        project_page_contexts = [
+            ProjectPageContext(
+                url=page.url,
+                title=page.title,
+                description=page.description,
+                summary=page.summary,
+                always_use=page.always_use,
+            )
+            for page in internal_project_pages
+        ]
+
+        return BlogPostGenerationContext(
+            project_details=self.project.project_details,
+            title_suggestion=self.title_suggestion_schema,
+            project_keywords=self.get_blog_post_keywords(),
+            project_pages=project_page_contexts,
+            content_type=content_type,
+        )
+
+    @staticmethod
+    def contains_placeholder_language(blog_post_content: str) -> bool:
+        import re
+
+        placeholder_patterns = [
+            r"insert\s+(an?\s+)?(image|screenshot|link|video|chart|graphic)\s+(here|below|above)",
+            r"(image|screenshot|link)\s+suggestion",
+            r"\[(image|screenshot|link|placeholder|todo|tbd)\]",
+            r"\b(todo|tbd|to be added|coming soon)\b",
+        ]
+
+        return any(
+            re.search(pattern, blog_post_content, re.IGNORECASE)
+            for pattern in placeholder_patterns
+        )
+
+    @staticmethod
+    def has_incomplete_ending(blog_post_content: str) -> bool:
+        import re
+
+        normalized_content = (blog_post_content or "").strip()
+
+        if not normalized_content:
+            return True
+
+        non_empty_lines = [line.strip() for line in normalized_content.splitlines() if line.strip()]
+        if not non_empty_lines:
+            return True
+
+        last_line = non_empty_lines[-1]
+
+        if re.search(r"[:;,\-(\[]$", last_line) or last_line.endswith("..."):
+            return True
+
+        if re.search(r"\b(and|or|but|because|with|to|for|in|on|at|of|the|a|an)$", last_line.lower()):
+            return True
+
+        has_complete_sentence_ending = (
+            re.search(r"[.!?](?:[\"'\)\]]+)?$", last_line) is not None
+        )
+
+        return not has_complete_sentence_ending
+
+    def validate_generated_blog_post_content(self, blog_post_content: str):
+        normalized_content = (blog_post_content or "").strip()
+
+        if not normalized_content:
+            return False, "Generated content is empty."
+
+        if self.contains_placeholder_language(normalized_content):
+            return False, "Generated content includes placeholder language."
+
+        if self.has_incomplete_ending(normalized_content):
+            return False, "Generated content appears to be cut off before completion."
+
+        return True, ""
+
+    def build_content_generation_prompt(self, previous_validation_error: str = "") -> str:
+        prompt_lines = [
+            "Generate a complete, publication-ready blog post from the provided context.",
+            "Return all required schema fields: description, slug, tags, and content.",
+            "The content must be fully written and final.",
+            "Never include placeholders or editorial notes (for example: insert image here, add screenshot, add link, [IMAGE], [LINK], TODO, or TBD).",  # noqa: E501
+            "Do not include a References section.",
+            "Finish with a complete conclusion and end on a complete sentence.",
+        ]
+
+        if previous_validation_error:
+            prompt_lines.append(
+                f"Previous draft failed validation: {previous_validation_error} Regenerate and fully fix this issue."  # noqa: E501
+            )
+
+        return "\n".join(prompt_lines)
+
+    def generate_content_with_custom_flow(self, content_type=ContentType.SHARING):
+        content_generation_agent = create_generate_blog_post_content_agent(
+            content_type=content_type
+        )
+        blog_post_generation_context = self.get_blog_post_generation_context(content_type)
+
+        maximum_generation_attempts = 3
+        latest_validation_error = ""
+
+        for generation_attempt_number in range(1, maximum_generation_attempts + 1):
+            generation_prompt = self.build_content_generation_prompt(
+                previous_validation_error=latest_validation_error
+            )
+            generation_result = run_agent_synchronously(
+                content_generation_agent,
+                generation_prompt,
+                deps=blog_post_generation_context,
+                function_name="generate_content_with_custom_flow",
+                model_name="BlogPostTitleSuggestion",
+            )
+
+            generated_blog_post_schema = generation_result.output
+            is_content_valid, validation_error = self.validate_generated_blog_post_content(
+                generated_blog_post_schema.content
+            )
+
+            if is_content_valid:
+                return generated_blog_post_schema
+
+            latest_validation_error = validation_error
+
+            logger.warning(
+                "[Generate Content Custom Flow] Generated content failed validation",
+                title_suggestion_id=self.id,
+                project_id=self.project.id,
+                generation_attempt_number=generation_attempt_number,
+                maximum_generation_attempts=maximum_generation_attempts,
+                validation_error=validation_error,
+            )
+
+        raise ValueError(
+            "Failed to generate a complete blog post without placeholders after multiple attempts."  # noqa: E501
+        )
+
     def generate_content(self, content_type=ContentType.SHARING):
-        # query defines the research question researcher will analyze
-        # custom_prompt controls how the research findings are presented
-
-        # Suggestion Instructions
-        query = "Write a post from the following suggestion:\n"
-        query += f"{self.title_suggestion_string_for_ai}\n\n"
-
-        # Get keywords to use in the blog post
-        project_keywords = list(
-            self.project.project_keywords.filter(use=True).select_related("keyword")
-        )
-        project_keyword_texts = [keyword.keyword.keyword_text for keyword in project_keywords]
-        post_suggestion_keywords = self.target_keywords or []
-        keywords_to_use = list(set(project_keyword_texts + post_suggestion_keywords))
-        newline_separator = "\n"
-        keywords_list = newline_separator.join([f"- {keyword}" for keyword in keywords_to_use])
-        query += "The following keywords should be used (organically) in the blog post:\n"
-        query += keywords_list
-        query += "\n\n"
-
-        query += "Quick reminder. You are writing a blog post for this company."
-        query += self.project.project_desctiption_string_for_ai
-        query += ". Make it look good, as the best solution for anyone reading the post."
-        query += "\n\n"
-
-        # # Writing Instructions
-        # query += GENERATE_CONTENT_SYSTEM_PROMPTS[content_type]
-        # query += "\n"
-        query += GeneratedBlogPost.blog_post_structure_rules()
-
-        agent = GPTResearcher(
-            query,
-            report_type="deep",
-            tone="Simple (written for young readers, using basic vocabulary and clear explanations)",  # noqa: E501
-            report_format="markdown",
+        generated_blog_post_schema = self.generate_content_with_custom_flow(
+            content_type=content_type
         )
 
-        result = run_gptr_synchronously(agent)
+        generated_content = (generated_blog_post_schema.content or "").strip()
+        if not generated_content:
+            raise ValueError("Generated blog post content is empty.")
 
-        # Create blog post with raw content first
-        slug = slugify(self.title)
-        tags = ", ".join(self.target_keywords) if self.target_keywords else ""
+        default_tags = ", ".join(self.target_keywords) if self.target_keywords else ""
+        generated_tags = (
+            generated_blog_post_schema.tags.strip()
+            if generated_blog_post_schema.tags
+            else default_tags
+        )
+        generated_description = (
+            generated_blog_post_schema.description.strip()
+            if generated_blog_post_schema.description
+            else self.suggested_meta_description
+        )
+
+        generated_slug_source = generated_blog_post_schema.slug or self.title
+        generated_slug = slugify(generated_slug_source) or slugify(self.title)
 
         blog_post = GeneratedBlogPost.objects.create(
             project=self.project,
             title_suggestion=self,
-            title=self.title,  # Temporary title, will be updated after processing
-            description=self.suggested_meta_description,
-            slug=slug,
-            tags=tags,
-            content=result,  # Raw content from GPTResearcher
+            title=self.title,
+            description=generated_description,
+            slug=generated_slug,
+            tags=generated_tags,
+            content=generated_content,
         )
 
-        # Insert links into the blog post content
         blog_post.insert_links_into_post()
 
-        # Process content after link insertion (extract title, clean up sections)
         blog_post_title, blog_post_content = process_generated_blog_content(
-            generated_content=blog_post.content,  # Use content after link insertion
+            generated_content=blog_post.content,
             fallback_title=self.title,
             title_suggestion_id=self.id,
             project_id=self.project.id,
         )
 
-        # Update blog post with processed content and extracted title
         blog_post.title = blog_post_title
         blog_post.slug = slugify(blog_post_title)
         blog_post.content = blog_post_content
