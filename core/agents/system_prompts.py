@@ -110,7 +110,9 @@ def add_project_pages(ctx: RunContext) -> str:
 
         return instruction
     else:
-        return ""
+        # Some providers (e.g. Perplexity Sonar) reject empty system messages.
+        # Return an explicit no-op instruction instead of an empty string.
+        return "No internal project pages were provided for linking. Do not add internal links unless explicit URLs are provided in context."
 
 
 def add_title_details(ctx: RunContext[BlogPostGenerationContext]) -> str:
@@ -150,7 +152,8 @@ def add_target_keywords(ctx: RunContext[BlogPostGenerationContext]) -> str:
             Don't make them bold, just a regular part of the text.
         """  # noqa: E501
     else:
-        return ""
+        # Some providers reject empty system messages; keep this non-empty.
+        return "No specific SEO focus keywords were provided."
 
 
 def add_webpage_content(ctx: RunContext[WebPageContent]) -> str:
