@@ -42,7 +42,7 @@ class TestSendProjectFeedbackCheckinEmail:
         assert sent_email_message.from_email == "rasul@tuxseo.com"
         assert sent_email_message.to == [user.email]
         assert "Do you have any suggestions for improvement?" in sent_email_message.body
-        assert sent_email_message.alternatives == []
+        assert getattr(sent_email_message, "alternatives", None) in (None, [])
 
         mock_async_task.assert_called_once_with(
             "core.tasks.track_email_sent",
