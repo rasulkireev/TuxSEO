@@ -27,6 +27,7 @@ from core.forms import AutoSubmissionSettingForm, ProfileUpdateForm, ProjectScan
 from core.models import (
     AutoSubmissionSetting,
     BlogPost,
+    BlogPostTitleSuggestion,
     Competitor,
     GeneratedBlogPost,
     KeywordTrend,
@@ -38,6 +39,7 @@ from core.tasks import (
     track_event,
     try_create_posthog_alias,
 )
+from core.utils import get_relevant_external_pages_for_blog_post
 from tuxseo.utils import get_tuxseo_logger
 
 stripe.api_key = settings.STRIPE_SECRET_KEY
@@ -842,6 +844,7 @@ class ProjectPagesView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         from urllib.parse import urlparse
+
         from django.core.paginator import Paginator
 
         context = super().get_context_data(**kwargs)
@@ -973,6 +976,213 @@ class GeneratedBlogPostDetailView(LoginRequiredMixin, DetailView):
                             "project_keyword_id": keyword_info["project_keyword_id"],
                         }
                     )
+
+        return context
+
+
+class BlogPostResearchProcessView(LoginRequiredMixin, DetailView):
+    model = BlogPostTitleSuggestion
+    template_name = "blog/blog_post_research_process.html"
+    context_object_name = "title_suggestion"
+
+    def get_queryset(self):
+        return BlogPostTitleSuggestion.objects.filter(
+            project__profile=self.request.user.profile,
+            project__pk=self.kwargs["project_pk"],
+        )
+
+    def _get_generated_blog_posts(self, title_suggestion: BlogPostTitleSuggestion):
+        return (
+            title_suggestion.generated_blog_posts.select_related("project", "title_suggestion")
+            .prefetch_related(
+                "blog_post_sections__research_questions__research_links",
+                "research_questions__research_links",
+            )
+            .order_by("-id")
+        )
+
+    def _build_generated_blog_posts_data(self, generated_blog_posts):
+        generated_blog_posts_data = []
+
+        for generated_blog_post in generated_blog_posts:
+            sections = sorted(
+                list(generated_blog_post.blog_post_sections.all()),
+                key=lambda section: (section.order, section.id),
+            )
+            blog_level_questions = sorted(
+                [
+                    question
+                    for question in generated_blog_post.research_questions.all()
+                    if not question.section_id
+                ],
+                key=lambda question: question.id,
+            )
+
+            sections_data = []
+            for section in sections:
+                section_questions = sorted(
+                    list(section.research_questions.all()),
+                    key=lambda question: question.id,
+                )
+                section_questions_data = []
+                for section_question in section_questions:
+                    research_links = sorted(
+                        list(section_question.research_links.all()),
+                        key=lambda research_link: research_link.id,
+                    )
+                    section_questions_data.append(
+                        {
+                            "id": section_question.id,
+                            "question": section_question.question,
+                            "links": research_links,
+                        }
+                    )
+
+                sections_data.append(
+                    {
+                        "id": section.id,
+                        "order": section.order,
+                        "title": section.title,
+                        "content": section.content or "",
+                        "questions": section_questions_data,
+                    }
+                )
+
+            blog_level_questions_data = []
+            for blog_level_question in blog_level_questions:
+                research_links = sorted(
+                    list(blog_level_question.research_links.all()),
+                    key=lambda research_link: research_link.id,
+                )
+                blog_level_questions_data.append(
+                    {
+                        "id": blog_level_question.id,
+                        "question": blog_level_question.question,
+                        "links": research_links,
+                    }
+                )
+
+            generated_blog_posts_data.append(
+                {
+                    "id": generated_blog_post.id,
+                    "project_id": generated_blog_post.project_id,
+                    "title_suggestion_id": generated_blog_post.title_suggestion_id,
+                    "title": generated_blog_post.title,
+                    "description": generated_blog_post.description,
+                    "slug": generated_blog_post.slug,
+                    "tags": generated_blog_post.tags,
+                    "posted": generated_blog_post.posted,
+                    "date_posted": generated_blog_post.date_posted,
+                    "content_length": len(generated_blog_post.content or ""),
+                    "sections": sections_data,
+                    "blog_level_questions": blog_level_questions_data,
+                }
+            )
+
+        return generated_blog_posts_data
+
+    def _get_internal_links(
+        self, title_suggestion: BlogPostTitleSuggestion, should_compute_links: bool
+    ):
+        manually_selected_project_pages = list(
+            title_suggestion.project.project_pages.filter(always_use=True)
+        )
+        if not should_compute_links:
+            return manually_selected_project_pages
+
+        if not settings.JINA_READER_API_KEY:
+            return manually_selected_project_pages
+
+        return title_suggestion.get_internal_links(max_pages=2)
+
+    def _get_external_links(
+        self, title_suggestion: BlogPostTitleSuggestion, should_compute_links: bool
+    ):
+        if not should_compute_links:
+            return []
+
+        if not settings.JINA_READER_API_KEY:
+            return []
+
+        meta_description = title_suggestion.suggested_meta_description or ""
+        external_pages = get_relevant_external_pages_for_blog_post(
+            meta_description=meta_description,
+            exclude_project=title_suggestion.project,
+            max_pages=3,
+        )
+        return list(external_pages)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        title_suggestion = self.object
+        project = title_suggestion.project
+        profile = self.request.user.profile
+
+        should_compute_links = self.request.GET.get("compute_links") == "true"
+
+        project_keywords = project.get_keywords()
+        title_suggestion.keywords_with_usage = []
+        if title_suggestion.target_keywords:
+            for keyword_text in title_suggestion.target_keywords:
+                keyword_info = project_keywords.get(
+                    keyword_text.lower(),
+                    {"keyword": None, "in_use": False, "project_keyword_id": None},
+                )
+                title_suggestion.keywords_with_usage.append(
+                    {
+                        "text": keyword_text,
+                        "keyword": keyword_info["keyword"],
+                        "in_use": keyword_info["in_use"],
+                        "project_keyword_id": keyword_info["project_keyword_id"],
+                    }
+                )
+
+        generated_blog_posts = self._get_generated_blog_posts(title_suggestion)
+        generated_blog_posts_data = self._build_generated_blog_posts_data(generated_blog_posts)
+
+        try:
+            keywords_to_use = title_suggestion.get_blog_post_keywords()
+        except (AttributeError, TypeError):
+            logger.warning(
+                "[BlogPostResearchProcessView] Failed to compute keywords_to_use",
+                title_suggestion_id=title_suggestion.id,
+                project_id=project.id,
+                exc_info=True,
+            )
+            keywords_to_use = []
+
+        try:
+            internal_links = self._get_internal_links(title_suggestion, should_compute_links)
+        except (AttributeError, TypeError, ValueError):
+            logger.warning(
+                "[BlogPostResearchProcessView] Failed to compute internal_links",
+                title_suggestion_id=title_suggestion.id,
+                project_id=project.id,
+                should_compute_links=should_compute_links,
+                exc_info=True,
+            )
+            internal_links = []
+
+        try:
+            external_links = self._get_external_links(title_suggestion, should_compute_links)
+        except (AttributeError, TypeError, ValueError):
+            logger.warning(
+                "[BlogPostResearchProcessView] Failed to compute external_links",
+                title_suggestion_id=title_suggestion.id,
+                project_id=project.id,
+                should_compute_links=should_compute_links,
+                exc_info=True,
+            )
+            external_links = []
+
+        context["project"] = project
+        context["has_pro_subscription"] = profile.is_on_pro_plan
+        context["jina_api_key_configured"] = bool(settings.JINA_READER_API_KEY)
+        context["should_compute_links"] = should_compute_links
+        context["keywords_to_use"] = keywords_to_use
+        context["internal_links"] = internal_links or []
+        context["external_links"] = external_links or []
+        context["generated_blog_posts"] = generated_blog_posts_data
 
         return context
 
