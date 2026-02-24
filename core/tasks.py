@@ -1573,6 +1573,98 @@ Just reply to this email to share your feedback.
         return f"Failed to send email to {user.email if user else 'unknown'}"
 
 
+def send_project_feedback_checkin_email(profile_id: int):
+    """
+    Send a plain-text feedback check-in email to recently registered users
+    who have created at least one project.
+    """
+    from django.core.mail import EmailMessage
+
+    try:
+        profile = Profile.objects.select_related("user").get(id=profile_id)
+    except Profile.DoesNotExist:
+        logger.error(
+            "[Send Project Feedback Check-in Email] Profile not found",
+            profile_id=profile_id,
+        )
+        return f"Profile {profile_id} not found"
+
+    user = profile.user
+
+    if EmailSent.objects.filter(
+        profile=profile, email_type=EmailType.PROJECT_FEEDBACK_CHECKIN
+    ).exists():
+        logger.info(
+            "[Send Project Feedback Check-in Email] Email already sent to this profile, skipping",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+        return f"Email already sent to {user.email}, skipping"
+
+    if not profile.projects.exists():
+        logger.info(
+            "[Send Project Feedback Check-in Email] Profile has no projects, skipping",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+        return f"Profile {profile_id} has no projects, skipping"
+
+    recipient_name = user.first_name or user.username
+
+    subject = "Quick check-in from Rasul at TuxSEO"
+    plain_text = f"""Hi {recipient_name}!
+
+I wanted to quickly check in and see how TuxSEO is going for you.
+
+- Are you finding the product useful so far?
+- Do you have any suggestions for improvement?
+- Do you need help with setup or content strategy?
+
+If it would be useful, I'm happy to jump on a quick call and help.
+
+Just reply to this email and I'll personally get back to you.
+
+Best,
+Rasul
+rasul@tuxseo.com
+"""
+
+    try:
+        email = EmailMessage(
+            subject=subject,
+            body=plain_text,
+            from_email="rasul@tuxseo.com",
+            to=[user.email],
+        )
+        email.send(fail_silently=False)
+
+        async_task(
+            "core.tasks.track_email_sent",
+            email_address=user.email,
+            email_type=EmailType.PROJECT_FEEDBACK_CHECKIN,
+            profile=profile,
+            group="Track Email Sent",
+        )
+
+        logger.info(
+            "[Send Project Feedback Check-in Email] Email sent successfully",
+            profile_id=profile_id,
+            user_email=user.email,
+        )
+
+        return f"Email sent to {user.email}"
+
+    except Exception as error:
+        logger.error(
+            "[Send Project Feedback Check-in Email] Failed to send email",
+            error=str(error),
+            exc_info=True,
+            profile_id=profile_id,
+            user_email=user.email if user else "unknown",
+        )
+        return f"Failed to send email to {user.email if user else 'unknown'}"
+
+
 def send_create_project_reminder_email(profile_id: int):
     """
     Send a reminder email to a profile who has verified their email
