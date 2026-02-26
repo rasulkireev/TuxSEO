@@ -39,6 +39,7 @@ from core.agents.schemas import (
     TitleSuggestionContext,
     WebPageContent,
 )
+from core.analytics import ANALYTICS_EVENTS
 from core.base_models import BaseModel
 from core.choices import (
     BlogPostStatus,
@@ -341,7 +342,7 @@ class Profile(BaseModel):
             if settings.POSTHOG_API_KEY:
                 posthog.capture(
                     self.user.email,
-                    event="project_created",
+                    event=ANALYTICS_EVENTS.PROJECT_CREATED,
                     properties=project_metadata,
                 )
             logger.info("[Get or Create Project] Project created", **project_metadata)

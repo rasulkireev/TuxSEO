@@ -22,6 +22,7 @@ from django_q.tasks import async_task
 from djstripe import models as djstripe_models
 from weasyprint import HTML
 
+from core.analytics import ANALYTICS_EVENTS
 from core.choices import BlogPostStatus, ContentType, Language, OGImageStyle, ProfileStates
 from core.forms import AutoSubmissionSettingForm, ProfileUpdateForm, ProjectScanForm
 from core.models import (
@@ -178,7 +179,7 @@ class AccountSignupView(SignupView):
         async_task(
             track_event,
             profile_id=profile.id,
-            event_name="user_signed_up",
+            event_name=ANALYTICS_EVENTS.SIGNUP_COMPLETED,
             properties={
                 "$set": {
                     "email": profile.user.email,
@@ -1067,7 +1068,7 @@ class ProjectDeleteView(LoginRequiredMixin, SuccessMessageMixin, DeleteView):
         async_task(
             track_event,
             profile_id=self.request.user.profile.id,
-            event_name="project_deleted",
+            event_name=ANALYTICS_EVENTS.PROJECT_DELETED,
             properties={
                 "project_id": self.object.id,
                 "project_name": project_name,

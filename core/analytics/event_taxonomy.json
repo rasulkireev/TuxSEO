@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "events": {
+    "site_visited": {
+      "stage": "awareness",
+      "description": "Visitor landed on a tracked marketing or app page."
+    },
+    "signup_completed": {
+      "stage": "activation",
+      "description": "Account sign-up finished successfully."
+    },
+    "project_created": {
+      "stage": "activation",
+      "description": "User created their first (or another) project."
+    },
+    "project_deleted": {
+      "stage": "lifecycle",
+      "description": "User deleted a project."
+    },
+    "first_title_generated": {
+      "stage": "activation",
+      "description": "First AI-generated title suggestion was created."
+    },
+    "first_post_generated": {
+      "stage": "activation",
+      "description": "First AI-generated post was created."
+    },
+    "first_publish_attempt": {
+      "stage": "activation",
+      "description": "First publish-to-endpoint attempt was made."
+    },
+    "pricing_cta_clicked": {
+      "stage": "conversion",
+      "description": "User clicked a pricing call-to-action button."
+    },
+    "checkout_started": {
+      "stage": "conversion",
+      "description": "Checkout session was initiated."
+    },
+    "checkout_completed": {
+      "stage": "conversion",
+      "description": "Checkout session completed and payment was confirmed."
+    },
+    "checkout_failed": {
+      "stage": "conversion",
+      "description": "Checkout failed due to payment or session error."
+    },
+    "subscription_created": {
+      "stage": "revenue",
+      "description": "Subscription created in Stripe."
+    },
+    "subscription_upgraded": {
+      "stage": "revenue",
+      "description": "Existing subscription moved to a higher-tier plan."
+    },
+    "subscription_cancelled": {
+      "stage": "revenue",
+      "description": "Subscription was set to cancel."
+    },
+    "subscription_deleted": {
+      "stage": "revenue",
+      "description": "Subscription ended or was removed."
+    }
+  },
+  "deprecated_aliases": {
+    "user_signed_up": "signup_completed"
+  }
+}
