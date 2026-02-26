@@ -8,6 +8,11 @@ from django.conf import settings
 from django.utils import timezone
 from django_q.tasks import async_task
 
+from core.analytics import (
+    EVENT_TAXONOMY_VERSION,
+    is_known_event_name,
+    normalize_event_name,
+)
 from core.choices import ContentType, EmailType, ProjectPageSource
 from core.models import (
     BlogPostTitleSuggestion,
@@ -615,9 +620,12 @@ def try_create_posthog_alias(profile_id: int, cookies: dict, source_function: st
 def track_event(
     profile_id: int, event_name: str, properties: dict, source_function: str = None
 ) -> str:
+    canonical_event_name = normalize_event_name(event_name)
+
     base_log_data = {
         "profile_id": profile_id,
-        "event_name": event_name,
+        "event_name": canonical_event_name,
+        "input_event_name": event_name,
         "properties": properties,
         "source_function": source_function,
     }
@@ -628,21 +636,28 @@ def track_event(
         logger.error("[TrackEvent] Profile not found.", **base_log_data)
         return f"Profile with id {profile_id} not found."
 
+    if canonical_event_name != event_name:
+        logger.info("[TrackEvent] Normalized deprecated event name", **base_log_data)
+
+    if not is_known_event_name(canonical_event_name):
+        logger.warning("[TrackEvent] Unknown event name", **base_log_data)
+
     if settings.POSTHOG_API_KEY:
         posthog.capture(
             profile.user.email,
-            event=event_name,
+            event=canonical_event_name,
             properties={
                 "profile_id": profile.id,
                 "email": profile.user.email,
                 "current_state": profile.state,
+                "event_schema_version": EVENT_TAXONOMY_VERSION,
                 **properties,
             },
         )
 
     logger.info("[TrackEvent] Tracked event", **base_log_data)
 
-    return f"Tracked event {event_name} for profile {profile_id}"
+    return f"Tracked event {canonical_event_name} for profile {profile_id}"
 
 
 def track_state_change(
