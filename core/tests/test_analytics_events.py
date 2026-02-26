@@ -1,6 +1,8 @@
 import inspect
 from unittest.mock import Mock, patch
 
+from django.test import override_settings
+
 from core.analytics import (
     ANALYTICS_EVENT_NAMES,
     ANALYTICS_EVENTS,
@@ -30,6 +32,7 @@ def test_deprecated_aliases_are_explicit_and_normalized():
     )
 
 
+@override_settings(POSTHOG_API_KEY="phc_test")
 def test_track_event_normalizes_deprecated_event_name_before_capture():
     fake_user = Mock(email="event-user@example.com")
     fake_profile = Mock(id=123, user=fake_user, state="active")
