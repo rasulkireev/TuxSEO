@@ -13,7 +13,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.db.models import Count, Prefetch, Q
-from django.http import HttpResponse
+from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
@@ -597,6 +597,21 @@ class BlogPostView(DetailView):
     model = BlogPost
     template_name = "blog/blog_post.html"
     context_object_name = "blog_post"
+
+    def get_queryset(self):
+        return BlogPost.objects.filter(status=BlogPostStatus.PUBLISHED).order_by(
+            "-created_at", "-id"
+        )
+
+    def get_object(self, queryset=None):
+        queryset = queryset or self.get_queryset()
+        slug = self.kwargs.get(self.slug_url_kwarg)
+
+        blog_post = queryset.filter(**{self.slug_field: slug}).first()
+        if blog_post is None:
+            raise Http404("No blog post found matching the query")
+
+        return blog_post
 
 
 class ProjectEyeCatchingPostsView(LoginRequiredMixin, DetailView):
