@@ -31,6 +31,7 @@ urlpatterns = [
     path("stripe/", include("djstripe.urls", namespace="djstripe")),
     path("", include("core.urls")),
     path("docs/", include("docs.urls")),
+    path("", include("steering.urls")),
     path(
         "sitemap.xml",
         sitemap,
