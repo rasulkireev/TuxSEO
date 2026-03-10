@@ -16,11 +16,13 @@ def pytest_configure(config):
                 "entrypoints": {
                     "index": {
                         "assets": {
-                            "js": [],
-                            "css": [],
+                            "js": ["/static/index.js"],
+                            "css": ["/static/index.css"],
                         }
                     }
-                }
+                },
+                "index.js": "/static/index.js",
+                "index.css": "/static/index.css"
             }
         ),
         encoding="utf-8",

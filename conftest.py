@@ -13,11 +13,13 @@ def test_webpack_manifest(settings, tmp_path):
                 "entrypoints": {
                     "index": {
                         "assets": {
-                            "js": [],
-                            "css": [],
+                            "js": ["/static/index.js"],
+                            "css": ["/static/index.css"],
                         }
                     }
-                }
+                },
+                "index.js": "/static/index.js",
+                "index.css": "/static/index.css"
             }
         ),
         encoding="utf-8",
