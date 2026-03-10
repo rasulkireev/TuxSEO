@@ -5,10 +5,19 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-suite-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -39,6 +48,7 @@ jobs:
       GEMINI_API_KEY: test-gemini-key
       PERPLEXITY_API_KEY: test-perplexity-key
       KEYWORDS_EVERYWHERE_API_KEY: test-keywords-key
+      PYTHONHASHSEED: "0"
 
     steps:
       - name: Checkout
@@ -56,4 +66,4 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q --strict-config --strict-markers

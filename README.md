@@ -123,6 +123,21 @@ All the information on how to run, develop and update your new application can b
 2. Run `make serve`
 3. Run `make restart-worker` just in case, it sometimes has troubles connecting to REDIS on first deployment.
 
+### CI pre-PR runbook (required before opening a PR)
+
+Run the same pytest command as CI locally:
+
+```bash
+make test-ci
+```
+
+What this does:
+- Boots local Postgres/Redis services used by tests.
+- Runs `pytest` with the same strict flags as CI (`--strict-config --strict-markers`).
+- Pins `PYTHONHASHSEED=0` for deterministic hash ordering.
+
+If this fails, fix locally before pushing.
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=rasulkireev/tuxseo&type=Date)](https://www.star-history.com/#rasulkireev/tuxseo&Date)
