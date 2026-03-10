@@ -5,6 +5,7 @@ import pytest
 import requests
 from django import forms
 from django.contrib.auth.models import User
+from django.core.cache import cache
 from django.test import RequestFactory, override_settings
 
 from core.forms import AutoSubmissionSettingForm, CustomSignUpForm, ProfileUpdateForm
@@ -111,6 +112,35 @@ class TestCustomSignUpFormTurnstile:
 
         assert cleaned_data == {}
         mock_verify_turnstile_token.assert_called_once_with("test-token", remote_ip)
+
+    @override_settings(
+        SIGNUP_RATE_LIMIT_ATTEMPTS_PER_IP=1,
+        SIGNUP_RATE_LIMIT_WINDOW_SECONDS=60,
+        CLOUDFLARE_TURNSTILE_SITEKEY="",
+    )
+    @patch("allauth.account.forms.SignupForm.clean", return_value={"email": "person@example.com"})
+    def test_clean_blocks_when_signup_rate_limit_is_exceeded(self, mock_signup_clean):
+        cache.clear()
+        form = CustomSignUpForm(data={})
+        form.request = RequestFactory().post("/accounts/signup/", REMOTE_ADDR="198.51.100.10")
+
+        first_cleaned_data = form.clean()
+        assert first_cleaned_data == {"email": "person@example.com"}
+
+        with pytest.raises(forms.ValidationError, match="Too many signup attempts"):
+            form.clean()
+
+    @override_settings(
+        CLOUDFLARE_TURNSTILE_SITEKEY="",
+        SIGNUP_DISPOSABLE_EMAIL_DOMAIN_BLOCKLIST=["mailinator.com"],
+    )
+    @patch("allauth.account.forms.SignupForm.clean", return_value={"email": "bot@mailinator.com"})
+    def test_clean_blocks_disposable_email_domains(self, mock_signup_clean):
+        form = CustomSignUpForm(data={})
+        form.request = RequestFactory().post("/accounts/signup/", REMOTE_ADDR="198.51.100.11")
+
+        with pytest.raises(forms.ValidationError, match="permanent email address"):
+            form.clean()
 
 
 @pytest.mark.django_db

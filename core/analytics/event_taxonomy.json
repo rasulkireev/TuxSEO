@@ -60,6 +60,10 @@
     "subscription_deleted": {
       "stage": "revenue",
       "description": "Subscription ended or was removed."
+    },
+    "abuse_guardrail_triggered": {
+      "stage": "risk",
+      "description": "A signup or expensive-action abuse guardrail blocked a request."
     }
   },
   "deprecated_aliases": {

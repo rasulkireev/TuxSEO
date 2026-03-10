@@ -6,7 +6,10 @@ from steering.models import Project
 
 class SteeringDashboardViewTests(TestCase):
     def test_dashboard_route_resolves_project(self):
-        Project.objects.create(key="tuxseo", display_name="TuxSEO")
+        Project.objects.get_or_create(
+            key="tuxseo",
+            defaults={"display_name": "TuxSEO"},
+        )
 
         response = Client().get(reverse("steering_dashboard", kwargs={"project_key": "tuxseo"}))
 
