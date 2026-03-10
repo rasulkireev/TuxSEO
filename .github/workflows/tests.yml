@@ -67,3 +67,11 @@ jobs:
 
       - name: Run tests
         run: python -m pytest -q --strict-config --strict-markers
+
+      - name: Upload content quality report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: content-quality-report
+          path: artifacts/content-quality-report.json
+          if-no-files-found: warn
