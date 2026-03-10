@@ -388,7 +388,7 @@ class Project(BaseModel):
     profile = models.ForeignKey(
         Profile, null=True, blank=True, on_delete=models.CASCADE, related_name="projects"
     )
-    url = models.URLField(max_length=200, unique=True)
+    url = models.URLField(max_length=200)
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=50, choices=ProjectType.choices, default=ProjectType.SAAS)
     summary = models.TextField(blank=True)
@@ -725,6 +725,9 @@ class Project(BaseModel):
                 "project_keyword_id": project_keyword.id,
             }
         return project_keywords
+
+    class Meta:
+        unique_together = ("profile", "url")
 
 
 class BlogPostTitleSuggestion(BaseModel):
