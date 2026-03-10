@@ -1,3 +1,5 @@
+PYTHON ?= .venv/bin/python
+
 serve:
 	docker compose -f docker-compose-local.yml up -d --build
 	docker compose -f docker-compose-local.yml logs -f backend
@@ -51,3 +53,20 @@ restart-worker:
 
 prod-shell:
 	./deployment/prod-shell.sh
+
+test-content-quality:
+	ENVIRONMENT=dev \
+	SECRET_KEY=test-secret-key \
+	DEBUG=True \
+	SITE_URL=http://localhost:8000 \
+	POSTGRES_DB=tuxseo \
+	POSTGRES_USER=tuxseo \
+	POSTGRES_PASSWORD=tuxseo \
+	POSTGRES_HOST=localhost \
+	POSTGRES_PORT=5432 \
+	JINA_READER_API_KEY=test-jina-key \
+	GEMINI_API_KEY=test-gemini-key \
+	PERPLEXITY_API_KEY=test-perplexity-key \
+	KEYWORDS_EVERYWHERE_API_KEY=test-keywords-key \
+	PYTHONHASHSEED=0 \
+	$(PYTHON) -m pytest -q core/tests/test_content_quality_evaluation.py --strict-config --strict-markers
