@@ -138,6 +138,26 @@ What this does:
 
 If this fails, fix locally before pushing.
 
+### Deterministic content quality evaluation
+
+Run the deterministic rubric evaluation locally:
+
+```bash
+make test-content-quality
+```
+
+This executes `core/tests/test_content_quality_evaluation.py`, scores `good`/`medium`/`bad` fixtures with fixed rubric weights, and writes `artifacts/content-quality-report.json`.
+
+Safe baseline update procedure:
+
+1. Run `make test-content-quality` and confirm the change is expected.
+2. Review the generated `artifacts/content-quality-report.json` score deltas.
+3. Re-run with explicit baseline update mode:
+```bash
+UPDATE_CONTENT_QUALITY_BASELINE=1 make test-content-quality
+```
+4. Commit `core/tests/fixtures/content_quality_baseline.json` together with the scoring logic change.
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=rasulkireev/tuxseo&type=Date)](https://www.star-history.com/#rasulkireev/tuxseo&Date)
