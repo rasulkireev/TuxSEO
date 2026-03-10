@@ -92,6 +92,7 @@ INSTALLED_APPS = [
     "mjml",
     "core.apps.CoreConfig",
     "docs.apps.DocsConfig",
+    "steering.apps.SteeringConfig",
 ]
 
 MIDDLEWARE = [
