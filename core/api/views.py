@@ -148,10 +148,10 @@ def create_project(request: HttpRequest, data: ProjectScanIn):
     if gate_error:
         return gate_error
 
-    if Project.objects.filter(url=data.url).exists():
+    if Project.objects.filter(profile=profile, url=data.url).exists():
         return {
             "status": "error",
-            "message": "A project with this URL already exists",
+            "message": "You already added this project URL",
         }
 
     if not profile.can_create_project:
