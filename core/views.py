@@ -49,6 +49,37 @@ logger = get_tuxseo_logger(__name__)
 User = get_user_model()
 
 
+def get_price_for_product_name(product_name):
+    """Get a Stripe price for a product name with dj-stripe first, Stripe API fallback second."""
+    try:
+        return djstripe_models.Price.objects.select_related("product").get(
+            product__name=product_name,
+            livemode=settings.STRIPE_LIVE_MODE,
+            active=True,
+        )
+    except (djstripe_models.Price.DoesNotExist, djstripe_models.Price.MultipleObjectsReturned):
+        pass
+
+    stripe_prices = stripe.Price.list(
+        active=True,
+        recurring={"interval": "month"},
+        expand=["data.product"],
+        limit=100,
+    )
+
+    for stripe_price in stripe_prices.auto_paging_iter():
+        stripe_product = stripe_price.get("product")
+        stripe_product_name = getattr(stripe_product, "name", None)
+
+        if stripe_product_name != product_name:
+            continue
+
+        synced_price = djstripe_models.Price.sync_from_stripe_data(stripe_price)
+        return synced_price
+
+    raise djstripe_models.Price.DoesNotExist
+
+
 class LandingView(TemplateView):
     template_name = "pages/landing.html"
 
@@ -282,10 +313,13 @@ class PricingView(TemplateView):
             try:
                 profile = self.request.user.profile
                 context["has_pro_subscription"] = profile.has_product_or_subscription
+                context["current_product_name"] = profile.product_name
             except Profile.DoesNotExist:
                 context["has_pro_subscription"] = False
+                context["current_product_name"] = "Free"
         else:
             context["has_pro_subscription"] = False
+            context["current_product_name"] = "Free"
 
         context["early_bird_spots_left"] = 20 - number_of_subscribed_users - 1
 
@@ -316,9 +350,7 @@ def create_checkout_session(request, product_name):
         return redirect(reverse("home"))
 
     try:
-        price = djstripe_models.Price.objects.select_related("product").get(
-            product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
-        )
+        price = get_price_for_product_name(product_name)
     except djstripe_models.Price.DoesNotExist:
         logger.error(
             "[CreateCheckout] Price not found",
@@ -438,9 +470,7 @@ def upgrade_subscription(request, product_name):
         return redirect(reverse("home"))
 
     try:
-        new_price = djstripe_models.Price.objects.select_related("product").get(
-            product__name=product_name, livemode=settings.STRIPE_LIVE_MODE
-        )
+        new_price = get_price_for_product_name(product_name)
     except djstripe_models.Price.DoesNotExist:
         logger.error(
             "[UpgradeSubscription] Price not found",
