@@ -3,6 +3,11 @@ from allauth.account.forms import LoginForm, SignupForm
 from django import forms
 from django.conf import settings
 
+from core.abuse_prevention import (
+    get_request_ip_address,
+    is_disposable_email_domain,
+    is_signup_rate_limited,
+)
 from core.models import AutoSubmissionSetting, Profile, Project
 from core.utils import DivErrorList
 from tuxseo.utils import get_tuxseo_logger
@@ -20,16 +25,35 @@ class CustomSignUpForm(SignupForm):
     def clean(self):
         cleaned_data = super().clean()
 
+        remote_ip_address = ""
+        if getattr(self, "request", None):
+            remote_ip_address = get_request_ip_address(self.request)
+
+        if is_signup_rate_limited(remote_ip_address):
+            logger.warning(
+                "[Signup Rate Limit] Signup blocked due to too many attempts",
+                ip_address=remote_ip_address,
+            )
+            raise forms.ValidationError(
+                "Too many signup attempts from your network. Please try again in a few minutes."
+            )
+
+        email_address = (cleaned_data.get("email") or "").strip().lower()
+        if email_address and is_disposable_email_domain(email_address):
+            logger.warning(
+                "[Signup Disposable Email] Signup blocked for disposable email domain",
+                email_domain=email_address.rsplit("@", 1)[1],
+            )
+            raise forms.ValidationError(
+                "Please use a permanent email address (disposable inboxes are not allowed)."
+            )
+
         if settings.CLOUDFLARE_TURNSTILE_SITEKEY:
             turnstile_token = self.data.get("cf-turnstile-response", "")
 
             if not turnstile_token:
                 logger.warning("[Turnstile Validation] Missing Turnstile token in signup form")
                 raise forms.ValidationError("Please complete the verification challenge.")
-
-            remote_ip_address = ""
-            if getattr(self, "request", None):
-                remote_ip_address = self.request.META.get("REMOTE_ADDR", "")
 
             is_valid = self._verify_turnstile_token(turnstile_token, remote_ip_address)
 

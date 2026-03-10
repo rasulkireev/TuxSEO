@@ -9,6 +9,7 @@ from django_q.models import Task
 from django_q.tasks import async_task, result
 from ninja import NinjaAPI
 
+from core.abuse_prevention import enforce_verified_email_for_expensive_action
 from core.api.auth import session_auth, superuser_api_auth
 from core.api.schemas import (
     AddCompetitorIn,
@@ -71,6 +72,10 @@ from tuxseo.utils import get_tuxseo_logger
 logger = get_tuxseo_logger(__name__)
 
 api = NinjaAPI(docs_url=None)
+
+
+def get_verified_email_gate_error(profile, action_name: str) -> dict | None:
+    return enforce_verified_email_for_expensive_action(profile=profile, action_name=action_name)
 
 
 @api.post("/validate-url", response=ValidateUrlOut, auth=[session_auth])
@@ -138,6 +143,10 @@ def validate_url(request: HttpRequest, data: ValidateUrlIn):
 @api.post("/projects/", response=ProjectScanOut, auth=[session_auth])
 def create_project(request: HttpRequest, data: ProjectScanIn):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "project creation")
+    if gate_error:
+        return gate_error
 
     if Project.objects.filter(url=data.url).exists():
         return {
@@ -215,6 +224,15 @@ def create_project(request: HttpRequest, data: ProjectScanIn):
 @api.post("/generate-title-suggestions", response=GenerateTitleSuggestionsOut, auth=[session_auth])
 def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggestionsIn):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "title generation")
+    if gate_error:
+        return {
+            "suggestions": [],
+            "suggestions_html": [],
+            **gate_error,
+        }
+
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     try:
@@ -290,6 +308,11 @@ def generate_title_suggestions(request: HttpRequest, data: GenerateTitleSuggesti
 @api.post("/generate-title-from-idea", response=GenerateTitleSuggestionOut, auth=[session_auth])
 def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestionsIn):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "title generation")
+    if gate_error:
+        return gate_error
+
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     if profile.reached_title_generation_limit:
@@ -372,6 +395,14 @@ def generate_title_from_idea(request: HttpRequest, data: GenerateTitleSuggestion
 )
 def generate_blog_content(request: HttpRequest, suggestion_id: int):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "blog content generation")
+    if gate_error:
+        return {
+            "task_id": None,
+            **gate_error,
+        }
+
     suggestion = get_object_or_404(
         BlogPostTitleSuggestion, id=suggestion_id, project__profile=profile
     )
@@ -646,6 +677,11 @@ def update_sitemap_url(request: HttpRequest, data: UpdateSitemapUrlIn):
     it triggers automatic parsing and analysis of the sitemap pages.
     """
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "sitemap processing")
+    if gate_error:
+        return gate_error
+
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     sitemap_url = data.sitemap_url.strip()
@@ -690,6 +726,11 @@ def submit_sitemap(request: HttpRequest, project_id: int, data: SubmitSitemapIn)
     it triggers automatic parsing and analysis of the sitemap pages.
     """  # noqa: E501
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "sitemap processing")
+    if gate_error:
+        return gate_error
+
     project = get_object_or_404(Project, id=project_id, profile=profile)
 
     sitemap_url = data.sitemap_url.strip()
@@ -777,6 +818,11 @@ def update_archive_status(request: HttpRequest, suggestion_id: int, data: Update
 @api.post("/add-pricing-page", auth=[session_auth])
 def add_pricing_page(request: HttpRequest, data: AddPricingPageIn):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "pricing page analysis")
+    if gate_error:
+        return gate_error
+
     project = Project.objects.get(id=data.project_id, profile=profile)
 
     project_page = ProjectPage.objects.create(
@@ -792,6 +838,11 @@ def add_pricing_page(request: HttpRequest, data: AddPricingPageIn):
 @api.post("/add-competitor", response=CompetitorAnalysisOut, auth=[session_auth])
 def add_competitor(request: HttpRequest, data: AddCompetitorIn):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "competitor analysis")
+    if gate_error:
+        return gate_error
+
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     # Check if user has reached competitor limit
@@ -861,6 +912,11 @@ def add_competitor(request: HttpRequest, data: AddCompetitorIn):
 def generate_competitor_vs_title(request: HttpRequest, data: GenerateCompetitorVsTitleIn):
     """Generate a competitor comparison blog post using Perplexity Sonar."""
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "competitor comparison generation")
+    if gate_error:
+        return gate_error
+
     competitor = get_object_or_404(Competitor, id=data.competitor_id)
     project = competitor.project
 
@@ -965,6 +1021,11 @@ def user_settings(request: HttpRequest, project_id: int):
 @api.post("/keywords/add", response=AddKeywordOut, auth=[session_auth])
 def add_keyword_to_project(request: HttpRequest, data: AddKeywordIn):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "keyword enrichment")
+    if gate_error:
+        return gate_error
+
     project = get_object_or_404(Project, id=data.project_id, profile=profile)
 
     if not profile.can_add_keywords:
@@ -1088,6 +1149,10 @@ def delete_project_keyword(request: HttpRequest, data: DeleteProjectKeywordIn):
 @api.get("/keywords/details", response=GetKeywordDetailsOut, auth=[session_auth])
 def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int):
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "keyword enrichment")
+    if gate_error:
+        return GetKeywordDetailsOut(status="error", message=gate_error["message"])
 
     try:
         # Verify user has access to the project
@@ -1312,6 +1377,10 @@ def generate_og_image(request: HttpRequest, data: GenerateOGImageIn):
     Generate an Open Graph image for a blog post using Replicate flux-schnell model.
     """
     profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "OG image generation")
+    if gate_error:
+        return gate_error
 
     if not settings.REPLICATE_API_TOKEN:
         logger.error(

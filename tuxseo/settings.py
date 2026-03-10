@@ -544,6 +544,23 @@ MJML_HTTPSERVERS = [
 CLOUDFLARE_TURNSTILE_SITEKEY = env("CLOUDFLARE_TURNSTILE_SITEKEY", default="")
 CLOUDFLARE_TURNSTILE_SECRET_KEY = env("CLOUDFLARE_TURNSTILE_SECRET_KEY", default="")
 
+REQUIRE_VERIFIED_EMAIL_FOR_EXPENSIVE_ACTIONS = env.bool(
+    "REQUIRE_VERIFIED_EMAIL_FOR_EXPENSIVE_ACTIONS", default=True
+)
+SIGNUP_RATE_LIMIT_ATTEMPTS_PER_IP = env.int("SIGNUP_RATE_LIMIT_ATTEMPTS_PER_IP", default=8)
+SIGNUP_RATE_LIMIT_WINDOW_SECONDS = env.int("SIGNUP_RATE_LIMIT_WINDOW_SECONDS", default=3600)
+SIGNUP_DISPOSABLE_EMAIL_DOMAIN_BLOCKLIST = env.list(
+    "SIGNUP_DISPOSABLE_EMAIL_DOMAIN_BLOCKLIST",
+    default=[
+        "10minutemail.com",
+        "guerrillamail.com",
+        "mailinator.com",
+        "temp-mail.org",
+        "tempmail.com",
+        "yopmail.com",
+    ],
+)
+
 REPLICATE_API_TOKEN = env("REPLICATE_API_TOKEN", default="")
 
 SHELL_PLUS_IMPORTS = [
