@@ -71,7 +71,7 @@ from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
 
-api = NinjaAPI(docs_url=None)
+api = NinjaAPI(docs_url=None, openapi_url=None)
 
 
 def get_verified_email_gate_error(profile, action_name: str) -> dict | None:

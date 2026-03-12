@@ -34,6 +34,7 @@ navigation:
 
   features:
     - blog-post-suggestions
+    - public-api-architecture
 
   deployment:
     - render-deployment
