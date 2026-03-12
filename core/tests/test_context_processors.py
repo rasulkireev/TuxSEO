@@ -93,6 +93,15 @@ class TestTurnstileSiteKey:
 
         assert context == {"turnstile_site_key": "turnstile_test_key"}
 
+    @override_settings(CLOUDFLARE_TURNSTILE_SITEKEY="")
+    def test_falls_back_to_legacy_site_key_env(self, request_factory, monkeypatch):
+        monkeypatch.setenv("CLOUDFLARE_TURNSTILE_SITE_KEY", "legacy-site-key")
+        request = request_factory.get("/")
+
+        context = turnstile_site_key(request)
+
+        assert context == {"turnstile_site_key": "legacy-site-key"}
+
 
 @pytest.mark.django_db
 class TestReferrerBannerContextProcessor:
