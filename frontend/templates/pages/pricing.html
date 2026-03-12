@@ -28,82 +28,69 @@
   <div class="px-6 mx-auto max-w-7xl lg:px-8">
     <div class="mx-auto max-w-4xl sm:text-center">
       <h2 class="text-base font-semibold leading-7 text-gray-600">Pricing</h2>
-      <p class="mt-2 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">Agency-first pricing that scales with your client load.</p>
-      <p class="mx-auto mt-6 max-w-2xl text-lg leading-8 text-gray-600">Choose the plan that fits your current stage. Every paid plan includes the full TuxSEO workflow, fast support, and predictable monthly billing.</p>
+      <p class="mt-2 text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">Simple pricing: Free or Pro.</p>
+      <p class="mx-auto mt-6 max-w-2xl text-lg leading-8 text-gray-600">Start free, then upgrade to Pro when you need unlimited content workflows and advanced automation.</p>
     </div>
 
-    <div class="grid grid-cols-1 gap-8 mx-auto mt-12 max-w-6xl lg:grid-cols-3">
+    <div class="grid grid-cols-1 gap-8 mx-auto mt-12 max-w-5xl lg:grid-cols-2">
       <div class="p-8 bg-white rounded-lg border border-gray-200 shadow-sm xl:p-10">
         <div class="flex gap-x-4 justify-between items-center">
-          <h3 id="tier-starter" class="font-semibold text-gray-900 text-lg/8">Starter</h3>
+          <h3 id="tier-free" class="font-semibold text-gray-900 text-lg/8">Free</h3>
         </div>
-        <p class="mt-4 text-gray-600 text-sm/6">Best for solo operators handling a few client campaigns.</p>
+        <p class="mt-4 text-gray-600 text-sm/6">Perfect for trying out TuxSEO.</p>
         <p class="flex gap-x-1 items-baseline mt-6">
-          <span class="text-4xl font-semibold tracking-tight text-gray-900">$79</span>
-          <span class="font-semibold text-gray-600 text-sm/6">/month</span>
+          <span class="text-4xl font-semibold tracking-tight text-gray-900">$0</span>
+          <span class="font-semibold text-gray-600 text-sm/6">/forever</span>
         </p>
 
         {% if user.is_authenticated %}
-          {% if current_product_name == 'Pro - Starter' %}
-            <a href="#" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 cursor-default">Current plan</a>
-          {% elif has_pro_subscription %}
-            <a href="{% url 'settings' %}" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 hover:bg-gray-50">Manage in settings</a>
+          {% if not has_pro_subscription %}
+            <a href="#" aria-describedby="tier-free" class="block px-3 py-2 mt-6 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 cursor-default">Current plan</a>
           {% else %}
-            <a href="{% url 'user_upgrade_checkout_session' product_name='Pro - Starter' %}" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Buy Starter</a>
+            <a href="{% url 'settings' %}" aria-describedby="tier-free" class="block px-3 py-2 mt-6 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 hover:bg-gray-50">Manage in settings</a>
           {% endif %}
         {% else %}
-          <a href="{% url 'account_signup' %}" aria-describedby="tier-starter" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Sign up for Starter</a>
+          <a href="{% url 'account_signup' %}" aria-describedby="tier-free" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Start for Free</a>
         {% endif %}
-        <p class="mt-3 text-xs font-medium text-gray-500">30-day money-back guarantee. Cancel anytime.</p>
+        <ul role="list" class="mt-6 space-y-3 text-sm text-gray-600">
+          <li>1 project</li>
+          <li>10 blog post suggestions</li>
+          <li>3 generated blog posts</li>
+        </ul>
       </div>
 
       <div class="p-8 bg-white rounded-lg border-2 border-gray-900 shadow-sm xl:p-10">
         <div class="flex gap-x-4 justify-between items-center">
-          <h3 id="tier-growth" class="font-semibold text-gray-900 text-lg/8">Growth</h3>
+          <h3 id="tier-pro" class="font-semibold text-gray-900 text-lg/8">Pro</h3>
           <span class="px-3 py-1 text-xs font-semibold text-gray-900 bg-gray-100 rounded-full">Most popular</span>
         </div>
-        <p class="mt-4 text-gray-600 text-sm/6">For agencies with repeatable content workflows and active client delivery.</p>
-        <p class="flex gap-x-1 items-baseline mt-6">
-          <span class="text-4xl font-semibold tracking-tight text-gray-900">$199</span>
-          <span class="font-semibold text-gray-600 text-sm/6">/month</span>
-        </p>
-
-        {% if user.is_authenticated %}
-          {% if current_product_name == 'Pro - Growth' %}
-            <a href="#" aria-describedby="tier-growth" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 cursor-default">Current plan</a>
-          {% elif has_pro_subscription %}
-            <a href="{% url 'settings' %}" aria-describedby="tier-growth" class="block px-3 py-2 mt-6 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 hover:bg-gray-50">Manage in settings</a>
-          {% else %}
-            <a href="{% url 'user_upgrade_checkout_session' product_name='Pro - Growth' %}" aria-describedby="tier-growth" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Buy Growth</a>
-          {% endif %}
-        {% else %}
-          <a href="{% url 'account_signup' %}" aria-describedby="tier-growth" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Sign up for Growth</a>
-        {% endif %}
-        <p class="mt-3 text-xs font-medium text-gray-500">30-day money-back guarantee. Cancel anytime.</p>
-      </div>
-
-      <div class="p-8 bg-white rounded-lg border border-gray-200 shadow-sm xl:p-10">
-        <div class="flex gap-x-4 justify-between items-center">
-          <h3 id="tier-agency" class="font-semibold text-gray-900 text-lg/8">Agency</h3>
+        <p class="mt-4 text-gray-600 text-sm/6">Unlimited projects and advanced automation for growing teams.</p>
+        <div class="mt-6 space-y-3">
+          <p class="flex gap-x-1 items-baseline">
+            <span class="text-4xl font-semibold tracking-tight text-gray-900">$9</span>
+            <span class="font-semibold text-gray-600 text-sm/6">/month</span>
+          </p>
+          <p class="flex gap-x-1 items-baseline">
+            <span class="text-2xl font-semibold tracking-tight text-gray-900">$90</span>
+            <span class="font-semibold text-gray-600 text-sm/6">/year</span>
+          </p>
         </div>
-        <p class="mt-4 text-gray-600 text-sm/6">For teams running multi-client SEO ops and high-volume content execution.</p>
-        <p class="flex gap-x-1 items-baseline mt-6">
-          <span class="text-4xl font-semibold tracking-tight text-gray-900">$299</span>
-          <span class="font-semibold text-gray-600 text-sm/6">/month</span>
-        </p>
 
         {% if user.is_authenticated %}
-          {% if current_product_name == 'Pro - Agency' %}
-            <a href="#" aria-describedby="tier-agency" class="block px-3 py-2 mt-6 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 cursor-default">Current plan</a>
-          {% elif has_pro_subscription %}
-            <a href="{% url 'settings' %}" aria-describedby="tier-agency" class="block px-3 py-2 mt-6 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 hover:bg-gray-50">Manage in settings</a>
+          {% if has_pro_subscription %}
+            <a href="{% url 'settings' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Manage in settings</a>
           {% else %}
-            <a href="{% url 'user_upgrade_checkout_session' product_name='Pro - Agency' %}" aria-describedby="tier-agency" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Buy Agency</a>
+            <a href="{% url 'user_upgrade_checkout_session' product_name='Pro - Monthly' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Choose Monthly</a>
+            <a href="{% url 'user_upgrade_checkout_session' product_name='Pro - Yearly' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-3 font-semibold text-center text-gray-900 bg-white rounded-md ring-1 ring-inset ring-gray-300 shadow-sm text-sm/6 hover:bg-gray-50">Choose Annual</a>
           {% endif %}
         {% else %}
-          <a href="{% url 'account_signup' %}" aria-describedby="tier-agency" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Sign up for Agency</a>
+          <a href="{% url 'account_signup' %}" aria-describedby="tier-pro" class="block px-3 py-2 mt-6 font-semibold text-center text-white bg-gray-800 rounded-md shadow-sm text-sm/6 hover:bg-gray-700">Create Free Account</a>
         {% endif %}
-        <p class="mt-3 text-xs font-medium text-gray-500">30-day money-back guarantee. Cancel anytime.</p>
+        <ul role="list" class="mt-6 space-y-3 text-sm text-gray-600">
+          <li><strong>Unlimited</strong> projects and blog posts</li>
+          <li>Automatic posting and OG image generation</li>
+          <li>Link exchange and priority support</li>
+        </ul>
       </div>
     </div>
 
