@@ -10,8 +10,8 @@ def test_pricing_template_uses_free_and_pro_only_with_current_checkout_targets()
 
     assert "Free" in content
     assert "Pro" in content
-    assert "$9" in content
-    assert "$90" in content
+    assert "$99" in content
+    assert "$990" in content
     assert "product_name='Pro - Monthly'" in content
     assert "product_name='Pro - Yearly'" in content
 
@@ -32,8 +32,8 @@ def test_pricing_template_uses_free_and_pro_only_with_current_checkout_targets()
 def test_user_settings_template_shows_updated_pro_prices_and_checkout_targets():
     content = SETTINGS_TEMPLATE_PATH.read_text(encoding="utf-8")
 
-    assert "$9" in content
-    assert "$90" in content
+    assert "$99" in content
+    assert "$990" in content
     assert "product_name='Pro - Monthly'" in content
     assert "product_name='Pro - Yearly'" in content
     assert "$100" not in content
