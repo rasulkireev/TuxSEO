@@ -3,6 +3,7 @@ from django.views.generic import RedirectView
 
 from core import views
 from core.api.views import api
+from core.public_api.views import public_api
 
 urlpatterns = [
     # pages
@@ -18,6 +19,7 @@ urlpatterns = [
     path("blog/<slug:slug>", views.BlogPostView.as_view(), name="blog_post"),
     # app
     path("api/", api.urls),
+    path("public-api/", public_api.urls),
     path(
         "project/<int:pk>/",
         RedirectView.as_view(pattern_name="project_seo_posts", permanent=False),
