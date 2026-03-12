@@ -179,7 +179,7 @@ export default class extends Controller {
       console.log("Project created successfully", { projectId: this.createdProjectId, data });
 
       if (this.createdProjectId && this.hasProjectLinkTarget) {
-        const project_url = `/project/${this.createdProjectId}/posts/seo-optimized/`;
+        const project_url = `/project/${this.createdProjectId}/home/`;
         console.log("Setting project link href to", project_url);
         this.projectLinkTarget.href = project_url;
       } else {
