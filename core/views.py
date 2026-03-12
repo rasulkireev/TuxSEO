@@ -192,6 +192,11 @@ class AdminPanelView(LoginRequiredMixin, TemplateView):
 class AccountSignupView(SignupView):
     template_name = "account/signup.html"
 
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context["signup_started_event_name"] = ANALYTICS_EVENTS.SIGNUP_STARTED
+        return context
+
     def form_valid(self, form):
         response = super().form_valid(form)
 
@@ -418,6 +423,19 @@ def create_checkout_session(request, product_name):
         user_id=user.id,
         profile_id=profile.id,
         product_name=product_name,
+    )
+
+    async_task(
+        track_event,
+        profile_id=profile.id,
+        event_name=ANALYTICS_EVENTS.CHECKOUT_STARTED,
+        properties={
+            "product_name": product_name,
+            "price_id": price.id,
+            "source": "create_checkout_session",
+        },
+        source_function="create_checkout_session",
+        group="Track Event",
     )
 
     base_success_url = request.build_absolute_uri(reverse("home"))

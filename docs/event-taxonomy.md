@@ -17,15 +17,17 @@ This file is the **single source of truth** for event names and deprecated alias
 ## Canonical events (v1)
 
 - `site_visited`
+- `signup_started`
 - `signup_completed`
-- `project_created`
+- `email_verified`
+- `project_create_succeeded`
 - `project_deleted`
 - `first_title_generated`
-- `first_post_generated`
+- `first_blog_generated`
 - `first_publish_attempt`
 - `pricing_cta_clicked`
 - `checkout_started`
-- `checkout_completed`
+- `checkout_succeeded`
 - `checkout_failed`
 - `subscription_created`
 - `subscription_upgraded`
@@ -35,6 +37,9 @@ This file is the **single source of truth** for event names and deprecated alias
 ## Deprecated aliases
 
 - `user_signed_up` → `signup_completed`
+- `project_created` → `project_create_succeeded`
+- `first_post_generated` → `first_blog_generated`
+- `checkout_completed` → `checkout_succeeded`
 
 `track_event` normalizes deprecated names before sending events to PostHog.
 

@@ -10,6 +10,7 @@ from django_q.tasks import async_task
 
 from core.analytics import (
     EVENT_TAXONOMY_VERSION,
+    get_event_definition,
     is_known_event_name,
     normalize_event_name,
 )
@@ -641,6 +642,12 @@ def track_event(
 
     if not is_known_event_name(canonical_event_name):
         logger.warning("[TrackEvent] Unknown event name", **base_log_data)
+        return f"Unknown event name: {canonical_event_name}"
+
+    event_definition = get_event_definition(canonical_event_name)
+    if not event_definition:
+        logger.warning("[TrackEvent] Missing event definition", **base_log_data)
+        return f"Missing event definition for event: {canonical_event_name}"
 
     if settings.POSTHOG_API_KEY:
         posthog.capture(
@@ -651,6 +658,7 @@ def track_event(
                 "email": profile.user.email,
                 "current_state": profile.state,
                 "event_schema_version": EVENT_TAXONOMY_VERSION,
+                "event_stage": event_definition["stage"],
                 **properties,
             },
         )
