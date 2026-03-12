@@ -3,7 +3,6 @@ import uuid
 import requests
 from allauth.account.forms import LoginForm, SignupForm
 from django import forms
-from django.conf import settings
 
 from core.abuse_prevention import (
     get_request_ip_address,
@@ -11,6 +10,7 @@ from core.abuse_prevention import (
     is_signup_rate_limited,
 )
 from core.models import AutoSubmissionSetting, Profile, Project
+from core.turnstile import get_turnstile_secret_key, get_turnstile_site_key
 from core.utils import DivErrorList
 from tuxseo.utils import get_tuxseo_logger
 
@@ -82,7 +82,7 @@ class CustomSignUpForm(SignupForm):
                 "Please use a permanent email address (disposable inboxes are not allowed)."
             )
 
-        if settings.CLOUDFLARE_TURNSTILE_SITEKEY:
+        if get_turnstile_site_key():
             turnstile_token = (self.data.get("cf-turnstile-response") or "").strip()
 
             if not turnstile_token:
@@ -150,7 +150,9 @@ class CustomSignUpForm(SignupForm):
         return TURNSTILE_REASON_UNKNOWN
 
     def _verify_turnstile_token(self, token, remote_ip_address=""):
-        if not settings.CLOUDFLARE_TURNSTILE_SECRET_KEY:
+        turnstile_secret_key = get_turnstile_secret_key()
+
+        if not turnstile_secret_key:
             logger.error(
                 "[Turnstile Validation] Secret key missing while Turnstile site key is configured"
             )
@@ -161,7 +163,7 @@ class CustomSignUpForm(SignupForm):
             }
 
         verification_payload = {
-            "secret": settings.CLOUDFLARE_TURNSTILE_SECRET_KEY,
+            "secret": turnstile_secret_key,
             "response": token,
         }
         if remote_ip_address:

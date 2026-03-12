@@ -57,6 +57,27 @@ Added env configuration:
 
 See `.env.example` for defaults.
 
+### Turnstile troubleshooting checklist (production)
+
+If signup shows a successful Turnstile challenge client-side but server-side verification fails:
+
+1. Verify environment variables are present in runtime (CapRover app env):
+   - preferred: `CLOUDFLARE_TURNSTILE_SITEKEY`
+   - preferred: `CLOUDFLARE_TURNSTILE_SECRET_KEY`
+2. Legacy aliases are also supported for backwards compatibility:
+   - `CLOUDFLARE_TURNSTILE_SITE_KEY`
+   - `TURNSTILE_SITE_KEY`
+   - `CLOUDFLARE_TURNSTILE_SECRET`
+   - `TURNSTILE_SECRET_KEY`
+3. Ensure site key and secret belong to the same Turnstile widget.
+4. Ensure widget hostname list includes `tuxseo.com`.
+5. In logs, inspect Turnstile `reason_code` and `error_codes` to distinguish:
+   - `token_missing`
+   - `token_invalid`
+   - `token_expired`
+   - `provider_error`
+   - `validation_mismatch`
+
 ## Validation notes
 
 ### Tests added
