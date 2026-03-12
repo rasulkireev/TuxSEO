@@ -6,6 +6,17 @@
     </h2>
     <ul class="space-y-1">
       <li>
+        <a
+          href="{% url 'project_home' project.id %}"
+          class="flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors {% if request.resolver_match.url_name == 'project_home' %}bg-gray-100 text-gray-900{% else %}text-gray-700 hover:bg-gray-50 hover:text-gray-900{% endif %}"
+        >
+          <svg class="mr-3 w-5 h-5 {% if request.resolver_match.url_name == 'project_home' %}text-gray-900{% else %}text-gray-400{% endif %}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10.5L12 3l9 7.5M5.25 9.75V21h13.5V9.75" />
+          </svg>
+          Home
+        </a>
+      </li>
+      <li>
         <div class="flex items-center px-3 py-2 text-sm font-medium text-gray-900">
           <svg class="mr-3 w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />

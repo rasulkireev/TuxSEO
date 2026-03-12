@@ -20,9 +20,10 @@ urlpatterns = [
     path("api/", api.urls),
     path(
         "project/<int:pk>/",
-        RedirectView.as_view(pattern_name="project_seo_posts", permanent=False),
+        RedirectView.as_view(pattern_name="project_home", permanent=False),
         name="project_redirect",
     ),
+    path("project/<int:pk>/home/", views.ProjectHomeView.as_view(), name="project_home"),
     path(
         "project/<int:pk>/posts/eye-catching/",
         views.ProjectEyeCatchingPostsView.as_view(),

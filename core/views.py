@@ -1,4 +1,5 @@
 import time
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -17,6 +18,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
+from django.utils import timezone
 from django.views.generic import DeleteView, DetailView, ListView, TemplateView, UpdateView
 from django_q.tasks import async_task
 from djstripe import models as djstripe_models
@@ -642,6 +644,79 @@ class BlogPostView(DetailView):
             raise Http404("No blog post found matching the query")
 
         return blog_post
+
+
+class ProjectHomeView(LoginRequiredMixin, DetailView):
+    model = Project
+    template_name = "project/project_home.html"
+    context_object_name = "project"
+
+    loading_window_minutes = 20
+
+    def get_queryset(self):
+        return Project.objects.filter(profile=self.request.user.profile)
+
+    def get_content_state(self, item_count: int, is_project_recently_created: bool) -> dict:
+        is_loading_state = item_count == 0 and is_project_recently_created
+        is_empty_state = item_count == 0 and not is_project_recently_created
+        return {
+            "count": item_count,
+            "is_loading_state": is_loading_state,
+            "is_empty_state": is_empty_state,
+            "has_items": item_count > 0,
+        }
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        project = self.object
+
+        is_project_recently_created = (
+            project.created_at
+            >= timezone.now() - timedelta(minutes=self.loading_window_minutes)
+        )
+
+        title_ideas_state = self.get_content_state(
+            item_count=project.blog_post_title_suggestions.count(),
+            is_project_recently_created=is_project_recently_created,
+        )
+        keywords_state = self.get_content_state(
+            item_count=project.project_keywords.count(),
+            is_project_recently_created=is_project_recently_created,
+        )
+        pages_state = self.get_content_state(
+            item_count=project.project_pages.count(),
+            is_project_recently_created=is_project_recently_created,
+        )
+        competitors_state = self.get_content_state(
+            item_count=project.competitors.count(),
+            is_project_recently_created=is_project_recently_created,
+        )
+
+        has_project_summary = bool(project.summary.strip())
+        is_summary_loading_state = not has_project_summary and is_project_recently_created
+        is_summary_empty_state = not has_project_summary and not is_project_recently_created
+
+        has_loading_generation_state = any(
+            content_state["is_loading_state"]
+            for content_state in [title_ideas_state, keywords_state, pages_state, competitors_state]
+        )
+        has_empty_generation_state = all(
+            content_state["is_empty_state"]
+            for content_state in [title_ideas_state, keywords_state, pages_state, competitors_state]
+        )
+
+        context["title_ideas_state"] = title_ideas_state
+        context["keywords_state"] = keywords_state
+        context["pages_state"] = pages_state
+        context["competitors_state"] = competitors_state
+        context["generated_posts_count"] = project.generated_blog_posts.count()
+        context["posted_posts_count"] = project.generated_blog_posts.filter(posted=True).count()
+        context["is_summary_loading_state"] = is_summary_loading_state
+        context["is_summary_empty_state"] = is_summary_empty_state
+        context["has_loading_generation_state"] = has_loading_generation_state
+        context["has_empty_generation_state"] = has_empty_generation_state
+
+        return context
 
 
 class ProjectEyeCatchingPostsView(LoginRequiredMixin, DetailView):

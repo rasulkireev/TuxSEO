@@ -1,0 +1,105 @@
+{% extends "base_project.html" %}
+
+{% block project_content %}
+  <div class="space-y-6">
+    <section class="overflow-hidden p-6 bg-white rounded-lg border border-gray-200 shadow-sm">
+      <div class="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h2 class="text-xl font-semibold text-gray-900">Project Home</h2>
+          <p class="mt-1 text-sm text-gray-500">Overview of project setup and generated content.</p>
+        </div>
+        {% if has_loading_generation_state %}
+          <span class="inline-flex items-center px-3 py-1 text-xs font-semibold text-amber-800 bg-amber-100 rounded-full">
+            Generation in progress
+          </span>
+        {% elif has_empty_generation_state %}
+          <span class="inline-flex items-center px-3 py-1 text-xs font-semibold text-gray-700 bg-gray-100 rounded-full">
+            No generated content yet
+          </span>
+        {% else %}
+          <span class="inline-flex items-center px-3 py-1 text-xs font-semibold text-green-800 bg-green-100 rounded-full">
+            Content available
+          </span>
+        {% endif %}
+      </div>
+
+      <div class="mt-6">
+        <h3 class="text-sm font-semibold tracking-wide text-gray-700 uppercase">Summary</h3>
+        {% if project.summary %}
+          <p class="mt-2 text-sm leading-relaxed text-gray-700">{{ project.summary }}</p>
+        {% elif is_summary_loading_state %}
+          <div class="flex gap-2 items-center mt-3 text-sm text-amber-700">
+            <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Summary is still being generated.</span>
+          </div>
+        {% else %}
+          <p class="mt-2 text-sm text-gray-500">No summary is available for this project yet.</p>
+        {% endif %}
+      </div>
+    </section>
+
+    <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">Title Ideas</p>
+        <p class="mt-2 text-3xl font-semibold text-gray-900">{{ title_ideas_state.count }}</p>
+        {% if title_ideas_state.is_loading_state %}
+          <p class="mt-2 text-xs text-amber-700">Generating title suggestions...</p>
+        {% elif title_ideas_state.is_empty_state %}
+          <p class="mt-2 text-xs text-gray-500">No title suggestions generated yet.</p>
+        {% else %}
+          <p class="mt-2 text-xs text-green-700">Title suggestions are ready.</p>
+        {% endif %}
+      </article>
+
+      <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">Keywords</p>
+        <p class="mt-2 text-3xl font-semibold text-gray-900">{{ keywords_state.count }}</p>
+        {% if keywords_state.is_loading_state %}
+          <p class="mt-2 text-xs text-amber-700">Extracting keywords...</p>
+        {% elif keywords_state.is_empty_state %}
+          <p class="mt-2 text-xs text-gray-500">No keywords found yet.</p>
+        {% else %}
+          <p class="mt-2 text-xs text-green-700">Keywords are available.</p>
+        {% endif %}
+      </article>
+
+      <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">Pages</p>
+        <p class="mt-2 text-3xl font-semibold text-gray-900">{{ pages_state.count }}</p>
+        {% if pages_state.is_loading_state %}
+          <p class="mt-2 text-xs text-amber-700">Discovering pages...</p>
+        {% elif pages_state.is_empty_state %}
+          <p class="mt-2 text-xs text-gray-500">No project pages discovered yet.</p>
+        {% else %}
+          <p class="mt-2 text-xs text-green-700">Project pages are available.</p>
+        {% endif %}
+      </article>
+
+      <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">Competitors</p>
+        <p class="mt-2 text-3xl font-semibold text-gray-900">{{ competitors_state.count }}</p>
+        {% if competitors_state.is_loading_state %}
+          <p class="mt-2 text-xs text-amber-700">Discovering competitors...</p>
+        {% elif competitors_state.is_empty_state %}
+          <p class="mt-2 text-xs text-gray-500">No competitors found yet.</p>
+        {% else %}
+          <p class="mt-2 text-xs text-green-700">Competitor data is available.</p>
+        {% endif %}
+      </article>
+
+      <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">Generated Posts</p>
+        <p class="mt-2 text-3xl font-semibold text-gray-900">{{ generated_posts_count }}</p>
+        <p class="mt-2 text-xs text-gray-500">Created from title suggestions.</p>
+      </article>
+
+      <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
+        <p class="text-sm font-medium text-gray-500">Posted Posts</p>
+        <p class="mt-2 text-3xl font-semibold text-gray-900">{{ posted_posts_count }}</p>
+        <p class="mt-2 text-xs text-gray-500">Successfully published.</p>
+      </article>
+    </section>
+  </div>
+{% endblock project_content %}
