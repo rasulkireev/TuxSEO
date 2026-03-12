@@ -16,15 +16,20 @@ Including another URLconf
 
 from django.contrib import admin
 from django.contrib.sitemaps.views import sitemap
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.views.generic import TemplateView
 
-from core.views import AccountSignupView, trigger_error
+from core.views import AccountSignupView, OnboardingFriendlyConfirmEmailView, trigger_error
 from tuxseo.sitemaps import sitemaps
 
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("accounts/signup/", AccountSignupView.as_view(), name="account_signup"),
+    re_path(
+        r"^accounts/confirm-email/(?P<key>[-:\w]+)/$",
+        OnboardingFriendlyConfirmEmailView.as_view(),
+        name="account_confirm_email",
+    ),
     path("accounts/", include("allauth.urls")),
     path("anymail/", include("anymail.urls")),
     path("uses", TemplateView.as_view(template_name="pages/uses.html"), name="uses"),

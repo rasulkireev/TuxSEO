@@ -4,14 +4,17 @@ from urllib.parse import urlencode
 
 import markdown
 import stripe
+from allauth.account import app_settings as account_app_settings
+from allauth.account.adapter import get_adapter
 from allauth.account.models import EmailAddress, EmailConfirmation
-from allauth.account.views import SignupView
+from allauth.account.views import ConfirmEmailView, SignupView
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
+from django.core import signing
 from django.db.models import Count, Prefetch, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import redirect, render
@@ -222,6 +225,38 @@ class AccountSignupView(SignupView):
         success_url = super().get_success_url() or reverse("home")
         welcome_params = {"welcome": "true"}
         return f"{success_url}?{urlencode(welcome_params)}"
+
+
+class OnboardingFriendlyConfirmEmailView(ConfirmEmailView):
+    def get(self, *args, **kwargs):
+        confirmation_key = self.kwargs.get("key", "")
+        verified_email_address = self.get_verified_email_address_for_used_hmac_key(
+            confirmation_key=confirmation_key
+        )
+        if verified_email_address:
+            messages.info(self.request, "Your email is already verified.")
+            redirect_url = get_adapter(self.request).get_email_verification_redirect_url(
+                verified_email_address
+            )
+            return redirect(redirect_url)
+
+        return super().get(*args, **kwargs)
+
+    def get_verified_email_address_for_used_hmac_key(self, confirmation_key: str):
+        if not account_app_settings.EMAIL_CONFIRMATION_HMAC:
+            return None
+
+        max_age_seconds = 60 * 60 * 24 * account_app_settings.EMAIL_CONFIRMATION_EXPIRE_DAYS
+        try:
+            email_address_id = signing.loads(
+                confirmation_key,
+                max_age=max_age_seconds,
+                salt=account_app_settings.SALT,
+            )
+        except (signing.BadSignature, signing.SignatureExpired):
+            return None
+
+        return EmailAddress.objects.filter(id=email_address_id, verified=True).first()
 
 
 class UserSettingsView(LoginRequiredMixin, SuccessMessageMixin, UpdateView):

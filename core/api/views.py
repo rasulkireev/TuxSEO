@@ -78,6 +78,12 @@ def get_verified_email_gate_error(profile, action_name: str) -> dict | None:
     return enforce_verified_email_for_expensive_action(profile=profile, action_name=action_name)
 
 
+def should_allow_unverified_first_onboarding_project(profile, project_source: str) -> bool:
+    is_onboarding_modal_source = project_source == "onboarding_modal"
+    has_no_existing_projects = not Project.objects.filter(profile=profile).exists()
+    return is_onboarding_modal_source and has_no_existing_projects
+
+
 @api.post("/validate-url", response=ValidateUrlOut, auth=[session_auth])
 def validate_url(request: HttpRequest, data: ValidateUrlIn):
     url_to_check = data.url.strip()
@@ -145,8 +151,18 @@ def create_project(request: HttpRequest, data: ProjectScanIn):
     profile = request.auth
 
     gate_error = get_verified_email_gate_error(profile, "project creation")
-    if gate_error:
+    is_allowed_unverified_onboarding_project = should_allow_unverified_first_onboarding_project(
+        profile=profile, project_source=data.source
+    )
+    if gate_error and not is_allowed_unverified_onboarding_project:
         return gate_error
+    if gate_error and is_allowed_unverified_onboarding_project:
+        logger.info(
+            "[VerifiedEmailGate] Allowing unverified first onboarding project creation",
+            profile_id=profile.id,
+            user_id=profile.user.id,
+            source=data.source,
+        )
 
     if Project.objects.filter(profile=profile, url=data.url).exists():
         return {

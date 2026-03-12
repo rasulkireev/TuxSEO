@@ -1,9 +1,11 @@
 import re
 import uuid
+from urllib.parse import urlencode
 
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 from django_q.tasks import async_task
 
 from core.choices import EmailType
@@ -64,6 +66,17 @@ class CustomAccountAdapter(DefaultAccountAdapter):
                 email=emailconfirmation.email_address.email,
             )
             raise
+
+    def get_email_verification_redirect_url(self, email_address):
+        profile = getattr(email_address.user, "profile", None)
+        has_no_projects = bool(profile and not profile.projects.exists())
+
+        query_parameters = {"email_confirmed": "true"}
+        if has_no_projects:
+            query_parameters["welcome"] = "true"
+
+        home_url = reverse("home")
+        return f"{home_url}?{urlencode(query_parameters)}"
 
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
