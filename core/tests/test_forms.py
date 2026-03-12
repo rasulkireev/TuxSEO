@@ -8,7 +8,14 @@ from django.contrib.auth.models import User
 from django.core.cache import cache
 from django.test import RequestFactory, override_settings
 
-from core.forms import AutoSubmissionSettingForm, CustomSignUpForm, ProfileUpdateForm
+from core.forms import (
+    AutoSubmissionSettingForm,
+    CustomSignUpForm,
+    ProfileUpdateForm,
+    TURNSTILE_REASON_PROVIDER_ERROR,
+    TURNSTILE_REASON_TOKEN_EXPIRED,
+    TURNSTILE_REASON_TOKEN_INVALID,
+)
 
 
 class TestAutoSubmissionSettingForm:
@@ -47,20 +54,21 @@ class TestAutoSubmissionSettingForm:
 class TestCustomSignUpFormTurnstile:
     @override_settings(CLOUDFLARE_TURNSTILE_SECRET_KEY="secret-key")
     @patch("core.forms.requests.post")
-    def test_verify_turnstile_token_returns_true_on_success(self, mock_post):
+    def test_verify_turnstile_token_returns_success_payload_on_success(self, mock_post):
         mock_response = Mock()
         mock_response.json.return_value = {"success": True}
         mock_post.return_value = mock_response
 
         form = CustomSignUpForm()
 
-        is_valid = form._verify_turnstile_token("test-token")
+        verification_result = form._verify_turnstile_token("test-token")
 
-        assert is_valid is True
+        assert verification_result["success"] is True
+        assert verification_result["reason_code"] == "verified"
 
     @override_settings(CLOUDFLARE_TURNSTILE_SECRET_KEY="secret-key")
     @patch("core.forms.requests.post")
-    def test_verify_turnstile_token_returns_false_when_api_reports_failure(self, mock_post):
+    def test_verify_turnstile_token_maps_invalid_response_error(self, mock_post):
         mock_response = Mock()
         mock_response.json.return_value = {
             "success": False,
@@ -70,18 +78,37 @@ class TestCustomSignUpFormTurnstile:
 
         form = CustomSignUpForm()
 
-        is_valid = form._verify_turnstile_token("test-token")
+        verification_result = form._verify_turnstile_token("test-token")
 
-        assert is_valid is False
+        assert verification_result["success"] is False
+        assert verification_result["reason_code"] == TURNSTILE_REASON_TOKEN_INVALID
+
+    @override_settings(CLOUDFLARE_TURNSTILE_SECRET_KEY="secret-key")
+    @patch("core.forms.requests.post")
+    def test_verify_turnstile_token_maps_timeout_duplicate_error(self, mock_post):
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "success": False,
+            "error-codes": ["timeout-or-duplicate"],
+        }
+        mock_post.return_value = mock_response
+
+        form = CustomSignUpForm()
+
+        verification_result = form._verify_turnstile_token("test-token")
+
+        assert verification_result["success"] is False
+        assert verification_result["reason_code"] == TURNSTILE_REASON_TOKEN_EXPIRED
 
     @override_settings(CLOUDFLARE_TURNSTILE_SECRET_KEY="secret-key")
     @patch("core.forms.requests.post", side_effect=requests.RequestException("network error"))
-    def test_verify_turnstile_token_returns_false_on_request_exception(self, mock_post):
+    def test_verify_turnstile_token_maps_request_exception_to_provider_error(self, mock_post):
         form = CustomSignUpForm()
 
-        is_valid = form._verify_turnstile_token("test-token")
+        verification_result = form._verify_turnstile_token("test-token")
 
-        assert is_valid is False
+        assert verification_result["success"] is False
+        assert verification_result["reason_code"] == TURNSTILE_REASON_PROVIDER_ERROR
 
     @override_settings(
         CLOUDFLARE_TURNSTILE_SITEKEY="site-key",
@@ -92,15 +119,21 @@ class TestCustomSignUpFormTurnstile:
         form = CustomSignUpForm(data={})
         form.request = RequestFactory().post("/accounts/signup/")
 
-        with pytest.raises(forms.ValidationError, match="Please complete the verification challenge"):
+        with pytest.raises(
+            forms.ValidationError, match="Please complete the verification challenge"
+        ):
             form.clean()
 
     @override_settings(
         CLOUDFLARE_TURNSTILE_SITEKEY="site-key",
         CLOUDFLARE_TURNSTILE_SECRET_KEY="secret-key",
     )
-    @patch("allauth.account.forms.SignupForm.clean", return_value={})
-    @patch.object(CustomSignUpForm, "_verify_turnstile_token", return_value=True)
+    @patch("allauth.account.forms.SignupForm.clean", return_value={"email": "test@example.com"})
+    @patch.object(
+        CustomSignUpForm,
+        "_verify_turnstile_token",
+        return_value={"success": True, "reason_code": "verified", "error_codes": []},
+    )
     def test_clean_passes_remote_ip_to_turnstile_verification(
         self, mock_verify_turnstile_token, mock_signup_clean
     ):
@@ -110,8 +143,70 @@ class TestCustomSignUpFormTurnstile:
 
         cleaned_data = form.clean()
 
-        assert cleaned_data == {}
+        assert cleaned_data == {"email": "test@example.com"}
         mock_verify_turnstile_token.assert_called_once_with("test-token", remote_ip)
+
+    @override_settings(
+        CLOUDFLARE_TURNSTILE_SITEKEY="site-key",
+        CLOUDFLARE_TURNSTILE_SECRET_KEY="secret-key",
+    )
+    @patch("allauth.account.forms.SignupForm.clean", return_value={"email": "test@example.com"})
+    @patch.object(
+        CustomSignUpForm,
+        "_verify_turnstile_token",
+        return_value={
+            "success": False,
+            "reason_code": TURNSTILE_REASON_TOKEN_EXPIRED,
+            "error_codes": ["timeout-or-duplicate"],
+        },
+    )
+    def test_clean_returns_actionable_message_when_turnstile_token_expired(
+        self, mock_verify_turnstile_token, mock_signup_clean
+    ):
+        form = CustomSignUpForm(data={"cf-turnstile-response": "stale-token"})
+        form.request = RequestFactory().post("/accounts/signup/", REMOTE_ADDR="198.51.100.7")
+
+        with pytest.raises(forms.ValidationError, match="Verification expired"):
+            form.clean()
+
+    @override_settings(
+        CLOUDFLARE_TURNSTILE_SITEKEY="site-key",
+        CLOUDFLARE_TURNSTILE_SECRET_KEY="secret-key",
+    )
+    @patch(
+        "allauth.account.forms.SignupForm.clean",
+        return_value={
+            "username": "verified-user",
+            "email": "verified@example.com",
+            "password1": "SafePass123!",
+            "password2": "SafePass123!",
+        },
+    )
+    @patch.object(
+        CustomSignUpForm,
+        "_verify_turnstile_token",
+        return_value={"success": True, "reason_code": "verified", "error_codes": []},
+    )
+    def test_verified_signup_happy_path_returns_cleaned_data_without_errors(
+        self, mock_verify_turnstile_token, mock_signup_clean
+    ):
+        """Regression guard for verified-signup happy path."""
+
+        form = CustomSignUpForm(
+            data={
+                "username": "verified-user",
+                "email": "verified@example.com",
+                "password1": "SafePass123!",
+                "password2": "SafePass123!",
+                "cf-turnstile-response": "valid-token",
+            }
+        )
+        form.request = RequestFactory().post("/accounts/signup/", REMOTE_ADDR="198.51.100.8")
+
+        cleaned_data = form.clean()
+
+        assert cleaned_data["username"] == "verified-user"
+        assert cleaned_data["email"] == "verified@example.com"
 
     @override_settings(
         SIGNUP_RATE_LIMIT_ATTEMPTS_PER_IP=1,

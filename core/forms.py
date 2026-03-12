@@ -1,3 +1,5 @@
+import uuid
+
 import requests
 from allauth.account.forms import LoginForm, SignupForm
 from django import forms
@@ -16,11 +18,39 @@ logger = get_tuxseo_logger(__name__)
 
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
+TURNSTILE_REASON_TOKEN_MISSING = "token_missing"
+TURNSTILE_REASON_TOKEN_INVALID = "token_invalid"
+TURNSTILE_REASON_TOKEN_EXPIRED = "token_expired"
+TURNSTILE_REASON_PROVIDER_ERROR = "provider_error"
+TURNSTILE_REASON_VALIDATION_MISMATCH = "validation_mismatch"
+TURNSTILE_REASON_UNKNOWN = "unknown"
+
 
 class CustomSignUpForm(SignupForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.error_class = DivErrorList
+
+    def _get_correlation_id(self):
+        if not getattr(self, "request", None):
+            return str(uuid.uuid4())
+
+        request_id_header = self.request.headers.get("X-Request-ID", "")
+        request_id_meta = self.request.META.get("HTTP_X_REQUEST_ID", "")
+
+        return request_id_header or request_id_meta or str(uuid.uuid4())
+
+    def _get_turnstile_failure_message(self, reason_code):
+        if reason_code == TURNSTILE_REASON_TOKEN_EXPIRED:
+            return "Verification expired. Please complete the challenge again and retry."
+
+        if reason_code == TURNSTILE_REASON_PROVIDER_ERROR:
+            return "We couldn't validate your verification right now. Please retry in a moment."
+
+        if reason_code == TURNSTILE_REASON_TOKEN_MISSING:
+            return "Please complete the verification challenge before signing up."
+
+        return "Verification failed. Please retry the challenge and submit again."
 
     def clean(self):
         cleaned_data = super().clean()
@@ -29,10 +59,13 @@ class CustomSignUpForm(SignupForm):
         if getattr(self, "request", None):
             remote_ip_address = get_request_ip_address(self.request)
 
+        correlation_id = self._get_correlation_id()
+
         if is_signup_rate_limited(remote_ip_address):
             logger.warning(
                 "[Signup Rate Limit] Signup blocked due to too many attempts",
                 ip_address=remote_ip_address,
+                correlation_id=correlation_id,
             )
             raise forms.ValidationError(
                 "Too many signup attempts from your network. Please try again in a few minutes."
@@ -43,32 +76,89 @@ class CustomSignUpForm(SignupForm):
             logger.warning(
                 "[Signup Disposable Email] Signup blocked for disposable email domain",
                 email_domain=email_address.rsplit("@", 1)[1],
+                correlation_id=correlation_id,
             )
             raise forms.ValidationError(
                 "Please use a permanent email address (disposable inboxes are not allowed)."
             )
 
         if settings.CLOUDFLARE_TURNSTILE_SITEKEY:
-            turnstile_token = self.data.get("cf-turnstile-response", "")
+            turnstile_token = (self.data.get("cf-turnstile-response") or "").strip()
 
             if not turnstile_token:
-                logger.warning("[Turnstile Validation] Missing Turnstile token in signup form")
-                raise forms.ValidationError("Please complete the verification challenge.")
+                logger.warning(
+                    "[Turnstile Validation] Missing Turnstile token in signup form",
+                    reason_code=TURNSTILE_REASON_TOKEN_MISSING,
+                    ip_address=remote_ip_address,
+                    correlation_id=correlation_id,
+                )
+                raise forms.ValidationError(
+                    self._get_turnstile_failure_message(TURNSTILE_REASON_TOKEN_MISSING)
+                )
 
-            is_valid = self._verify_turnstile_token(turnstile_token, remote_ip_address)
+            verification_result = self._verify_turnstile_token(turnstile_token, remote_ip_address)
 
-            if not is_valid:
-                logger.warning("[Turnstile Validation] Invalid Turnstile token in signup form")
-                raise forms.ValidationError("Verification failed. Please try again.")
+            if not verification_result["success"]:
+                reason_code = verification_result["reason_code"]
+                logger.warning(
+                    "[Turnstile Validation] Signup blocked due to failed verification",
+                    reason_code=reason_code,
+                    ip_address=remote_ip_address,
+                    correlation_id=correlation_id,
+                    error_codes=verification_result.get("error_codes", []),
+                )
+                raise forms.ValidationError(self._get_turnstile_failure_message(reason_code))
+
+            logger.info(
+                "[Turnstile Validation] Signup verification succeeded",
+                reason_code="verified",
+                ip_address=remote_ip_address,
+                correlation_id=correlation_id,
+            )
 
         return cleaned_data
+
+    def _map_turnstile_error_codes(self, error_codes):
+        if not error_codes:
+            return TURNSTILE_REASON_UNKNOWN
+
+        error_codes_set = set(error_codes)
+
+        if "timeout-or-duplicate" in error_codes_set:
+            return TURNSTILE_REASON_TOKEN_EXPIRED
+
+        if {
+            "invalid-input-response",
+            "missing-input-response",
+            "invalid-widget-id",
+            "invalid-parsed-domain",
+        } & error_codes_set:
+            return TURNSTILE_REASON_TOKEN_INVALID
+
+        if {
+            "invalid-input-secret",
+            "missing-input-secret",
+            "bad-request",
+        } & error_codes_set:
+            return TURNSTILE_REASON_VALIDATION_MISMATCH
+
+        if {
+            "internal-error",
+        } & error_codes_set:
+            return TURNSTILE_REASON_PROVIDER_ERROR
+
+        return TURNSTILE_REASON_UNKNOWN
 
     def _verify_turnstile_token(self, token, remote_ip_address=""):
         if not settings.CLOUDFLARE_TURNSTILE_SECRET_KEY:
             logger.error(
                 "[Turnstile Validation] Secret key missing while Turnstile site key is configured"
             )
-            return False
+            return {
+                "success": False,
+                "reason_code": TURNSTILE_REASON_PROVIDER_ERROR,
+                "error_codes": [],
+            }
 
         verification_payload = {
             "secret": settings.CLOUDFLARE_TURNSTILE_SECRET_KEY,
@@ -86,14 +176,26 @@ class CustomSignUpForm(SignupForm):
 
             result = response.json()
             success = result.get("success", False)
+            error_codes = result.get("error-codes", [])
 
             if not success:
+                reason_code = self._map_turnstile_error_codes(error_codes)
                 logger.warning(
                     "[Turnstile Validation] Verification failed",
-                    error_codes=result.get("error-codes", []),
+                    reason_code=reason_code,
+                    error_codes=error_codes,
                 )
+                return {
+                    "success": False,
+                    "reason_code": reason_code,
+                    "error_codes": error_codes,
+                }
 
-            return success
+            return {
+                "success": True,
+                "reason_code": "verified",
+                "error_codes": [],
+            }
 
         except requests.RequestException as error:
             logger.error(
@@ -101,7 +203,11 @@ class CustomSignUpForm(SignupForm):
                 error=str(error),
                 exc_info=True,
             )
-            return False
+            return {
+                "success": False,
+                "reason_code": TURNSTILE_REASON_PROVIDER_ERROR,
+                "error_codes": [],
+            }
 
 
 class CustomLoginForm(LoginForm):
