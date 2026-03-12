@@ -60,12 +60,7 @@ def get_price_for_product_name(product_name):
     except (djstripe_models.Price.DoesNotExist, djstripe_models.Price.MultipleObjectsReturned):
         pass
 
-    stripe_prices = stripe.Price.list(
-        active=True,
-        recurring={"interval": "month"},
-        expand=["data.product"],
-        limit=100,
-    )
+    stripe_prices = stripe.Price.list(active=True, expand=["data.product"], limit=100)
 
     for stripe_price in stripe_prices.auto_paging_iter():
         stripe_product = stripe_price.get("product")
