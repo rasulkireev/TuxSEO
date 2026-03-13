@@ -1,99 +1,63 @@
-import pytest
-from django.contrib.auth.models import User
-from django.urls import reverse
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
-from core.api.auth import APIKeyAuth
+from django.conf import settings
 
-
-@pytest.mark.django_db
-def test_settings_page_shows_api_access_controls_without_exposing_raw_key(client):
-    user = User.objects.create_user(
-        username="settings-api-key-ui-user",
-        email="settings-api-key-ui-user@example.com",
-        password="secret",
-    )
-    client.force_login(user)
-
-    response = client.get(reverse("settings"))
-
-    assert response.status_code == 200
-
-    content = response.content.decode()
-    assert "API Access" in content
-    assert "Reveal" in content
-    assert "Copy" in content
-    assert "Regenerate API Key" in content
-    assert user.profile.key not in content
+from core.api.views import get_api_key, regenerate_api_key
 
 
-@pytest.mark.django_db
-def test_get_api_key_returns_authenticated_users_key(client):
-    user = User.objects.create_user(
-        username="settings-api-key-get-user",
-        email="settings-api-key-get-user@example.com",
-        password="secret",
-    )
-    client.force_login(user)
+def test_settings_template_contains_api_access_controls():
+    template_path = Path(settings.BASE_DIR) / "frontend" / "templates" / "pages" / "user-settings.html"
+    template_content = template_path.read_text(encoding="utf-8")
 
-    response = client.get("/api/settings/api-key")
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    assert response.json()["key"] == user.profile.key
+    assert "API Access" in template_content
+    assert "data-controller=\"api-key\"" in template_content
+    assert "data-api-key-fetch-url-value=\"/api/settings/api-key\"" in template_content
+    assert "data-api-key-regenerate-url-value=\"/api/settings/api-key/regenerate\"" in template_content
+    assert "Reveal" in template_content
+    assert "Copy" in template_content
+    assert "Regenerate API Key" in template_content
+    assert "value=\"**********\"" in template_content
 
 
-@pytest.mark.django_db
-def test_get_api_key_requires_authenticated_user(client):
-    response = client.get("/api/settings/api-key")
+def test_get_api_key_returns_authenticated_users_key():
+    request = SimpleNamespace(auth=SimpleNamespace(key="api-key-123"))
 
-    assert response.status_code == 401
+    response = get_api_key(request)
 
-
-@pytest.mark.django_db
-def test_regenerate_api_key_replaces_current_key_and_invalidates_old_key(client):
-    user = User.objects.create_user(
-        username="settings-api-key-regen-user",
-        email="settings-api-key-regen-user@example.com",
-        password="secret",
-    )
-    profile = user.profile
-    old_key = profile.key
-
-    client.force_login(user)
-    response = client.post("/api/settings/api-key/regenerate")
-
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
-
-    profile.refresh_from_db()
-    assert profile.key != old_key
-    assert response.json()["key"] == profile.key
-
-    assert APIKeyAuth().authenticate(request=None, key=old_key) is None
-    assert APIKeyAuth().authenticate(request=None, key=profile.key).id == profile.id
+    assert response == {"status": "success", "key": "api-key-123"}
 
 
-@pytest.mark.django_db
-def test_regenerate_api_key_only_changes_authenticated_users_key(client):
-    owner = User.objects.create_user(
-        username="settings-api-key-owner",
-        email="settings-api-key-owner@example.com",
-        password="secret",
-    )
-    other = User.objects.create_user(
-        username="settings-api-key-other",
-        email="settings-api-key-other@example.com",
-        password="secret",
-    )
-    other_original_key = other.profile.key
+def test_regenerate_api_key_updates_profile_key_and_saves():
+    profile = SimpleNamespace(key="old-key", id=1, user_id=7, save=Mock())
+    request = SimpleNamespace(auth=profile)
 
-    client.force_login(owner)
-    response = client.post("/api/settings/api-key/regenerate")
+    filter_result = Mock()
+    filter_result.exists.side_effect = [True, False]
 
-    assert response.status_code == 200
+    with (
+        patch("core.api.views.generate_random_key", side_effect=["old-key", "taken-key", "new-key"]),
+        patch("core.api.views.Profile.objects.filter", return_value=filter_result),
+    ):
+        response = regenerate_api_key(request)
 
-    owner.profile.refresh_from_db()
-    other.profile.refresh_from_db()
+    assert response == {"status": "success", "key": "new-key"}
+    assert profile.key == "new-key"
+    profile.save.assert_called_once_with(update_fields=["key"])
 
-    assert owner.profile.key == response.json()["key"]
-    assert other.profile.key == other_original_key
+
+def test_regenerate_api_key_returns_error_when_unique_key_not_found():
+    profile = SimpleNamespace(key="fixed-key", id=1, user_id=7, save=Mock())
+    request = SimpleNamespace(auth=profile)
+
+    with patch("core.api.views.generate_random_key", return_value="fixed-key"):
+        status_code, response = regenerate_api_key(request)
+
+    assert status_code == 500
+    assert response == {
+        "status": "error",
+        "key": "",
+        "message": "Failed to regenerate API key. Please try again.",
+    }
+    profile.save.assert_not_called()

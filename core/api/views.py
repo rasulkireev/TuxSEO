@@ -97,7 +97,7 @@ def validate_url(request: HttpRequest, data: ValidateUrlIn):
             "message": "URL cannot be empty",
         }
 
-    if not url_to_check.startswith(("http://", "https://")):
+    if not url_to_check.lower().startswith(("http://", "https://")):
         return {
             "status": "error",
             "reachable": False,
