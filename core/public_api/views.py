@@ -5,12 +5,15 @@ from core.abuse_prevention import enforce_verified_email_for_expensive_action
 from core.models import AutoSubmissionSetting, Project
 from core.public_api.auth import public_api_key_auth
 from core.public_api.schemas import (
+    PublicAPIErrorOut,
     PublicAccountOut,
     PublicContentAutomationIn,
     PublicContentAutomationOut,
-    PublicAPIErrorOut,
     PublicProjectCreateOut,
+    PublicProjectGetOut,
     PublicProjectIn,
+    PublicProjectUpdateIn,
+    PublicProjectUpdateOut,
 )
 from tuxseo.utils import get_tuxseo_logger
 
@@ -27,6 +30,25 @@ public_api = NinjaAPI(
 
 def get_verified_email_gate_error(profile, action_name: str) -> dict | None:
     return enforce_verified_email_for_expensive_action(profile=profile, action_name=action_name)
+
+
+def serialize_public_project(project: Project) -> dict:
+    return {
+        "project_id": project.id,
+        "name": project.name,
+        "type": project.get_type_display(),
+        "url": project.url,
+        "summary": project.summary,
+        "blog_theme": project.blog_theme,
+        "founders": project.founders,
+        "key_features": project.key_features,
+        "target_audience_summary": project.target_audience_summary,
+        "pain_points": project.pain_points,
+        "product_usage": project.product_usage,
+        "links": project.links,
+        "language": project.language,
+        "location": project.location,
+    }
 
 
 @public_api.get("/account", response=PublicAccountOut, auth=[public_api_key_auth])
@@ -91,13 +113,7 @@ def create_public_project(request: HttpRequest, data: PublicProjectIn):
 
         return {
             "status": "success",
-            "project": {
-                "project_id": project.id,
-                "name": project.name,
-                "type": project.get_type_display(),
-                "url": project.url,
-                "summary": project.summary,
-            },
+            "project": serialize_public_project(project),
         }
     except Exception as error:
         logger.error(
@@ -110,6 +126,52 @@ def create_public_project(request: HttpRequest, data: PublicProjectIn):
         if project.id:
             project.delete()
         return 500, {"message": "An unexpected error occurred while creating the project"}
+
+
+@public_api.get(
+    "/projects/{project_id}",
+    response={200: PublicProjectGetOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def get_public_project(request: HttpRequest, project_id: int):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    return {"status": "success", "project": serialize_public_project(project)}
+
+
+@public_api.patch(
+    "/projects/{project_id}",
+    response={200: PublicProjectUpdateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def update_public_project(request: HttpRequest, project_id: int, data: PublicProjectUpdateIn):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    update_data = data.model_dump(exclude_none=True)
+    if not update_data:
+        return 400, {"message": "At least one field is required for update"}
+
+    cleaned_update_data = {}
+    for field_name, field_value in update_data.items():
+        if isinstance(field_value, str):
+            cleaned_update_data[field_name] = field_value.strip()
+        else:
+            cleaned_update_data[field_name] = field_value
+
+    if "name" in cleaned_update_data and cleaned_update_data["name"] == "":
+        return 400, {"message": "Project name cannot be empty"}
+
+    for field_name, field_value in cleaned_update_data.items():
+        setattr(project, field_name, field_value)
+    project.save(update_fields=list(cleaned_update_data.keys()))
+
+    return {"status": "success", "project": serialize_public_project(project)}
 
 
 @public_api.post(

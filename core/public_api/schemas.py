@@ -27,9 +27,44 @@ class PublicProjectOut(Schema):
     type: str
     url: str
     summary: str
+    blog_theme: str = ""
+    founders: str = ""
+    key_features: str = ""
+    target_audience_summary: str = ""
+    pain_points: str = ""
+    product_usage: str = ""
+    links: str = ""
+    language: str = ""
+    location: str = ""
 
 
 class PublicProjectCreateOut(Schema):
+    status: str
+    message: str = ""
+    project: PublicProjectOut | None = None
+
+
+class PublicProjectGetOut(Schema):
+    status: str
+    message: str = ""
+    project: PublicProjectOut | None = None
+
+
+class PublicProjectUpdateIn(Schema):
+    name: str | None = None
+    summary: str | None = None
+    blog_theme: str | None = None
+    founders: str | None = None
+    key_features: str | None = None
+    target_audience_summary: str | None = None
+    pain_points: str | None = None
+    product_usage: str | None = None
+    links: str | None = None
+    language: str | None = None
+    location: str | None = None
+
+
+class PublicProjectUpdateOut(Schema):
     status: str
     message: str = ""
     project: PublicProjectOut | None = None

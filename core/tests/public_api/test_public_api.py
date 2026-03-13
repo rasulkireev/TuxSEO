@@ -6,8 +6,18 @@ from pydantic import ValidationError
 
 from core.api.views import api
 from core.public_api.auth import PublicAPIKeyAuth
-from core.public_api.schemas import PublicContentAutomationIn, PublicProjectIn
-from core.public_api.views import configure_content_automation, create_public_project, public_api
+from core.public_api.schemas import (
+    PublicContentAutomationIn,
+    PublicProjectIn,
+    PublicProjectUpdateIn,
+)
+from core.public_api.views import (
+    configure_content_automation,
+    create_public_project,
+    get_public_project,
+    public_api,
+    update_public_project,
+)
 
 
 def build_profile(**overrides):
@@ -121,6 +131,101 @@ def test_create_public_project_returns_success():
     assert response_data["project"]["project_id"] == 10
 
 
+def test_get_public_project_returns_not_found_for_missing_project():
+    request = SimpleNamespace(auth=build_profile())
+
+    project_filter_mock = Mock()
+    project_filter_mock.first.return_value = None
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter_mock):
+        response_status_code, response_data = get_public_project(request, project_id=10)
+
+    assert response_status_code == 404
+    assert response_data["message"] == "Project not found"
+
+
+def test_get_public_project_returns_success():
+    project_mock = Mock()
+    project_mock.id = 10
+    project_mock.name = "Project Name"
+    project_mock.url = "https://example.com"
+    project_mock.summary = "Summary"
+    project_mock.get_type_display.return_value = "SaaS"
+    project_mock.blog_theme = "Founder-focused growth"
+    project_mock.founders = "Jane Doe"
+    project_mock.key_features = "SEO automation"
+    project_mock.target_audience_summary = "Bootstrapped SaaS founders"
+    project_mock.pain_points = "No time for content"
+    project_mock.product_usage = "Weekly blog generation"
+    project_mock.links = "https://example.com/docs"
+    project_mock.language = "english"
+    project_mock.location = "Global"
+
+    request = SimpleNamespace(auth=build_profile())
+    project_filter_mock = Mock()
+    project_filter_mock.first.return_value = project_mock
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter_mock):
+        response_data = get_public_project(request, project_id=10)
+
+    assert response_data["status"] == "success"
+    assert response_data["project"]["project_id"] == 10
+    assert response_data["project"]["name"] == "Project Name"
+
+
+def test_update_public_project_returns_not_found_for_missing_project():
+    request = SimpleNamespace(auth=build_profile())
+
+    project_filter_mock = Mock()
+    project_filter_mock.first.return_value = None
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter_mock):
+        response_status_code, response_data = update_public_project(
+            request,
+            project_id=10,
+            data=PublicProjectUpdateIn(name="Updated"),
+        )
+
+    assert response_status_code == 404
+    assert response_data["message"] == "Project not found"
+
+
+def test_update_public_project_returns_error_when_no_fields_are_provided():
+    request = SimpleNamespace(auth=build_profile())
+    project_mock = Mock()
+    project_filter_mock = Mock()
+    project_filter_mock.first.return_value = project_mock
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter_mock):
+        response_status_code, response_data = update_public_project(
+            request,
+            project_id=10,
+            data=PublicProjectUpdateIn(),
+        )
+
+    assert response_status_code == 400
+    assert response_data["message"] == "At least one field is required for update"
+
+
+def test_update_public_project_updates_only_provided_fields():
+    request = SimpleNamespace(auth=build_profile())
+    project_mock = Mock()
+    project_filter_mock = Mock()
+    project_filter_mock.first.return_value = project_mock
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter_mock):
+        response_data = update_public_project(
+            request,
+            project_id=10,
+            data=PublicProjectUpdateIn(name="Updated Project", summary="Updated summary"),
+        )
+
+    assert response_data["status"] == "success"
+    assert response_data["project"]["name"] == "Updated Project"
+    assert response_data["project"]["summary"] == "Updated summary"
+    project_mock.save.assert_called_once_with(update_fields=["name", "summary"])
+
+
 def test_configure_content_automation_returns_not_found_for_missing_project():
     request = SimpleNamespace(auth=build_profile())
 
@@ -218,6 +323,7 @@ def test_public_openapi_includes_public_routes_only():
 
     assert "/public-api/account" in schema_paths
     assert "/public-api/projects" in schema_paths
+    assert "/public-api/projects/{project_id}" in schema_paths
     assert "/public-api/projects/{project_id}/content-automation" in schema_paths
     assert "/public-api/validate-url" not in schema_paths
 
