@@ -94,6 +94,28 @@ navigation:
     assert [page["slug"] for page in getting_started_pages] == ["introduction", "quickstart"]
 
 
+def test_docs_navigation_groups_api_as_top_level_section():
+    navigation = get_docs_navigation()
+
+    assert [item["category_slug"] for item in navigation] == [
+        "getting-started",
+        "features",
+        "deployment",
+        "api",
+    ]
+
+
+def test_docs_navigation_places_public_api_page_in_api_section():
+    navigation = get_docs_navigation()
+    pages_by_category = {section["category_slug"]: section["pages"] for section in navigation}
+
+    assert "api" in pages_by_category
+    assert [page["slug"] for page in pages_by_category["api"]] == ["public-api-architecture"]
+    assert "public-api-architecture" not in {
+        page["slug"] for page in pages_by_category.get("features", [])
+    }
+
+
 def test_get_flat_page_list_flattens_navigation_structure():
     navigation = [
         {
