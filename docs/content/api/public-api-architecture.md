@@ -5,33 +5,20 @@ description: How TuxSEO separates external public automation APIs from internal 
 
 ## Overview
 
-TuxSEO now has two API surfaces:
+TuxSEO has two API surfaces:
 
 - Internal API: `/api/*` for first-party web app behavior.
 - Public API: `/public-api/*` for external automation clients.
 
-This separation keeps internal endpoints stable for product development
-while giving external users a focused contract.
+This keeps internal endpoints stable for product development while giving external users a focused, documented contract.
 
-## Public API Module
+## Authentication
 
-The public surface lives in `core/public_api` and has its own:
+Public API requests use an API key header:
 
-- auth layer (`X-API-Key` header)
-- request/response schemas
-- route handlers
-- OpenAPI schema and docs UI
+- Header: `X-API-Key: <your_api_key>`
 
-## Initial Public Endpoints
-
-- `GET /public-api/account`
-- `POST /public-api/projects`
-- `GET /public-api/projects/{project_id}/title-suggestions`
-- `GET /public-api/projects/{project_id}/title-suggestions/{suggestion_id}`
-- `POST /public-api/projects/{project_id}/title-suggestions`
-- `POST /public-api/projects/{project_id}/content-automation`
-
-These endpoints cover account introspection, project onboarding, title suggestion management, and content automation setup.
+You can find your API key in **Settings → API Access**.
 
 ## Documentation Exposure
 
@@ -40,10 +27,93 @@ Public docs are available at:
 - `GET /public-api/docs`
 - `GET /public-api/openapi.json`
 
-Internal OpenAPI docs are disabled to avoid exposing private-first route contracts.
+Internal OpenAPI docs are intentionally disabled.
+
+## Public Endpoints
+
+### Account
+
+- `GET /public-api/account`
+
+### Projects
+
+- `POST /public-api/projects`
+- `GET /public-api/projects/{project_id}`
+- `PATCH /public-api/projects/{project_id}`
+
+### Content Automation
+
+- `POST /public-api/projects/{project_id}/content-automation`
+
+### Title Suggestions
+
+- `GET /public-api/projects/{project_id}/title-suggestions`
+- `GET /public-api/projects/{project_id}/title-suggestions/{suggestion_id}`
+- `POST /public-api/projects/{project_id}/title-suggestions`
+
+### Keywords
+
+- `GET /public-api/projects/{project_id}/keywords`
+- `GET /public-api/projects/{project_id}/keywords/{keyword_id}`
+- `POST /public-api/projects/{project_id}/keywords`
+
+### Blog Posts
+
+- `POST /public-api/projects/{project_id}/blog-posts/generate`
+- `GET /public-api/projects/{project_id}/blog-posts`
+- `GET /public-api/projects/{project_id}/blog-posts/{blog_post_id}`
+- `POST /public-api/projects/{project_id}/blog-posts/{blog_post_id}/publish`
+
+## Request Examples
+
+### Get account
+
+```bash
+curl -X GET "https://tuxseo.com/public-api/account" \
+  -H "X-API-Key: $TUXSEO_API_KEY"
+```
+
+### Create title suggestions
+
+```bash
+curl -X POST "https://tuxseo.com/public-api/projects/123/title-suggestions" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $TUXSEO_API_KEY" \
+  -d '{
+    "count": 5,
+    "content_type": "SHARING",
+    "seed_guidance": "focus on founder-led growth"
+  }'
+```
+
+### Generate a blog post from a title suggestion
+
+```bash
+curl -X POST "https://tuxseo.com/public-api/projects/123/blog-posts/generate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $TUXSEO_API_KEY" \
+  -d '{
+    "title_suggestion_id": 456
+  }'
+```
+
+### List blog posts without content payload
+
+```bash
+curl -X GET "https://tuxseo.com/public-api/projects/123/blog-posts?include_content=false&page=1&page_size=20" \
+  -H "X-API-Key: $TUXSEO_API_KEY"
+```
+
+### Publish a generated blog post
+
+```bash
+curl -X POST "https://tuxseo.com/public-api/projects/123/blog-posts/789/publish" \
+  -H "X-API-Key: $TUXSEO_API_KEY"
+```
 
 ## Design Notes
 
-- Internal API handlers remain unchanged for existing app flows.
 - Public handlers reuse existing models and business rules where possible.
 - Validation happens at schema and endpoint layers with explicit error responses.
+- Ownership checks are enforced at the project/resource level for all endpoints.
+- Internal/private API details are intentionally excluded from public docs.
