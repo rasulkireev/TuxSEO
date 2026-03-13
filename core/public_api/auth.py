@@ -7,6 +7,14 @@ from tuxseo.utils import get_tuxseo_logger
 logger = get_tuxseo_logger(__name__)
 
 
+def _redact_key(key: str) -> str:
+    if not key:
+        return ""
+    if len(key) <= 4:
+        return "****"
+    return f"{key[:2]}***{key[-2:]}"
+
+
 class PublicAPIKeyAuth(APIKeyHeader):
     param_name = "X-API-Key"
 
@@ -14,7 +22,7 @@ class PublicAPIKeyAuth(APIKeyHeader):
         try:
             return Profile.objects.get(key=key)
         except Profile.DoesNotExist:
-            logger.warning("[Public API Auth] Invalid API key", key=key)
+            logger.warning("[Public API Auth] Invalid API key", key=_redact_key(key))
             return None
 
 
