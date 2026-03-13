@@ -26,9 +26,12 @@ The public surface lives in `core/public_api` and has its own:
 
 - `GET /public-api/account`
 - `POST /public-api/projects`
+- `GET /public-api/projects/{project_id}/title-suggestions`
+- `GET /public-api/projects/{project_id}/title-suggestions/{suggestion_id}`
+- `POST /public-api/projects/{project_id}/title-suggestions`
 - `POST /public-api/projects/{project_id}/content-automation`
 
-These endpoints cover account introspection, project onboarding, and content automation setup.
+These endpoints cover account introspection, project onboarding, title suggestion management, and content automation setup.
 
 ## Documentation Exposure
 
