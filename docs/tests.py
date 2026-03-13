@@ -237,25 +237,33 @@ def test_docs_page_view_raises_404_for_missing_file(tmp_path, request_factory):
     assert "Documentation page not found" in str(exc_info.value)
 
 
-def test_api_docs_root_redirects_to_introduction(client):
-    response = client.get("/api/docs/", follow=False)
+def test_api_openapi_json_is_served_from_canonical_path(client):
+    response = client.get("/api/openapi.json", follow=False)
+
+    assert response.status_code == 200
+    content = response.json()
+    assert "/public-api/account" in content["paths"]
+
+
+def test_legacy_public_api_docs_redirects_to_canonical_api_docs(client):
+    response = client.get("/public-api/docs", follow=False)
 
     assert response.status_code == 302
-    assert response["Location"] == "/api/docs/getting-started/introduction/"
+    assert response["Location"] == "/api/docs"
 
 
-def test_docs_root_redirects_to_api_docs_introduction(client):
+def test_docs_root_redirects_to_docs_introduction(client):
     response = client.get("/docs", follow=False)
 
     assert response.status_code == 302
-    assert response["Location"] == "/api/docs/getting-started/introduction/"
+    assert response["Location"] == "/docs/getting-started/introduction/"
 
 
-def test_docs_root_with_trailing_slash_redirects_to_api_docs_introduction(client):
+def test_docs_root_with_trailing_slash_redirects_to_docs_introduction(client):
     response = client.get("/docs/", follow=False)
 
     assert response.status_code == 302
-    assert response["Location"] == "/api/docs/getting-started/introduction/"
+    assert response["Location"] == "/docs/getting-started/introduction/"
 
 
 def test_public_api_architecture_doc_includes_blog_post_endpoints_and_examples():

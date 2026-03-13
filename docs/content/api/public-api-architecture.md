@@ -24,10 +24,11 @@ You can find your API key in **Settings → API Access**.
 
 Public docs are available at:
 
-- `GET /public-api/docs`
-- `GET /public-api/openapi.json`
+- `GET /api/docs`
+- `GET /api/openapi.json`
 
 Internal OpenAPI docs are intentionally disabled.
+Legacy paths (`/public-api/docs`, `/public-api/openapi.json`) redirect to these canonical URLs.
 
 ## Public Endpoints
 
