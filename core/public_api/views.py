@@ -2,7 +2,8 @@ from django.http import HttpRequest
 from ninja import NinjaAPI
 
 from core.abuse_prevention import enforce_verified_email_for_expensive_action
-from core.models import AutoSubmissionSetting, Project
+from core.choices import ContentType
+from core.models import AutoSubmissionSetting, BlogPostTitleSuggestion, Project
 from core.public_api.auth import public_api_key_auth
 from core.public_api.schemas import (
     PublicAPIErrorOut,
@@ -14,6 +15,10 @@ from core.public_api.schemas import (
     PublicProjectIn,
     PublicProjectUpdateIn,
     PublicProjectUpdateOut,
+    PublicTitleSuggestionCreateIn,
+    PublicTitleSuggestionCreateOut,
+    PublicTitleSuggestionGetOut,
+    PublicTitleSuggestionListOut,
 )
 from tuxseo.utils import get_tuxseo_logger
 
@@ -48,6 +53,27 @@ def serialize_public_project(project: Project) -> dict:
         "links": project.links,
         "language": project.language,
         "location": project.location,
+    }
+
+
+def get_public_title_suggestion_status(suggestion: BlogPostTitleSuggestion) -> str:
+    if suggestion.archived:
+        return "archived"
+    if suggestion.generated_blog_posts.filter(posted=True).exists():
+        return "published"
+    return "unpublished"
+
+
+def serialize_public_title_suggestion(suggestion: BlogPostTitleSuggestion) -> dict:
+    return {
+        "id": suggestion.id,
+        "title": suggestion.title,
+        "category": suggestion.category,
+        "description": suggestion.description,
+        "target_keywords": suggestion.target_keywords or [],
+        "suggested_meta_description": suggestion.suggested_meta_description,
+        "content_type": suggestion.content_type,
+        "status": get_public_title_suggestion_status(suggestion),
     }
 
 
@@ -235,3 +261,103 @@ def configure_content_automation(
             profile_id=profile.id,
         )
         return 500, {"message": "Failed to save content automation settings"}
+
+
+@public_api.get(
+    "/projects/{project_id}/title-suggestions",
+    response={200: PublicTitleSuggestionListOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def list_public_title_suggestions(
+    request: HttpRequest,
+    project_id: int,
+    status: str = "all",
+    page: int = 1,
+    page_size: int = 20,
+):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    if status not in {"all", "unpublished", "published", "archived"}:
+        return 400, {"message": "Invalid status filter"}
+
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+
+    suggestions_query = BlogPostTitleSuggestion.objects.filter(project=project)
+    if status == "archived":
+        suggestions_query = suggestions_query.filter(archived=True)
+    elif status == "published":
+        suggestions_query = suggestions_query.filter(
+            archived=False, generated_blog_posts__posted=True
+        ).distinct()
+    elif status == "unpublished":
+        suggestions_query = suggestions_query.filter(archived=False).exclude(
+            generated_blog_posts__posted=True
+        )
+
+    suggestions_query = suggestions_query.order_by("-created_at")
+    total = suggestions_query.count()
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    suggestions = list(suggestions_query[start_index:end_index])
+
+    return {
+        "status": "success",
+        "suggestions": [serialize_public_title_suggestion(suggestion) for suggestion in suggestions],
+        "pagination": {"page": page, "page_size": page_size, "total": total},
+    }
+
+
+@public_api.get(
+    "/projects/{project_id}/title-suggestions/{suggestion_id}",
+    response={200: PublicTitleSuggestionGetOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def get_public_title_suggestion(request: HttpRequest, project_id: int, suggestion_id: int):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    suggestion = BlogPostTitleSuggestion.objects.filter(id=suggestion_id, project=project).first()
+    if suggestion is None:
+        return 404, {"message": "Title suggestion not found"}
+
+    return {"status": "success", "suggestion": serialize_public_title_suggestion(suggestion)}
+
+
+@public_api.post(
+    "/projects/{project_id}/title-suggestions",
+    response={200: PublicTitleSuggestionCreateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def create_public_title_suggestions(
+    request: HttpRequest, project_id: int, data: PublicTitleSuggestionCreateIn
+):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    try:
+        content_type = ContentType[data.content_type]
+    except KeyError:
+        return 400, {"message": f"Invalid content type: {data.content_type}"}
+
+    suggestions = project.generate_title_suggestions(
+        content_type=content_type,
+        num_titles=data.count,
+        user_prompt=data.seed_guidance.strip(),
+    )
+    serialized_suggestions = [
+        serialize_public_title_suggestion(suggestion) for suggestion in suggestions
+    ]
+
+    return {
+        "status": "success",
+        "count": len(serialized_suggestions),
+        "suggestions": serialized_suggestions,
+    }

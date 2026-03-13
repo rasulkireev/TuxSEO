@@ -84,3 +84,43 @@ class PublicContentAutomationOut(Schema):
     project_id: int
     content_automation_id: int
     enable_automatic_post_submission: bool
+
+
+class PublicTitleSuggestionOut(Schema):
+    id: int
+    title: str
+    category: str = ""
+    description: str = ""
+    target_keywords: list[str] = []
+    suggested_meta_description: str = ""
+    content_type: str
+    status: str
+
+
+class PublicPaginationOut(Schema):
+    page: int
+    page_size: int
+    total: int
+
+
+class PublicTitleSuggestionListOut(Schema):
+    status: str
+    suggestions: list[PublicTitleSuggestionOut] = []
+    pagination: PublicPaginationOut
+
+
+class PublicTitleSuggestionGetOut(Schema):
+    status: str
+    suggestion: PublicTitleSuggestionOut | None = None
+
+
+class PublicTitleSuggestionCreateIn(Schema):
+    count: int = Field(default=3, gt=0)
+    content_type: str = "SHARING"
+    seed_guidance: str = ""
+
+
+class PublicTitleSuggestionCreateOut(Schema):
+    status: str
+    count: int
+    suggestions: list[PublicTitleSuggestionOut] = []

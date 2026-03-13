@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -10,11 +10,15 @@ from core.public_api.schemas import (
     PublicContentAutomationIn,
     PublicProjectIn,
     PublicProjectUpdateIn,
+    PublicTitleSuggestionCreateIn,
 )
 from core.public_api.views import (
     configure_content_automation,
     create_public_project,
+    create_public_title_suggestions,
     get_public_project,
+    get_public_title_suggestion,
+    list_public_title_suggestions,
     public_api,
     update_public_project,
 )
@@ -66,6 +70,11 @@ def test_public_content_automation_schema_requires_positive_posts_per_month():
         PublicContentAutomationIn.model_validate(
             {"endpoint_url": "https://example.com/publish", "posts_per_month": 0}
         )
+
+
+def test_public_title_suggestion_create_schema_requires_positive_count():
+    with pytest.raises(ValidationError):
+        PublicTitleSuggestionCreateIn.model_validate({"count": 0})
 
 
 def test_create_public_project_returns_error_for_invalid_url_scheme():
@@ -317,6 +326,158 @@ def test_configure_content_automation_returns_error_when_save_fails():
     assert response_data["message"] == "Failed to save content automation settings"
 
 
+def _build_title_suggestion(id_value: int, *, archived: bool, published: bool):
+    suggestion = Mock()
+    suggestion.id = id_value
+    suggestion.title = f"Suggestion {id_value}"
+    suggestion.category = "General Audience"
+    suggestion.description = f"Description {id_value}"
+    suggestion.target_keywords = []
+    suggestion.suggested_meta_description = f"Meta {id_value}"
+    suggestion.content_type = "SHARING"
+    suggestion.archived = archived
+    generated_posts_filter = Mock()
+    generated_posts_filter.exists.return_value = published
+    suggestion.generated_blog_posts.filter.return_value = generated_posts_filter
+    return suggestion
+
+
+def test_list_public_title_suggestions_supports_filters_and_pagination():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+
+    unpublished = _build_title_suggestion(1, archived=False, published=False)
+    published = _build_title_suggestion(2, archived=False, published=True)
+    archived = _build_title_suggestion(3, archived=True, published=False)
+    suggestions = [unpublished, published, archived]
+
+    suggestion_query = MagicMock()
+    suggestion_query.filter.return_value = suggestion_query
+    suggestion_query.exclude.return_value = suggestion_query
+    suggestion_query.distinct.return_value = suggestion_query
+    suggestion_query.order_by.return_value = suggestion_query
+    suggestion_query.count.return_value = len(suggestions)
+    suggestion_query.__getitem__.return_value = suggestions[:2]
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        with patch(
+            "core.public_api.views.BlogPostTitleSuggestion.objects.filter",
+            return_value=suggestion_query,
+        ):
+            all_response = list_public_title_suggestions(
+                request,
+                project_id=project.id,
+                status="all",
+                page=1,
+                page_size=2,
+            )
+
+            published_response = list_public_title_suggestions(
+                request,
+                project_id=project.id,
+                status="published",
+                page=1,
+                page_size=10,
+            )
+
+            archived_response = list_public_title_suggestions(
+                request,
+                project_id=project.id,
+                status="archived",
+                page=1,
+                page_size=10,
+            )
+
+            unpublished_response = list_public_title_suggestions(
+                request,
+                project_id=project.id,
+                status="unpublished",
+                page=1,
+                page_size=10,
+            )
+
+    assert all_response["pagination"]["total"] == 3
+    assert len(all_response["suggestions"]) == 2
+    assert all_response["suggestions"][0]["status"] == "unpublished"
+    assert all_response["suggestions"][1]["status"] == "published"
+    assert published_response["pagination"]["page"] == 1
+    assert archived_response["pagination"]["page_size"] == 10
+    assert unpublished_response["pagination"]["total"] == 3
+    suggestion_query.filter.assert_any_call(archived=True)
+    suggestion_query.filter.assert_any_call(archived=False, generated_blog_posts__posted=True)
+    suggestion_query.filter.assert_any_call(archived=False)
+    suggestion_query.exclude.assert_called_with(generated_blog_posts__posted=True)
+
+
+def test_list_public_title_suggestions_returns_not_found_for_non_owned_project():
+    request = SimpleNamespace(auth=build_profile())
+    project_filter = Mock()
+    project_filter.first.return_value = None
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        response_status_code, response_data = list_public_title_suggestions(
+            request,
+            project_id=99,
+            status="all",
+            page=1,
+            page_size=10,
+        )
+
+    assert response_status_code == 404
+    assert response_data["message"] == "Project not found"
+
+
+def test_get_public_title_suggestion_respects_ownership():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+    suggestion_filter = Mock()
+    suggestion_filter.first.return_value = None
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        with patch(
+            "core.public_api.views.BlogPostTitleSuggestion.objects.filter",
+            return_value=suggestion_filter,
+        ):
+            response_status_code, response_data = get_public_title_suggestion(
+                request,
+                project_id=project.id,
+                suggestion_id=123,
+            )
+
+    assert response_status_code == 404
+    assert response_data["message"] == "Title suggestion not found"
+
+
+def test_create_public_title_suggestions_passes_count_and_seed_guidance():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+    generated_suggestion = _build_title_suggestion(44, archived=False, published=False)
+    project.generate_title_suggestions.return_value = [generated_suggestion]
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        response_data = create_public_title_suggestions(
+            request,
+            project_id=project.id,
+            data=PublicTitleSuggestionCreateIn(count=2, seed_guidance="focus on onboarding"),
+        )
+
+    assert response_data["status"] == "success"
+    assert response_data["count"] == 1
+    assert response_data["suggestions"][0]["id"] == generated_suggestion.id
+    project.generate_title_suggestions.assert_called_once()
+    assert project.generate_title_suggestions.call_args.kwargs["num_titles"] == 2
+    assert (
+        project.generate_title_suggestions.call_args.kwargs["user_prompt"]
+        == "focus on onboarding"
+    )
+
+
 def test_public_openapi_includes_public_routes_only():
     openapi_schema = public_api.get_openapi_schema()
     schema_paths = openapi_schema["paths"]
@@ -325,6 +486,8 @@ def test_public_openapi_includes_public_routes_only():
     assert "/public-api/projects" in schema_paths
     assert "/public-api/projects/{project_id}" in schema_paths
     assert "/public-api/projects/{project_id}/content-automation" in schema_paths
+    assert "/public-api/projects/{project_id}/title-suggestions" in schema_paths
+    assert "/public-api/projects/{project_id}/title-suggestions/{suggestion_id}" in schema_paths
     assert "/public-api/validate-url" not in schema_paths
 
 
