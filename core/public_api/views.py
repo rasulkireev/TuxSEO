@@ -3,13 +3,23 @@ from ninja import NinjaAPI
 
 from core.abuse_prevention import enforce_verified_email_for_expensive_action
 from core.choices import ContentType
-from core.models import AutoSubmissionSetting, BlogPostTitleSuggestion, Project
+from core.models import (
+    AutoSubmissionSetting,
+    BlogPostTitleSuggestion,
+    Keyword,
+    Project,
+    ProjectKeyword,
+)
 from core.public_api.auth import public_api_key_auth
 from core.public_api.schemas import (
     PublicAPIErrorOut,
     PublicAccountOut,
     PublicContentAutomationIn,
     PublicContentAutomationOut,
+    PublicKeywordCreateIn,
+    PublicKeywordCreateOut,
+    PublicKeywordGetOut,
+    PublicKeywordListOut,
     PublicProjectCreateOut,
     PublicProjectGetOut,
     PublicProjectIn,
@@ -74,6 +84,27 @@ def serialize_public_title_suggestion(suggestion: BlogPostTitleSuggestion) -> di
         "suggested_meta_description": suggestion.suggested_meta_description,
         "content_type": suggestion.content_type,
         "status": get_public_title_suggestion_status(suggestion),
+    }
+
+
+def serialize_public_keyword(project_keyword: ProjectKeyword) -> dict:
+    keyword = project_keyword.keyword
+    return {
+        "id": keyword.id,
+        "keyword_text": keyword.keyword_text,
+        "volume": keyword.volume,
+        "cpc_currency": keyword.cpc_currency,
+        "cpc_value": float(keyword.cpc_value) if keyword.cpc_value is not None else None,
+        "competition": keyword.competition,
+        "country": keyword.country,
+        "data_source": keyword.data_source,
+        "last_fetched_at": keyword.last_fetched_at.isoformat() if keyword.last_fetched_at else None,
+        "trend_data": [
+            {"value": trend.value, "month": trend.month, "year": trend.year}
+            for trend in keyword.trends.all()
+        ],
+        "project_keyword_id": project_keyword.id,
+        "in_use": project_keyword.use,
     }
 
 
@@ -360,4 +391,105 @@ def create_public_title_suggestions(
         "status": "success",
         "count": len(serialized_suggestions),
         "suggestions": serialized_suggestions,
+    }
+
+
+@public_api.get(
+    "/projects/{project_id}/keywords",
+    response={200: PublicKeywordListOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def list_public_keywords(
+    request: HttpRequest,
+    project_id: int,
+    page: int = 1,
+    page_size: int = 20,
+):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+
+    keyword_query = ProjectKeyword.objects.filter(project=project).select_related("keyword")
+    keyword_query = keyword_query.order_by("-date_associated")
+
+    total = keyword_query.count()
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    keywords = list(keyword_query[start_index:end_index])
+
+    return {
+        "status": "success",
+        "keywords": [serialize_public_keyword(project_keyword) for project_keyword in keywords],
+        "pagination": {"page": page, "page_size": page_size, "total": total},
+    }
+
+
+@public_api.get(
+    "/projects/{project_id}/keywords/{keyword_id}",
+    response={200: PublicKeywordGetOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def get_public_keyword(request: HttpRequest, project_id: int, keyword_id: int):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    project_keyword = ProjectKeyword.objects.select_related("keyword").filter(
+        project=project, keyword_id=keyword_id
+    ).first()
+    if project_keyword is None:
+        return 404, {"message": "Keyword not found"}
+
+    return {"status": "success", "keyword": serialize_public_keyword(project_keyword)}
+
+
+@public_api.post(
+    "/projects/{project_id}/keywords",
+    response={200: PublicKeywordCreateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def create_public_keyword(request: HttpRequest, project_id: int, data: PublicKeywordCreateIn):
+    profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "keyword enrichment")
+    if gate_error:
+        return 400, {"message": gate_error["message"]}
+
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    if not profile.can_add_keywords:
+        if profile.is_on_free_plan:
+            message = (
+                "Keyword additions are not available on the Free plan. "
+                "Upgrade to Pro to add custom keywords."
+            )
+        else:
+            message = "Keyword limit reached. Contact support for assistance."
+        return 400, {"message": message}
+
+    keyword_text_cleaned = data.keyword_text.strip().lower()
+    if not keyword_text_cleaned:
+        return 400, {"message": "Keyword text cannot be empty"}
+
+    keyword, keyword_created = Keyword.objects.get_or_create(keyword_text=keyword_text_cleaned)
+    project_keyword, project_keyword_created = ProjectKeyword.objects.get_or_create(
+        project=project, keyword=keyword
+    )
+
+    if keyword_created:
+        keyword.fetch_and_update_metrics()
+
+    message = "Keyword added" if project_keyword_created else "Keyword already added"
+
+    return {
+        "status": "success",
+        "message": message,
+        "keyword": serialize_public_keyword(project_keyword),
     }
