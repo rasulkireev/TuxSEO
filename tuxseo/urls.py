@@ -18,6 +18,7 @@ from django.contrib import admin
 from django.contrib.sitemaps.views import sitemap
 from django.urls import include, path, re_path
 from django.views.generic import TemplateView
+from django.views.generic.base import RedirectView
 
 from core.views import AccountSignupView, OnboardingFriendlyConfirmEmailView, trigger_error
 from tuxseo.sitemaps import sitemaps
@@ -34,8 +35,24 @@ urlpatterns = [
     path("anymail/", include("anymail.urls")),
     path("uses", TemplateView.as_view(template_name="pages/uses.html"), name="uses"),
     path("stripe/", include("djstripe.urls", namespace="djstripe")),
+    path(
+        "api/docs",
+        RedirectView.as_view(url="/api/docs/getting-started/introduction/", permanent=False),
+    ),
+    path(
+        "api/docs/",
+        RedirectView.as_view(url="/api/docs/getting-started/introduction/", permanent=False),
+    ),
+    path("api/docs/", include("docs.urls")),
+    re_path(
+        r"^docs/?$",
+        RedirectView.as_view(url="/api/docs/getting-started/introduction/", permanent=False),
+    ),
+    re_path(
+        r"^docs/(?P<path>.*)$",
+        RedirectView.as_view(url="/api/docs/%(path)s", permanent=False),
+    ),
     path("", include("core.urls")),
-    path("docs/", include("docs.urls")),
     path("", include("steering.urls")),
     path(
         "sitemap.xml",

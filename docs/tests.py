@@ -97,12 +97,12 @@ def test_get_flat_page_list_flattens_navigation_structure():
                 {
                     "slug": "introduction",
                     "title": "Introduction",
-                    "url": "/docs/getting-started/introduction/",
+                    "url": "/api/docs/getting-started/introduction/",
                 },
                 {
                     "slug": "quickstart",
                     "title": "Quickstart",
-                    "url": "/docs/getting-started/quickstart/",
+                    "url": "/api/docs/getting-started/quickstart/",
                 },
             ],
         }
@@ -124,12 +124,12 @@ def test_get_previous_and_next_pages_returns_neighbor_pages():
                 {
                     "slug": "introduction",
                     "title": "Introduction",
-                    "url": "/docs/getting-started/introduction/",
+                    "url": "/api/docs/getting-started/introduction/",
                 },
                 {
                     "slug": "quickstart",
                     "title": "Quickstart",
-                    "url": "/docs/getting-started/quickstart/",
+                    "url": "/api/docs/getting-started/quickstart/",
                 },
             ],
         },
@@ -140,7 +140,7 @@ def test_get_previous_and_next_pages_returns_neighbor_pages():
                 {
                     "slug": "blog-post-suggestions",
                     "title": "Blog Post Suggestions",
-                    "url": "/docs/features/blog-post-suggestions/",
+                    "url": "/api/docs/features/blog-post-suggestions/",
                 }
             ],
         },
@@ -207,3 +207,38 @@ def test_docs_page_view_raises_404_for_missing_file(tmp_path, request_factory):
         docs_page_view(request, category="missing", page="page")
 
     assert "Documentation page not found" in str(exc_info.value)
+
+
+def test_api_docs_root_redirects_to_introduction(client):
+    response = client.get("/api/docs/", follow=False)
+
+    assert response.status_code == 302
+    assert response["Location"] == "/api/docs/getting-started/introduction/"
+
+
+def test_docs_root_redirects_to_api_docs_introduction(client):
+    response = client.get("/docs", follow=False)
+
+    assert response.status_code == 302
+    assert response["Location"] == "/api/docs/getting-started/introduction/"
+
+
+def test_docs_root_with_trailing_slash_redirects_to_api_docs_introduction(client):
+    response = client.get("/docs/", follow=False)
+
+    assert response.status_code == 302
+    assert response["Location"] == "/api/docs/getting-started/introduction/"
+
+
+def test_legacy_docs_page_redirects_to_api_docs_page(client):
+    response = client.get("/docs/getting-started/introduction/", follow=False)
+
+    assert response.status_code == 302
+    assert response["Location"] == "/api/docs/getting-started/introduction/"
+
+
+def test_api_docs_category_page_is_served_from_existing_docs_content(client):
+    with patch("docs.views.render", return_value=HttpResponse("ok")):
+        response = client.get("/api/docs/getting-started/introduction/")
+
+    assert response.status_code == 200
