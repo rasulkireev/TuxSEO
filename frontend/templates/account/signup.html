@@ -122,3 +122,32 @@
     </div>
   </div>
 {% endblock content %}
+
+{% block schema %}
+{{ block.super }}
+<script>
+  document.addEventListener("DOMContentLoaded", () => {
+    const form = document.getElementById("signup_form");
+    if (!form || typeof window.posthog === "undefined") {
+      return;
+    }
+
+    const eventName = "{{ signup_started_event_name|escapejs }}";
+    let hasTrackedSignupStart = false;
+
+    const trackSignupStarted = (trigger) => {
+      if (hasTrackedSignupStart) {
+        return;
+      }
+      hasTrackedSignupStart = true;
+      window.posthog.capture(eventName, {
+        trigger,
+        path: window.location.pathname,
+      });
+    };
+
+    form.addEventListener("focusin", () => trackSignupStarted("form_focus"), { once: true });
+    form.addEventListener("submit", () => trackSignupStarted("form_submit"));
+  });
+</script>
+{% endblock schema %}

@@ -5,11 +5,19 @@
       "stage": "awareness",
       "description": "Visitor landed on a tracked marketing or app page."
     },
+    "signup_started": {
+      "stage": "activation",
+      "description": "Visitor started the sign-up flow."
+    },
     "signup_completed": {
       "stage": "activation",
       "description": "Account sign-up finished successfully."
     },
-    "project_created": {
+    "email_verified": {
+      "stage": "activation",
+      "description": "User verified their email address."
+    },
+    "project_create_succeeded": {
       "stage": "activation",
       "description": "User created their first (or another) project."
     },
@@ -21,7 +29,7 @@
       "stage": "activation",
       "description": "First AI-generated title suggestion was created."
     },
-    "first_post_generated": {
+    "first_blog_generated": {
       "stage": "activation",
       "description": "First AI-generated post was created."
     },
@@ -37,7 +45,7 @@
       "stage": "conversion",
       "description": "Checkout session was initiated."
     },
-    "checkout_completed": {
+    "checkout_succeeded": {
       "stage": "conversion",
       "description": "Checkout session completed and payment was confirmed."
     },
@@ -67,6 +75,9 @@
     }
   },
   "deprecated_aliases": {
-    "user_signed_up": "signup_completed"
+    "user_signed_up": "signup_completed",
+    "project_created": "project_create_succeeded",
+    "first_post_generated": "first_blog_generated",
+    "checkout_completed": "checkout_succeeded"
   }
 }

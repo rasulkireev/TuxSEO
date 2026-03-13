@@ -1,6 +1,8 @@
+from django_q.tasks import async_task
 from djstripe.event_handlers import djstripe_receiver
 from djstripe.models import Customer, Product, Subscription
 
+from core.analytics import ANALYTICS_EVENTS
 from core.models import Profile, ProfileStates
 from tuxseo.utils import get_tuxseo_logger
 
@@ -240,11 +242,28 @@ def handle_checkout_completed(**kwargs):
 
     try:
         event_data = event.data.get("object", {})
+        customer_id = event_data.get("customer")
+        profile = Profile.objects.filter(customer__id=customer_id).first()
+
+        if profile:
+            async_task(
+                "core.tasks.track_event",
+                profile_id=profile.id,
+                event_name=ANALYTICS_EVENTS.CHECKOUT_SUCCEEDED,
+                properties={
+                    "checkout_id": event_data.get("id"),
+                    "mode": event_data.get("mode"),
+                    "payment_status": event_data.get("payment_status"),
+                    "subscription_id": event_data.get("subscription"),
+                },
+                source_function="webhooks.handle_checkout_completed",
+                group="Track Event",
+            )
 
         logger.info(
             "[CheckoutCompleted] Checkout completed",
             checkout_id=event_data.get("id"),
-            customer_id=event_data.get("customer"),
+            customer_id=customer_id,
             mode=event_data.get("mode"),
             payment_status=event_data.get("payment_status"),
             subscription_id=event_data.get("subscription"),

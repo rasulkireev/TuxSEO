@@ -1,7 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from urllib.request import urlopen
 
-import posthog
 import replicate
 import requests
 from django.conf import settings
@@ -339,12 +338,14 @@ class Profile(BaseModel):
         }
 
         if created:
-            if settings.POSTHOG_API_KEY:
-                posthog.capture(
-                    self.user.email,
-                    event=ANALYTICS_EVENTS.PROJECT_CREATED,
-                    properties=project_metadata,
-                )
+            async_task(
+                "core.tasks.track_event",
+                profile_id=self.id,
+                event_name=ANALYTICS_EVENTS.PROJECT_CREATE_SUCCEEDED,
+                properties=project_metadata,
+                source_function="Profile.get_or_create_project",
+                group="Track Event",
+            )
             logger.info("[Get or Create Project] Project created", **project_metadata)
         else:
             logger.info("[Get or Create Project] Got existing project", **project_metadata)
@@ -1007,6 +1008,21 @@ class BlogPostTitleSuggestion(BaseModel):
                 "core.tasks.generate_og_image_for_blog_post",
                 blog_post.id,
                 group="Generate OG Image",
+            )
+
+        if GeneratedBlogPost.objects.filter(project__profile=self.project.profile).count() == 1:
+            async_task(
+                "core.tasks.track_event",
+                profile_id=self.project.profile.id,
+                event_name=ANALYTICS_EVENTS.FIRST_BLOG_GENERATED,
+                properties={
+                    "project_id": self.project.id,
+                    "blog_post_id": blog_post.id,
+                    "title_suggestion_id": self.id,
+                    "content_type": content_type,
+                },
+                source_function="BlogPostTitleSuggestion.generate_content",
+                group="Track Event",
             )
 
         return blog_post

@@ -4,6 +4,7 @@ from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 from django_q.tasks import async_task
 
+from core.analytics import ANALYTICS_EVENTS
 from core.models import Profile, ProfileStates, Project
 from core.tasks import add_email_to_buttondown
 from tuxseo.utils import get_tuxseo_logger
@@ -32,12 +33,28 @@ def save_user_profile(sender, instance, **kwargs):
 
 @receiver(email_confirmed)
 def add_email_to_buttondown_on_confirm(sender, **kwargs):
+    email_address = kwargs.get("email_address")
+    profile = getattr(getattr(email_address, "user", None), "profile", None)
+    email = getattr(email_address, "email", "")
+
+    if profile and email:
+        async_task(
+            "core.tasks.track_event",
+            profile_id=profile.id,
+            event_name=ANALYTICS_EVENTS.EMAIL_VERIFIED,
+            properties={
+                "email_domain": email.split("@")[-1] if "@" in email else "",
+            },
+            source_function="signals.add_email_to_buttondown_on_confirm",
+            group="Track Event",
+        )
+
     logger.info(
         "Adding new user to buttondown newsletter, on email confirmation",
         kwargs=kwargs,
         sender=sender,
     )
-    async_task(add_email_to_buttondown, kwargs["email_address"], tag="user")
+    async_task(add_email_to_buttondown, email_address, tag="user")
 
 
 @receiver(user_signed_up)
