@@ -41,6 +41,88 @@
     </section>
 
     <section class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm md:col-span-2 xl:col-span-3">
+        <h3 class="text-base font-semibold text-gray-900">How to use TuxSEO</h3>
+        <p class="mt-1 text-sm text-gray-600">
+          Use the core workflow below to go from ideas to published content quickly.
+        </p>
+
+        <div class="grid grid-cols-1 gap-3 mt-4 sm:grid-cols-3">
+          <a
+            href="{% url 'project_seo_posts' project.id %}"
+            class="inline-flex justify-center items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100"
+          >
+            Title Ideas
+          </a>
+          <a
+            href="{% url 'project_seo_posts' project.id %}"
+            class="inline-flex justify-center items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100"
+          >
+            Generate Posts
+          </a>
+          <a
+            href="{% url 'project_keywords' project.id %}"
+            class="inline-flex justify-center items-center px-4 py-2 text-sm font-medium text-gray-700 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100"
+          >
+            Keywords
+          </a>
+        </div>
+
+        <div class="pt-5 mt-5 border-t border-gray-200">
+          <h4 class="text-sm font-semibold tracking-wide text-gray-700 uppercase">API Quickstart</h4>
+          <p class="mt-2 text-sm text-gray-600">
+            Find your API key in
+            <a href="{% url 'settings' %}" class="font-medium text-gray-800 underline">Settings</a>,
+            then test your account endpoint with this curl command. Full docs:
+            <a href="/public-api/docs" class="font-medium text-gray-800 underline">Public API docs</a>.
+          </p>
+
+          <div class="mt-4" data-controller="copy">
+            <label class="block mb-2 text-xs font-semibold tracking-wide text-gray-600 uppercase">Account curl example</label>
+            <textarea
+              readonly
+              rows="5"
+              data-copy-target="source"
+              class="block px-3 py-2 w-full text-xs font-mono text-gray-800 bg-gray-50 rounded-md border border-gray-300"
+            >curl -X GET "https://tuxseo.com/public-api/account" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Accept: application/json"</textarea>
+            <button
+              type="button"
+              data-copy-target="button"
+              data-action="click->copy#copy"
+              class="inline-flex items-center px-3 py-1.5 mt-2 text-xs font-medium text-white bg-pink-600 rounded-md hover:bg-pink-700"
+            >
+              Copy
+            </button>
+          </div>
+
+          <div class="mt-4" data-controller="copy">
+            <label class="block mb-2 text-xs font-semibold tracking-wide text-gray-600 uppercase">Prompt template for AI agents</label>
+            <textarea
+              readonly
+              rows="7"
+              data-copy-target="source"
+              class="block px-3 py-2 w-full text-xs font-mono text-gray-800 bg-gray-50 rounded-md border border-gray-300"
+            >You are helping me operate TuxSEO for my project.
+Project URL: {{ project.url }}
+Goal: increase organic traffic with useful content.
+1) Pull account and project status via the TuxSEO public API.
+2) Suggest 10 SEO title ideas based on project context.
+3) Propose which titles to generate first and why.
+4) Return a short weekly execution plan.</textarea>
+            <button
+              type="button"
+              data-copy-target="button"
+              data-action="click->copy#copy"
+              class="inline-flex items-center px-3 py-1.5 mt-2 text-xs font-medium text-white bg-pink-600 rounded-md hover:bg-pink-700"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      </article>
+
       <article class="p-5 bg-white rounded-lg border border-gray-200 shadow-sm">
         <p class="text-sm font-medium text-gray-500">Title Ideas</p>
         <p class="mt-2 text-3xl font-semibold text-gray-900">{{ title_ideas_state.count }}</p>

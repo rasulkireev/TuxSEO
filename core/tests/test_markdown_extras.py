@@ -16,6 +16,27 @@ class TestMarkdownFilter:
 
         assert "<h1>Heading</h1>" in rendered_html
 
+    def test_renders_fenced_code_blocks_with_copy_controls(self):
+        markdown_text = '```bash\necho "hello"\n```'
+
+        rendered_html = markdown_filter(markdown_text)
+
+        assert 'class="code-snippet"' in rendered_html
+        assert 'data-controller="copy"' in rendered_html
+        assert 'data-action="copy#copy"' in rendered_html
+        assert 'data-copy-target="source"' in rendered_html
+        assert 'data-copy-target="button"' in rendered_html
+        assert 'echo "hello"' in rendered_html
+
+    def test_adds_safe_new_tab_attributes_to_external_links(self):
+        markdown_text = "[Example](https://example.com)"
+
+        rendered_html = markdown_filter(markdown_text)
+
+        assert 'href="https://example.com"' in rendered_html
+        assert 'target="_blank"' in rendered_html
+        assert 'rel="noopener noreferrer"' in rendered_html
+
 
 class TestReplaceQuotesFilter:
     def test_replaces_double_quotes_with_single_quotes(self):

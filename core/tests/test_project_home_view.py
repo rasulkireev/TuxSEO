@@ -158,3 +158,42 @@ def test_project_home_view_blocks_access_to_other_users_project(client):
 
     assert owner_user != other_user
     assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_project_home_view_renders_how_to_use_block_with_expected_links(client):
+    user, project = create_user_with_project(
+        username="project-home-how-to-user",
+        project_url="https://how-to-project.example.com",
+    )
+    client.force_login(user)
+
+    response = client.get(reverse("project_home", kwargs={"pk": project.id}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "How to use TuxSEO" in content
+    assert reverse("project_seo_posts", kwargs={"pk": project.id}) in content
+    assert reverse("project_keywords", kwargs={"pk": project.id}) in content
+    assert reverse("settings") in content
+    assert "/public-api/docs" in content
+
+
+@pytest.mark.django_db
+def test_project_home_view_renders_copyable_api_and_prompt_snippets(client):
+    user, project = create_user_with_project(
+        username="project-home-copy-snippets-user",
+        project_url="https://copy-snippets-project.example.com",
+    )
+    client.force_login(user)
+
+    response = client.get(reverse("project_home", kwargs={"pk": project.id}))
+
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "curl -X GET" in content
+    assert "X-API-Key: YOUR_API_KEY" in content
+    assert "/public-api/account" in content
+    assert "You are helping me operate TuxSEO for my project." in content
+    assert content.count('data-controller="copy"') >= 2
+    assert content.count("click->copy#copy") >= 2
