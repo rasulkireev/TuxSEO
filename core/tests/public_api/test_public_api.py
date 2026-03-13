@@ -784,5 +784,23 @@ def test_public_openapi_includes_public_routes_only():
     assert "/public-api/validate-url" not in schema_paths
 
 
+def test_public_openapi_groups_endpoints_by_functional_tags():
+    openapi_schema = public_api.get_openapi_schema()
+    paths = openapi_schema["paths"]
+
+    assert paths["/public-api/account"]["get"]["tags"] == ["Account"]
+    assert paths["/public-api/projects"]["post"]["tags"] == ["Projects"]
+    assert paths["/public-api/projects/{project_id}/content-automation"]["post"]["tags"] == [
+        "Content Automation"
+    ]
+    assert paths["/public-api/projects/{project_id}/title-suggestions"]["get"]["tags"] == [
+        "Title Suggestions"
+    ]
+    assert paths["/public-api/projects/{project_id}/keywords"]["get"]["tags"] == ["Keywords"]
+    assert paths["/public-api/projects/{project_id}/blog-posts"]["get"]["tags"] == [
+        "Blog Posts"
+    ]
+
+
 def test_internal_openapi_is_not_exposed():
     assert api.openapi_url is None

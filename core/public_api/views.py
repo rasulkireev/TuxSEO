@@ -129,7 +129,12 @@ def serialize_public_blog_post(blog_post: GeneratedBlogPost, *, include_content:
     }
 
 
-@public_api.get("/account", response=PublicAccountOut, auth=[public_api_key_auth])
+@public_api.get(
+    "/account",
+    response=PublicAccountOut,
+    auth=[public_api_key_auth],
+    tags=["Account"],
+)
 def get_public_account(request: HttpRequest):
     profile = request.auth
 
@@ -147,6 +152,7 @@ def get_public_account(request: HttpRequest):
     "/projects",
     response={200: PublicProjectCreateOut, 400: PublicAPIErrorOut, 500: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Projects"],
 )
 def create_public_project(request: HttpRequest, data: PublicProjectIn):
     profile = request.auth
@@ -210,6 +216,7 @@ def create_public_project(request: HttpRequest, data: PublicProjectIn):
     "/projects/{project_id}",
     response={200: PublicProjectGetOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Projects"],
 )
 def get_public_project(request: HttpRequest, project_id: int):
     profile = request.auth
@@ -224,6 +231,7 @@ def get_public_project(request: HttpRequest, project_id: int):
     "/projects/{project_id}",
     response={200: PublicProjectUpdateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Projects"],
 )
 def update_public_project(request: HttpRequest, project_id: int, data: PublicProjectUpdateIn):
     profile = request.auth
@@ -261,6 +269,7 @@ def update_public_project(request: HttpRequest, project_id: int, data: PublicPro
         500: PublicAPIErrorOut,
     },
     auth=[public_api_key_auth],
+    tags=["Content Automation"],
 )
 def configure_content_automation(
     request: HttpRequest, project_id: int, data: PublicContentAutomationIn
@@ -319,6 +328,7 @@ def configure_content_automation(
     "/projects/{project_id}/title-suggestions",
     response={200: PublicTitleSuggestionListOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Title Suggestions"],
 )
 def list_public_title_suggestions(
     request: HttpRequest,
@@ -367,6 +377,7 @@ def list_public_title_suggestions(
     "/projects/{project_id}/title-suggestions/{suggestion_id}",
     response={200: PublicTitleSuggestionGetOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Title Suggestions"],
 )
 def get_public_title_suggestion(request: HttpRequest, project_id: int, suggestion_id: int):
     profile = request.auth
@@ -385,6 +396,7 @@ def get_public_title_suggestion(request: HttpRequest, project_id: int, suggestio
     "/projects/{project_id}/title-suggestions",
     response={200: PublicTitleSuggestionCreateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Title Suggestions"],
 )
 def create_public_title_suggestions(
     request: HttpRequest, project_id: int, data: PublicTitleSuggestionCreateIn
@@ -419,6 +431,7 @@ def create_public_title_suggestions(
     "/projects/{project_id}/keywords",
     response={200: PublicKeywordListOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Keywords"],
 )
 def list_public_keywords(
     request: HttpRequest,
@@ -453,6 +466,7 @@ def list_public_keywords(
     "/projects/{project_id}/keywords/{keyword_id}",
     response={200: PublicKeywordGetOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Keywords"],
 )
 def get_public_keyword(request: HttpRequest, project_id: int, keyword_id: int):
     profile = request.auth
@@ -473,6 +487,7 @@ def get_public_keyword(request: HttpRequest, project_id: int, keyword_id: int):
     "/projects/{project_id}/keywords",
     response={200: PublicKeywordCreateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Keywords"],
 )
 def create_public_keyword(request: HttpRequest, project_id: int, data: PublicKeywordCreateIn):
     profile = request.auth
@@ -520,6 +535,7 @@ def create_public_keyword(request: HttpRequest, project_id: int, data: PublicKey
     "/projects/{project_id}/blog-posts/generate",
     response={200: PublicBlogPostGenerateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Blog Posts"],
 )
 def generate_public_blog_post(request: HttpRequest, project_id: int, data: PublicBlogPostGenerateIn):
     profile = request.auth
@@ -569,6 +585,7 @@ def generate_public_blog_post(request: HttpRequest, project_id: int, data: Publi
     "/projects/{project_id}/blog-posts",
     response={200: PublicBlogPostListOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Blog Posts"],
 )
 def list_public_blog_posts(
     request: HttpRequest,
@@ -604,6 +621,7 @@ def list_public_blog_posts(
     "/projects/{project_id}/blog-posts/{blog_post_id}",
     response={200: PublicBlogPostGetOut, 404: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Blog Posts"],
 )
 def get_public_blog_post(request: HttpRequest, project_id: int, blog_post_id: int):
     profile = request.auth
@@ -622,6 +640,7 @@ def get_public_blog_post(request: HttpRequest, project_id: int, blog_post_id: in
     "/projects/{project_id}/blog-posts/{blog_post_id}/publish",
     response={200: PublicBlogPostPublishOut, 404: PublicAPIErrorOut, 400: PublicAPIErrorOut},
     auth=[public_api_key_auth],
+    tags=["Blog Posts"],
 )
 def publish_public_blog_post(request: HttpRequest, project_id: int, blog_post_id: int):
     profile = request.auth
