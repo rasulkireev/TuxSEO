@@ -166,3 +166,42 @@ class PublicKeywordCreateOut(Schema):
     status: str
     message: str = ""
     keyword: PublicKeywordOut | None = None
+
+
+class PublicBlogPostOut(Schema):
+    id: int
+    title: str
+    slug: str
+    description: str = ""
+    tags: str = ""
+    posted: bool
+    date_posted: str | None = None
+    title_suggestion_id: int | None = None
+    content: str | None = None
+
+
+class PublicBlogPostListOut(Schema):
+    status: str
+    posts: list[PublicBlogPostOut] = []
+    pagination: PublicPaginationOut
+
+
+class PublicBlogPostGetOut(Schema):
+    status: str
+    post: PublicBlogPostOut | None = None
+
+
+class PublicBlogPostGenerateIn(Schema):
+    title_suggestion_id: int
+
+
+class PublicBlogPostGenerateOut(Schema):
+    status: str
+    message: str = ""
+    post: PublicBlogPostOut | None = None
+
+
+class PublicBlogPostPublishOut(Schema):
+    status: str
+    message: str = ""
+    post: PublicBlogPostOut | None = None

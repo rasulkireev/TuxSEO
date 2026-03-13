@@ -1,4 +1,5 @@
 from django.http import HttpRequest
+from django.utils import timezone
 from ninja import NinjaAPI
 
 from core.abuse_prevention import enforce_verified_email_for_expensive_action
@@ -6,6 +7,7 @@ from core.choices import ContentType
 from core.models import (
     AutoSubmissionSetting,
     BlogPostTitleSuggestion,
+    GeneratedBlogPost,
     Keyword,
     Project,
     ProjectKeyword,
@@ -14,6 +16,11 @@ from core.public_api.auth import public_api_key_auth
 from core.public_api.schemas import (
     PublicAPIErrorOut,
     PublicAccountOut,
+    PublicBlogPostGenerateIn,
+    PublicBlogPostGenerateOut,
+    PublicBlogPostGetOut,
+    PublicBlogPostListOut,
+    PublicBlogPostPublishOut,
     PublicContentAutomationIn,
     PublicContentAutomationOut,
     PublicKeywordCreateIn,
@@ -105,6 +112,20 @@ def serialize_public_keyword(project_keyword: ProjectKeyword) -> dict:
         ],
         "project_keyword_id": project_keyword.id,
         "in_use": project_keyword.use,
+    }
+
+
+def serialize_public_blog_post(blog_post: GeneratedBlogPost, *, include_content: bool = True) -> dict:
+    return {
+        "id": blog_post.id,
+        "title": blog_post.title,
+        "slug": blog_post.slug,
+        "description": blog_post.description,
+        "tags": blog_post.tags,
+        "posted": blog_post.posted,
+        "date_posted": blog_post.date_posted.isoformat() if blog_post.date_posted else None,
+        "title_suggestion_id": blog_post.title_suggestion_id,
+        "content": blog_post.content if include_content else None,
     }
 
 
@@ -492,4 +513,144 @@ def create_public_keyword(request: HttpRequest, project_id: int, data: PublicKey
         "status": "success",
         "message": message,
         "keyword": serialize_public_keyword(project_keyword),
+    }
+
+
+@public_api.post(
+    "/projects/{project_id}/blog-posts/generate",
+    response={200: PublicBlogPostGenerateOut, 400: PublicAPIErrorOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def generate_public_blog_post(request: HttpRequest, project_id: int, data: PublicBlogPostGenerateIn):
+    profile = request.auth
+
+    gate_error = get_verified_email_gate_error(profile, "blog content generation")
+    if gate_error:
+        return 400, {"message": gate_error["message"]}
+
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    suggestion = BlogPostTitleSuggestion.objects.filter(
+        id=data.title_suggestion_id, project=project
+    ).first()
+    if suggestion is None:
+        return 404, {"message": "Title suggestion not found"}
+
+    try:
+        content_type = ContentType[suggestion.content_type]
+    except KeyError:
+        return 400, {"message": f"Invalid content type on suggestion: {suggestion.content_type}"}
+
+    try:
+        blog_post = suggestion.generate_content(content_type=content_type)
+    except ValueError as error:
+        return 400, {"message": str(error)}
+    except Exception as error:
+        logger.error(
+            "[Public API] Failed to generate blog post",
+            error=str(error),
+            exc_info=True,
+            project_id=project_id,
+            profile_id=profile.id,
+            suggestion_id=suggestion.id,
+        )
+        return 400, {"message": "Failed to generate blog post"}
+
+    return {
+        "status": "success",
+        "message": "Blog post generated",
+        "post": serialize_public_blog_post(blog_post),
+    }
+
+
+@public_api.get(
+    "/projects/{project_id}/blog-posts",
+    response={200: PublicBlogPostListOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def list_public_blog_posts(
+    request: HttpRequest,
+    project_id: int,
+    include_content: bool = False,
+    page: int = 1,
+    page_size: int = 20,
+):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+
+    posts_query = GeneratedBlogPost.objects.filter(project=project).order_by("-created_at")
+    total = posts_query.count()
+    start_index = (page - 1) * page_size
+    end_index = start_index + page_size
+    posts = list(posts_query[start_index:end_index])
+
+    return {
+        "status": "success",
+        "posts": [
+            serialize_public_blog_post(post, include_content=include_content) for post in posts
+        ],
+        "pagination": {"page": page, "page_size": page_size, "total": total},
+    }
+
+
+@public_api.get(
+    "/projects/{project_id}/blog-posts/{blog_post_id}",
+    response={200: PublicBlogPostGetOut, 404: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def get_public_blog_post(request: HttpRequest, project_id: int, blog_post_id: int):
+    profile = request.auth
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    post = GeneratedBlogPost.objects.filter(id=blog_post_id, project=project).first()
+    if post is None:
+        return 404, {"message": "Blog post not found"}
+
+    return {"status": "success", "post": serialize_public_blog_post(post)}
+
+
+@public_api.post(
+    "/projects/{project_id}/blog-posts/{blog_post_id}/publish",
+    response={200: PublicBlogPostPublishOut, 404: PublicAPIErrorOut, 400: PublicAPIErrorOut},
+    auth=[public_api_key_auth],
+)
+def publish_public_blog_post(request: HttpRequest, project_id: int, blog_post_id: int):
+    profile = request.auth
+
+    project = Project.objects.filter(id=project_id, profile=profile).first()
+    if project is None:
+        return 404, {"message": "Project not found"}
+
+    post = GeneratedBlogPost.objects.filter(id=blog_post_id, project=project).first()
+    if post is None:
+        return 404, {"message": "Blog post not found"}
+
+    if post.posted:
+        return {
+            "status": "success",
+            "message": "Blog post already published",
+            "post": serialize_public_blog_post(post),
+        }
+
+    submitted = post.submit_blog_post_to_endpoint()
+    if not submitted:
+        return 400, {"message": "Failed to publish blog post"}
+
+    post.posted = True
+    post.date_posted = post.date_posted or timezone.now()
+    post.save(update_fields=["posted", "date_posted"])
+
+    return {
+        "status": "success",
+        "message": "Blog post published",
+        "post": serialize_public_blog_post(post),
     }

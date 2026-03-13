@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from core.api.views import api
 from core.public_api.auth import PublicAPIKeyAuth
 from core.public_api.schemas import (
+    PublicBlogPostGenerateIn,
     PublicContentAutomationIn,
     PublicKeywordCreateIn,
     PublicProjectIn,
@@ -18,11 +19,15 @@ from core.public_api.views import (
     create_public_keyword,
     create_public_project,
     create_public_title_suggestions,
+    generate_public_blog_post,
+    get_public_blog_post,
     get_public_keyword,
     get_public_project,
     get_public_title_suggestion,
+    list_public_blog_posts,
     list_public_keywords,
     list_public_title_suggestions,
+    publish_public_blog_post,
     public_api,
     update_public_project,
 )
@@ -644,6 +649,122 @@ def test_create_public_keyword_normalizes_keyword_text():
     keyword.fetch_and_update_metrics.assert_called_once()
 
 
+def _build_generated_post(*, post_id: int, title_suggestion_id: int | None = None, posted: bool = False):
+    post = Mock()
+    post.id = post_id
+    post.title = f"Generated post {post_id}"
+    post.slug = f"generated-post-{post_id}"
+    post.description = "Generated description"
+    post.tags = "seo,automation"
+    post.content = "Generated content"
+    post.posted = posted
+    post.date_posted = None
+    post.title_suggestion_id = title_suggestion_id
+    post.save = Mock()
+    return post
+
+
+def test_generate_public_blog_post_from_title_suggestion():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    suggestion = Mock(id=50, content_type="SHARING")
+    generated_post = _build_generated_post(post_id=200, title_suggestion_id=suggestion.id)
+    suggestion.generate_content.return_value = generated_post
+
+    project_filter = Mock()
+    project_filter.first.return_value = project
+    suggestion_filter = Mock()
+    suggestion_filter.first.return_value = suggestion
+
+    with patch("core.public_api.views.get_verified_email_gate_error", return_value=None):
+        with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+            with patch(
+                "core.public_api.views.BlogPostTitleSuggestion.objects.filter",
+                return_value=suggestion_filter,
+            ):
+                response_data = generate_public_blog_post(
+                    request,
+                    project_id=project.id,
+                    data=PublicBlogPostGenerateIn(title_suggestion_id=suggestion.id),
+                )
+
+    assert response_data["status"] == "success"
+    assert response_data["post"]["id"] == generated_post.id
+    suggestion.generate_content.assert_called_once()
+
+
+def test_list_public_blog_posts_hides_content_by_default():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+
+    generated_posts = [_build_generated_post(post_id=1), _build_generated_post(post_id=2)]
+
+    posts_query = MagicMock()
+    posts_query.order_by.return_value = posts_query
+    posts_query.count.return_value = len(generated_posts)
+    posts_query.__getitem__.return_value = generated_posts
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        with patch(
+            "core.public_api.views.GeneratedBlogPost.objects.filter",
+            return_value=posts_query,
+        ):
+            response_data = list_public_blog_posts(request, project_id=project.id, page=1, page_size=20)
+
+    assert response_data["status"] == "success"
+    assert response_data["posts"][0]["content"] is None
+    assert response_data["pagination"]["total"] == 2
+
+
+def test_get_public_blog_post_returns_not_found_when_missing():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+
+    project_filter = Mock()
+    project_filter.first.return_value = project
+
+    post_filter = Mock()
+    post_filter.first.return_value = None
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        with patch("core.public_api.views.GeneratedBlogPost.objects.filter", return_value=post_filter):
+            response_status_code, response_data = get_public_blog_post(
+                request,
+                project_id=project.id,
+                blog_post_id=999,
+            )
+
+    assert response_status_code == 404
+    assert response_data["message"] == "Blog post not found"
+
+
+def test_publish_public_blog_post_sets_posted_flag_when_submission_succeeds():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    post = _build_generated_post(post_id=300)
+    post.submit_blog_post_to_endpoint.return_value = True
+
+    project_filter = Mock()
+    project_filter.first.return_value = project
+
+    post_filter = Mock()
+    post_filter.first.return_value = post
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        with patch("core.public_api.views.GeneratedBlogPost.objects.filter", return_value=post_filter):
+            response_data = publish_public_blog_post(
+                request,
+                project_id=project.id,
+                blog_post_id=post.id,
+            )
+
+    assert response_data["status"] == "success"
+    assert response_data["post"]["posted"] is True
+    post.save.assert_called_once()
+
+
 def test_public_openapi_includes_public_routes_only():
     openapi_schema = public_api.get_openapi_schema()
     schema_paths = openapi_schema["paths"]
@@ -656,6 +777,10 @@ def test_public_openapi_includes_public_routes_only():
     assert "/public-api/projects/{project_id}/title-suggestions/{suggestion_id}" in schema_paths
     assert "/public-api/projects/{project_id}/keywords" in schema_paths
     assert "/public-api/projects/{project_id}/keywords/{keyword_id}" in schema_paths
+    assert "/public-api/projects/{project_id}/blog-posts/generate" in schema_paths
+    assert "/public-api/projects/{project_id}/blog-posts" in schema_paths
+    assert "/public-api/projects/{project_id}/blog-posts/{blog_post_id}" in schema_paths
+    assert "/public-api/projects/{project_id}/blog-posts/{blog_post_id}/publish" in schema_paths
     assert "/public-api/validate-url" not in schema_paths
 
 
