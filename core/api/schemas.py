@@ -21,6 +21,12 @@ class UserSettingsOut(Schema):
     project: ProjectSettingsOut
 
 
+class APIKeyOut(Schema):
+    status: str
+    key: str
+    message: str = ""
+
+
 class ProjectScanIn(Schema):
     url: str
     source: str = "default"

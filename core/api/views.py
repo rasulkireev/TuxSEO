@@ -12,6 +12,7 @@ from ninja import NinjaAPI
 from core.abuse_prevention import enforce_verified_email_for_expensive_action
 from core.api.auth import session_auth, superuser_api_auth
 from core.api.schemas import (
+    APIKeyOut,
     AddCompetitorIn,
     AddKeywordIn,
     AddKeywordOut,
@@ -62,11 +63,12 @@ from core.models import (
     Feedback,
     GeneratedBlogPost,
     Keyword,
+    Profile,
     Project,
     ProjectKeyword,
     ProjectPage,
 )
-from core.utils import download_image_from_url
+from core.utils import download_image_from_url, generate_random_key
 from tuxseo.utils import get_tuxseo_logger
 
 logger = get_tuxseo_logger(__name__)
@@ -144,6 +146,51 @@ def validate_url(request: HttpRequest, data: ValidateUrlIn):
             "reachable": False,
             "message": "Could not validate URL",
         }
+
+
+@api.get("/settings/api-key", response=APIKeyOut, auth=[session_auth])
+def get_api_key(request: HttpRequest):
+    return {
+        "status": "success",
+        "key": request.auth.key,
+    }
+
+
+@api.post("/settings/api-key/regenerate", response=APIKeyOut, auth=[session_auth])
+def regenerate_api_key(request: HttpRequest):
+    profile = request.auth
+    max_attempts = 10
+
+    for _ in range(max_attempts):
+        regenerated_key = generate_random_key()
+        if regenerated_key == profile.key:
+            continue
+        if Profile.objects.filter(key=regenerated_key).exists():
+            continue
+
+        profile.key = regenerated_key
+        profile.save(update_fields=["key"])
+
+        logger.info(
+            "[API Key] Regenerated key for profile",
+            profile_id=profile.id,
+            user_id=profile.user_id,
+        )
+        return {
+            "status": "success",
+            "key": regenerated_key,
+        }
+
+    logger.error(
+        "[API Key] Failed to regenerate unique key",
+        profile_id=profile.id,
+        user_id=profile.user_id,
+    )
+    return 500, {
+        "status": "error",
+        "key": "",
+        "message": "Failed to regenerate API key. Please try again.",
+    }
 
 
 @api.post("/projects/", response=ProjectScanOut, auth=[session_auth])
