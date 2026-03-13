@@ -258,6 +258,18 @@ def test_docs_root_with_trailing_slash_redirects_to_api_docs_introduction(client
     assert response["Location"] == "/api/docs/getting-started/introduction/"
 
 
+def test_public_api_architecture_doc_includes_blog_post_endpoints_and_examples():
+    docs_root = Path(__file__).resolve().parent / "content"
+    architecture_doc = docs_root / "api" / "public-api-architecture.md"
+    content = architecture_doc.read_text(encoding="utf-8")
+
+    assert "POST /public-api/projects/{project_id}/blog-posts/generate" in content
+    assert "GET /public-api/projects/{project_id}/blog-posts" in content
+    assert "GET /public-api/projects/{project_id}/blog-posts/{blog_post_id}" in content
+    assert "POST /public-api/projects/{project_id}/blog-posts/{blog_post_id}/publish" in content
+    assert "include_content=false" in content
+
+
 def test_legacy_docs_page_redirects_to_api_docs_page(client):
     response = client.get("/docs/getting-started/introduction/", follow=False)
 
