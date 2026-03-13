@@ -34,10 +34,12 @@ navigation:
 
   features:
     - blog-post-suggestions
-    - public-api-architecture
 
   deployment:
     - render-deployment
     - docker-compose-deployment
+
+  api:
+    - public-api-architecture
 
   # Any categories not listed here will appear after these, in alphabetical order

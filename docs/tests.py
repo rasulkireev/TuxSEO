@@ -94,10 +94,6 @@ navigation:
     assert [page["slug"] for page in getting_started_pages] == ["introduction", "quickstart"]
 
 
-@pytest.mark.xfail(
-    reason="Pending docs IA update: add top-level API section and move public API docs under it.",
-    strict=True,
-)
 def test_docs_navigation_groups_api_as_top_level_section():
     navigation = get_docs_navigation()
 
@@ -109,10 +105,6 @@ def test_docs_navigation_groups_api_as_top_level_section():
     ]
 
 
-@pytest.mark.xfail(
-    reason="Pending docs IA update: public API architecture should be grouped under /api/docs/api/.",
-    strict=True,
-)
 def test_docs_navigation_places_public_api_page_in_api_section():
     navigation = get_docs_navigation()
     pages_by_category = {section["category_slug"]: section["pages"] for section in navigation}
