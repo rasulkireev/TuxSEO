@@ -8,16 +8,20 @@ from core.api.views import api
 from core.public_api.auth import PublicAPIKeyAuth
 from core.public_api.schemas import (
     PublicContentAutomationIn,
+    PublicKeywordCreateIn,
     PublicProjectIn,
     PublicProjectUpdateIn,
     PublicTitleSuggestionCreateIn,
 )
 from core.public_api.views import (
     configure_content_automation,
+    create_public_keyword,
     create_public_project,
     create_public_title_suggestions,
+    get_public_keyword,
     get_public_project,
     get_public_title_suggestion,
+    list_public_keywords,
     list_public_title_suggestions,
     public_api,
     update_public_project,
@@ -75,6 +79,11 @@ def test_public_content_automation_schema_requires_positive_posts_per_month():
 def test_public_title_suggestion_create_schema_requires_positive_count():
     with pytest.raises(ValidationError):
         PublicTitleSuggestionCreateIn.model_validate({"count": 0})
+
+
+def test_public_keyword_create_schema_requires_keyword_text():
+    with pytest.raises(ValidationError):
+        PublicKeywordCreateIn.model_validate({})
 
 
 def test_create_public_project_returns_error_for_invalid_url_scheme():
@@ -478,6 +487,163 @@ def test_create_public_title_suggestions_passes_count_and_seed_guidance():
     )
 
 
+def _build_project_keyword(*, keyword_id: int, project_keyword_id: int, keyword_text: str):
+    keyword = Mock()
+    keyword.id = keyword_id
+    keyword.keyword_text = keyword_text
+    keyword.volume = 320
+    keyword.cpc_currency = "usd"
+    keyword.cpc_value = 4.25
+    keyword.competition = 0.45
+    keyword.country = "us"
+    keyword.data_source = "gkp"
+    keyword.last_fetched_at = SimpleNamespace(isoformat=Mock(return_value="2026-03-13T00:00:00Z"))
+    trend = Mock(value=12, month="Jan", year=2026)
+    keyword.trends.all.return_value = [trend]
+
+    project_keyword = Mock()
+    project_keyword.id = project_keyword_id
+    project_keyword.keyword = keyword
+    project_keyword.use = True
+    return project_keyword
+
+
+def test_list_public_keywords_supports_pagination():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+
+    first_project_keyword = _build_project_keyword(
+        keyword_id=1, project_keyword_id=11, keyword_text="onboarding seo"
+    )
+    second_project_keyword = _build_project_keyword(
+        keyword_id=2, project_keyword_id=12, keyword_text="saas content"
+    )
+    project_keywords = [first_project_keyword, second_project_keyword]
+
+    keyword_query = MagicMock()
+    keyword_query.select_related.return_value = keyword_query
+    keyword_query.order_by.return_value = keyword_query
+    keyword_query.count.return_value = len(project_keywords)
+    keyword_query.__getitem__.return_value = project_keywords[:1]
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        with patch("core.public_api.views.ProjectKeyword.objects.filter", return_value=keyword_query):
+            response_data = list_public_keywords(request, project_id=project.id, page=1, page_size=1)
+
+    assert response_data["status"] == "success"
+    assert response_data["pagination"]["total"] == 2
+    assert len(response_data["keywords"]) == 1
+    assert response_data["keywords"][0]["keyword_text"] == "onboarding seo"
+
+
+def test_get_public_keyword_returns_not_found_for_non_owned_project():
+    request = SimpleNamespace(auth=build_profile())
+    project_filter = Mock()
+    project_filter.first.return_value = None
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        response_status_code, response_data = get_public_keyword(
+            request,
+            project_id=99,
+            keyword_id=1,
+        )
+
+    assert response_status_code == 404
+    assert response_data["message"] == "Project not found"
+
+
+def test_get_public_keyword_returns_keyword_details():
+    request = SimpleNamespace(auth=build_profile())
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+    project_keyword = _build_project_keyword(
+        keyword_id=4, project_keyword_id=44, keyword_text="content ops"
+    )
+    project_keyword_query = MagicMock()
+    project_keyword_query.filter.return_value = project_keyword_query
+    project_keyword_query.first.return_value = project_keyword
+
+    with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+        with patch(
+            "core.public_api.views.ProjectKeyword.objects.select_related",
+            return_value=project_keyword_query,
+        ):
+            response_data = get_public_keyword(request, project_id=project.id, keyword_id=4)
+
+    assert response_data["status"] == "success"
+    assert response_data["keyword"]["id"] == 4
+    assert response_data["keyword"]["project_keyword_id"] == 44
+
+
+def test_create_public_keyword_returns_error_for_blank_text():
+    request = SimpleNamespace(auth=build_profile(can_add_keywords=True))
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+
+    with patch("core.public_api.views.get_verified_email_gate_error", return_value=None):
+        with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+            response_status_code, response_data = create_public_keyword(
+                request,
+                project_id=project.id,
+                data=PublicKeywordCreateIn(keyword_text="   "),
+            )
+
+    assert response_status_code == 400
+    assert response_data["message"] == "Keyword text cannot be empty"
+
+
+def test_create_public_keyword_normalizes_keyword_text():
+    profile = build_profile(can_add_keywords=True, is_on_free_plan=False)
+    request = SimpleNamespace(auth=profile)
+    project = Mock(id=10)
+    project_filter = Mock()
+    project_filter.first.return_value = project
+
+    keyword = Mock()
+    keyword.id = 5
+    keyword.keyword_text = "seo automation"
+    keyword.volume = None
+    keyword.cpc_currency = ""
+    keyword.cpc_value = None
+    keyword.competition = None
+    keyword.country = "us"
+    keyword.data_source = "gkp"
+    keyword.last_fetched_at = None
+    keyword.trends.all.return_value = []
+    keyword.fetch_and_update_metrics = Mock(return_value=True)
+
+    project_keyword = Mock()
+    project_keyword.id = 15
+    project_keyword.keyword = keyword
+    project_keyword.use = False
+
+    with patch("core.public_api.views.get_verified_email_gate_error", return_value=None):
+        with patch("core.public_api.views.Project.objects.filter", return_value=project_filter):
+            with patch(
+                "core.public_api.views.Keyword.objects.get_or_create",
+                return_value=(keyword, True),
+            ) as keyword_get_or_create:
+                with patch(
+                    "core.public_api.views.ProjectKeyword.objects.get_or_create",
+                    return_value=(project_keyword, True),
+                ):
+                    response_data = create_public_keyword(
+                        request,
+                        project_id=project.id,
+                        data=PublicKeywordCreateIn(keyword_text="  SEO Automation  "),
+                    )
+
+    assert response_data["status"] == "success"
+    assert response_data["message"] == "Keyword added"
+    assert response_data["keyword"]["keyword_text"] == "seo automation"
+    keyword_get_or_create.assert_called_once_with(keyword_text="seo automation")
+    keyword.fetch_and_update_metrics.assert_called_once()
+
+
 def test_public_openapi_includes_public_routes_only():
     openapi_schema = public_api.get_openapi_schema()
     schema_paths = openapi_schema["paths"]
@@ -488,6 +654,8 @@ def test_public_openapi_includes_public_routes_only():
     assert "/public-api/projects/{project_id}/content-automation" in schema_paths
     assert "/public-api/projects/{project_id}/title-suggestions" in schema_paths
     assert "/public-api/projects/{project_id}/title-suggestions/{suggestion_id}" in schema_paths
+    assert "/public-api/projects/{project_id}/keywords" in schema_paths
+    assert "/public-api/projects/{project_id}/keywords/{keyword_id}" in schema_paths
     assert "/public-api/validate-url" not in schema_paths
 
 

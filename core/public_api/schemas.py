@@ -124,3 +124,45 @@ class PublicTitleSuggestionCreateOut(Schema):
     status: str
     count: int
     suggestions: list[PublicTitleSuggestionOut] = []
+
+
+class PublicKeywordTrendOut(Schema):
+    value: int
+    month: str
+    year: int
+
+
+class PublicKeywordOut(Schema):
+    id: int
+    keyword_text: str
+    volume: int | None = None
+    cpc_currency: str | None = None
+    cpc_value: float | None = None
+    competition: float | None = None
+    country: str | None = None
+    data_source: str | None = None
+    last_fetched_at: str | None = None
+    trend_data: list[PublicKeywordTrendOut] = []
+    project_keyword_id: int
+    in_use: bool
+
+
+class PublicKeywordListOut(Schema):
+    status: str
+    keywords: list[PublicKeywordOut] = []
+    pagination: PublicPaginationOut
+
+
+class PublicKeywordGetOut(Schema):
+    status: str
+    keyword: PublicKeywordOut | None = None
+
+
+class PublicKeywordCreateIn(Schema):
+    keyword_text: str
+
+
+class PublicKeywordCreateOut(Schema):
+    status: str
+    message: str = ""
+    keyword: PublicKeywordOut | None = None
