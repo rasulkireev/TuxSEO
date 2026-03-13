@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from unittest.mock import patch
 
@@ -22,6 +23,11 @@ def request_factory():
 def create_markdown_file(path: Path, content: str):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def _get_docs_markdown_files() -> list[Path]:
+    docs_content_root = Path(__file__).resolve().parent / "content"
+    return sorted(docs_content_root.rglob("*.md"))
 
 
 @override_settings(BASE_DIR="/tmp/nonexistent-base-dir")
@@ -242,3 +248,79 @@ def test_api_docs_category_page_is_served_from_existing_docs_content(client):
         response = client.get("/api/docs/getting-started/introduction/")
 
     assert response.status_code == 200
+
+
+def test_docs_markdown_internal_links_use_api_docs_paths():
+    markdown_link_pattern = re.compile(r"(?<!\!)\[[^\]]+\]\(([^)]+)\)")
+    docs_content_root = Path(__file__).resolve().parent / "content"
+    validation_errors = []
+
+    for markdown_file in _get_docs_markdown_files():
+        markdown_content = markdown_file.read_text(encoding="utf-8")
+        for raw_target in markdown_link_pattern.findall(markdown_content):
+            link_target = raw_target.strip().split(maxsplit=1)[0]
+            if not link_target or link_target.startswith(("http://", "https://", "#", "mailto:")):
+                continue
+
+            if link_target.startswith("/docs/"):
+                validation_errors.append(
+                    f"{markdown_file}: use '/api/docs/' paths instead of '{link_target}'"
+                )
+                continue
+
+            if not link_target.startswith("/api/docs/"):
+                continue
+
+            path_without_prefix = link_target.removeprefix("/api/docs/").strip("/")
+            path_parts = path_without_prefix.split("/")
+            if len(path_parts) != 2:
+                validation_errors.append(
+                    f"{markdown_file}: invalid docs path format '{link_target}'"
+                )
+                continue
+
+            category_slug, page_slug = path_parts
+            target_markdown_file = docs_content_root / category_slug / f"{page_slug}.md"
+            if not target_markdown_file.exists():
+                validation_errors.append(
+                    f"{markdown_file}: docs link target not found for '{link_target}'"
+                )
+
+    assert not validation_errors, "\n".join(validation_errors)
+
+
+def test_docs_markdown_curl_commands_use_expected_format():
+    curl_command_pattern = re.compile(
+        r'^curl -o \S+ https://\S+$|^curl -X [A-Z]+ "https://[^"]+"(?: \\)?$'
+    )
+    validation_errors = []
+
+    for markdown_file in _get_docs_markdown_files():
+        markdown_content = markdown_file.read_text(encoding="utf-8")
+        current_fence_language = None
+
+        for line_number, line in enumerate(markdown_content.splitlines(), start=1):
+            stripped_line = line.strip()
+
+            if stripped_line.startswith("```"):
+                if current_fence_language is None:
+                    current_fence_language = stripped_line[3:].strip().lower()
+                else:
+                    current_fence_language = None
+                continue
+
+            if not stripped_line.startswith("curl "):
+                continue
+
+            if current_fence_language != "bash":
+                validation_errors.append(
+                    f"{markdown_file}:{line_number} curl command must be in a bash code block"
+                )
+                continue
+
+            if not curl_command_pattern.match(stripped_line):
+                validation_errors.append(
+                    f"{markdown_file}:{line_number} curl command has unexpected format"
+                )
+
+    assert not validation_errors, "\n".join(validation_errors)
