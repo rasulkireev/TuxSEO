@@ -400,7 +400,7 @@ def create_checkout_session(request, product_name):
     # Get or create customer
     customer, _ = djstripe_models.Customer.get_or_create(subscriber=user)
 
-    if not profile.customer:
+    if not profile.customer and isinstance(customer, djstripe_models.Customer):
         profile.customer = customer
         profile.save(update_fields=["customer"])
 

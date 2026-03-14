@@ -57,6 +57,11 @@ urlpatterns = [
         RedirectView.as_view(url="/api/openapi.json", permanent=False),
         name="legacy_public_api_openapi",
     ),
+    re_path(
+        r"^api/docs/(?P<path>.+)/$",
+        RedirectView.as_view(url="/docs/%(path)s/", permanent=False),
+        name="legacy_api_docs_content",
+    ),
     path(
         "docs",
         RedirectView.as_view(url="/docs/getting-started/introduction/", permanent=False),
