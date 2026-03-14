@@ -66,12 +66,13 @@ urlpatterns = [
     ),
     path(
         "docs",
-        RedirectView.as_view(url="/api/docs/getting-started/introduction/", permanent=False),
+        RedirectView.as_view(url="/docs/getting-started/introduction/", permanent=False),
     ),
     path(
         "docs/",
-        RedirectView.as_view(url="/api/docs/getting-started/introduction/", permanent=False),
+        RedirectView.as_view(url="/docs/getting-started/introduction/", permanent=False),
     ),
+    path("docs/", include("docs.urls")),
     path("", include("core.urls")),
     path("", include("steering.urls")),
     path(
