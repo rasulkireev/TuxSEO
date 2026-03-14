@@ -25,6 +25,7 @@ from ninja.openapi.views import openapi_json, openapi_view
 
 from core.public_api.views import public_api
 from core.views import AccountSignupView, OnboardingFriendlyConfirmEmailView, trigger_error
+from docs.views import docs_page_view
 from tuxseo.sitemaps import sitemaps
 
 urlpatterns = [
@@ -56,6 +57,12 @@ urlpatterns = [
         "public-api/openapi.json",
         RedirectView.as_view(url="/api/openapi.json", permanent=False),
         name="legacy_public_api_openapi",
+    ),
+    path("api/docs/<str:category>/<str:page>/", docs_page_view, name="api_docs_page"),
+    path(
+        "docs/<str:category>/<str:page>/",
+        RedirectView.as_view(url="/api/docs/%(category)s/%(page)s/", permanent=False),
+        name="legacy_docs_page",
     ),
     path(
         "docs",

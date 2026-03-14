@@ -19,6 +19,7 @@ from core.api.schemas import (
     AddPricingPageIn,
     BlogPostIn,
     BlogPostOut,
+    BlogPostUpdateIn,
     CompetitorAnalysisOut,
     DeleteProjectKeywordIn,
     DeleteProjectKeywordOut,
@@ -29,6 +30,8 @@ from core.api.schemas import (
     GeneratedContentOut,
     GenerateOGImageIn,
     GenerateOGImageOut,
+    InternalBlogPostDetailOut,
+    InternalBlogPostListOut,
     GenerateTitleSuggestionOut,
     GenerateTitleSuggestionsIn,
     GenerateTitleSuggestionsOut,
@@ -1286,6 +1289,89 @@ def get_keyword_details(request: HttpRequest, keyword_text: str, project_id: int
         )
 
 
+def _serialize_internal_blog_post(blog_post: BlogPost) -> dict:
+    return {
+        "id": blog_post.id,
+        "title": blog_post.title,
+        "description": blog_post.description,
+        "slug": blog_post.slug,
+        "tags": blog_post.tags,
+        "content": blog_post.content,
+        "status": blog_post.status,
+        "icon_url": blog_post.icon.url if blog_post.icon else "",
+        "image_url": blog_post.image.url if blog_post.image else "",
+        "created_at": blog_post.created_at.isoformat(),
+        "updated_at": blog_post.updated_at.isoformat(),
+    }
+
+
+def _attach_blog_post_media_from_urls(
+    blog_post: BlogPost,
+    *,
+    icon_url: str | None,
+    image_url: str | None,
+    log_prefix: str,
+):
+    if icon_url:
+        icon_url = icon_url.strip()
+        if icon_url.startswith(("http://", "https://")):
+            icon_content = download_image_from_url(
+                image_url=icon_url,
+                field_name="icon",
+                instance_id=blog_post.id,
+            )
+            if icon_content:
+                filename = f"blog-post-icon-{blog_post.id}.png"
+                blog_post.icon.save(filename, icon_content, save=True)
+                logger.info(
+                    f"[{log_prefix}] Icon downloaded and saved",
+                    blog_post_id=blog_post.id,
+                    icon_url=icon_url,
+                )
+
+    if image_url:
+        image_url = image_url.strip()
+        if image_url.startswith(("http://", "https://")):
+            image_content = download_image_from_url(
+                image_url=image_url,
+                field_name="image",
+                instance_id=blog_post.id,
+            )
+            if image_content:
+                filename = f"blog-post-image-{blog_post.id}.png"
+                blog_post.image.save(filename, image_content, save=True)
+                logger.info(
+                    f"[{log_prefix}] Image downloaded and saved",
+                    blog_post_id=blog_post.id,
+                    image_url=image_url,
+                )
+
+
+@api.get("/internal/blog-posts", response=InternalBlogPostListOut, auth=[superuser_api_auth])
+def list_internal_blog_posts(request: HttpRequest):
+    blog_posts = BlogPost.objects.order_by("-created_at")
+    return {
+        "status": "success",
+        "blog_posts": [_serialize_internal_blog_post(blog_post) for blog_post in blog_posts],
+    }
+
+
+@api.get(
+    "/internal/blog-posts/{blog_post_id}",
+    response={200: InternalBlogPostDetailOut, 404: BlogPostOut},
+    auth=[superuser_api_auth],
+)
+def get_internal_blog_post(request: HttpRequest, blog_post_id: int):
+    blog_post = BlogPost.objects.filter(id=blog_post_id).first()
+    if not blog_post:
+        return 404, {"status": "error", "message": "Blog post not found."}
+
+    return {
+        "status": "success",
+        "blog_post": _serialize_internal_blog_post(blog_post),
+    }
+
+
 @api.post("/blog-posts/submit", response=BlogPostOut, auth=[superuser_api_auth])
 def submit_blog_post(request: HttpRequest, data: BlogPostIn):
     try:
@@ -1298,35 +1384,12 @@ def submit_blog_post(request: HttpRequest, data: BlogPostIn):
             status=data.status,
         )
 
-        if data.icon:
-            icon_url = data.icon.strip()
-            if icon_url.startswith(("http://", "https://")):
-                icon_content = download_image_from_url(
-                    image_url=icon_url, field_name="icon", instance_id=blog_post.id
-                )
-                if icon_content:
-                    filename = f"blog-post-icon-{blog_post.id}.png"
-                    blog_post.icon.save(filename, icon_content, save=True)
-                    logger.info(
-                        "[Submit Blog Post] Icon downloaded and saved",
-                        blog_post_id=blog_post.id,
-                        icon_url=icon_url,
-                    )
-
-        if data.image:
-            image_url = data.image.strip()
-            if image_url.startswith(("http://", "https://")):
-                image_content = download_image_from_url(
-                    image_url=image_url, field_name="image", instance_id=blog_post.id
-                )
-                if image_content:
-                    filename = f"blog-post-image-{blog_post.id}.png"
-                    blog_post.image.save(filename, image_content, save=True)
-                    logger.info(
-                        "[Submit Blog Post] Image downloaded and saved",
-                        blog_post_id=blog_post.id,
-                        image_url=image_url,
-                    )
+        _attach_blog_post_media_from_urls(
+            blog_post,
+            icon_url=data.icon,
+            image_url=data.image,
+            log_prefix="Submit Blog Post",
+        )
 
         return BlogPostOut(status="success", message="Blog post submitted successfully.")
     except Exception as e:
@@ -1338,6 +1401,104 @@ def submit_blog_post(request: HttpRequest, data: BlogPostIn):
             slug=data.slug,
         )
         return BlogPostOut(status="error", message="Failed to submit blog post")
+
+
+@api.put(
+    "/internal/blog-posts/{blog_post_id}",
+    response={200: InternalBlogPostDetailOut, 404: BlogPostOut},
+    auth=[superuser_api_auth],
+)
+def update_internal_blog_post(request: HttpRequest, blog_post_id: int, data: BlogPostIn):
+    blog_post = BlogPost.objects.filter(id=blog_post_id).first()
+    if not blog_post:
+        return 404, {"status": "error", "message": "Blog post not found."}
+
+    blog_post.title = data.title
+    blog_post.description = data.description
+    blog_post.slug = data.slug
+    blog_post.tags = data.tags
+    blog_post.content = data.content
+    blog_post.status = data.status
+    blog_post.save(update_fields=["title", "description", "slug", "tags", "content", "status"])
+
+    _attach_blog_post_media_from_urls(
+        blog_post,
+        icon_url=data.icon,
+        image_url=data.image,
+        log_prefix="Update Blog Post",
+    )
+
+    return {
+        "status": "success",
+        "blog_post": _serialize_internal_blog_post(blog_post),
+        "message": "Blog post updated successfully.",
+    }
+
+
+@api.patch(
+    "/internal/blog-posts/{blog_post_id}",
+    response={200: InternalBlogPostDetailOut, 400: BlogPostOut, 404: BlogPostOut},
+    auth=[superuser_api_auth],
+)
+def patch_internal_blog_post(request: HttpRequest, blog_post_id: int, data: BlogPostUpdateIn):
+    blog_post = BlogPost.objects.filter(id=blog_post_id).first()
+    if not blog_post:
+        return 404, {"status": "error", "message": "Blog post not found."}
+
+    fields_to_update: list[str] = []
+
+    if "title" in data.model_fields_set and data.title is not None:
+        blog_post.title = data.title
+        fields_to_update.append("title")
+    if "description" in data.model_fields_set and data.description is not None:
+        blog_post.description = data.description
+        fields_to_update.append("description")
+    if "slug" in data.model_fields_set and data.slug is not None:
+        blog_post.slug = data.slug
+        fields_to_update.append("slug")
+    if "tags" in data.model_fields_set and data.tags is not None:
+        blog_post.tags = data.tags
+        fields_to_update.append("tags")
+    if "content" in data.model_fields_set and data.content is not None:
+        blog_post.content = data.content
+        fields_to_update.append("content")
+    if "status" in data.model_fields_set and data.status is not None:
+        blog_post.status = data.status
+        fields_to_update.append("status")
+
+    if fields_to_update:
+        blog_post.save(update_fields=fields_to_update)
+
+    if "icon" in data.model_fields_set or "image" in data.model_fields_set:
+        _attach_blog_post_media_from_urls(
+            blog_post,
+            icon_url=data.icon,
+            image_url=data.image,
+            log_prefix="Patch Blog Post",
+        )
+
+    if not fields_to_update and not ({"icon", "image"} & data.model_fields_set):
+        return 400, {"status": "error", "message": "No fields provided for update."}
+
+    return {
+        "status": "success",
+        "blog_post": _serialize_internal_blog_post(blog_post),
+        "message": "Blog post updated successfully.",
+    }
+
+
+@api.delete(
+    "/internal/blog-posts/{blog_post_id}",
+    response={200: BlogPostOut, 404: BlogPostOut},
+    auth=[superuser_api_auth],
+)
+def delete_internal_blog_post(request: HttpRequest, blog_post_id: int):
+    blog_post = BlogPost.objects.filter(id=blog_post_id).first()
+    if not blog_post:
+        return 404, {"status": "error", "message": "Blog post not found."}
+
+    blog_post.delete()
+    return {"status": "success", "message": "Blog post deleted successfully."}
 
 
 @api.post("/post-generated-blog-post", response=PostGeneratedBlogPostOut, auth=[session_auth])

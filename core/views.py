@@ -17,7 +17,7 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.messages.views import SuccessMessageMixin
 from django.core import signing
 from django.db.models import Count, Prefetch, Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, HttpResponseRedirect
 from django.shortcuts import redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse, reverse_lazy
@@ -400,7 +400,7 @@ def create_checkout_session(request, product_name):
     # Get or create customer
     customer, _ = djstripe_models.Customer.get_or_create(subscriber=user)
 
-    if not profile.customer:
+    if not profile.customer and isinstance(customer, djstripe_models.Customer):
         profile.customer = customer
         profile.save(update_fields=["customer"])
 
@@ -486,7 +486,9 @@ def create_checkout_session(request, product_name):
             checkout_session_id=checkout_session.id,
         )
 
-        return redirect(checkout_session.url, code=303)
+        response = HttpResponseRedirect(checkout_session.url)
+        response.status_code = 303
+        return response
 
     except stripe.error.StripeError as e:
         logger.error(

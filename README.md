@@ -158,6 +158,19 @@ UPDATE_CONTENT_QUALITY_BASELINE=1 make test-content-quality
 ```
 4. Commit `core/tests/fixtures/content_quality_baseline.json` together with the scoring logic change.
 
+## Internal API (BlogPost CRUD)
+
+Internal blog post management endpoints are available under `/api/internal/blog-posts` and are protected by the **superuser API key** query param (`?api_key=...`).
+
+- `POST /api/blog-posts/submit` — create (existing endpoint, kept for compatibility)
+- `GET /api/internal/blog-posts` — list
+- `GET /api/internal/blog-posts/{id}` — retrieve
+- `PUT /api/internal/blog-posts/{id}` — full update
+- `PATCH /api/internal/blog-posts/{id}` — partial update
+- `DELETE /api/internal/blog-posts/{id}` — delete
+
+Non-superuser or missing API keys are rejected with unauthorized responses.
+
 ## Star History
 
 [![Star History Chart](https://api.star-history.com/svg?repos=rasulkireev/tuxseo&type=Date)](https://www.star-history.com/#rasulkireev/tuxseo&Date)
