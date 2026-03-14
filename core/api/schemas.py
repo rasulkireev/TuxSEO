@@ -223,6 +223,42 @@ class BlogPostOut(Schema):
     message: str
 
 
+class BlogPostUpdateIn(Schema):
+    title: str | None = None
+    description: str | None = None
+    slug: str | None = None
+    tags: str | None = None
+    content: str | None = None
+    icon: str | None = None
+    image: str | None = None
+    status: BlogPostStatus | None = None
+
+
+class InternalBlogPostItemOut(Schema):
+    id: int
+    title: str
+    description: str
+    slug: str
+    tags: str
+    content: str
+    status: str
+    icon_url: str = ""
+    image_url: str = ""
+    created_at: str
+    updated_at: str
+
+
+class InternalBlogPostListOut(Schema):
+    status: str
+    blog_posts: list[InternalBlogPostItemOut] = []
+
+
+class InternalBlogPostDetailOut(Schema):
+    status: str
+    blog_post: InternalBlogPostItemOut | None = None
+    message: str = ""
+
+
 class PostGeneratedBlogPostIn(Schema):
     id: int
 
